@@ -47,12 +47,17 @@ export class TscCheck extends BaseCheck {
     let tscPath;
     if (shouldSearchInPath) {
       tscPath = checkInPath("tsc");
+      // On Windows, `where tsc` may return the POSIX shebang script (no extension)
+      // before tsc.cmd. execFile can't run that without shell:true, so append .cmd.
+      if (tscPath && process.platform === "win32" && !tscPath.endsWith(".cmd") && !tscPath.endsWith(".exe")) {
+        tscPath = tscPath + ".cmd";
+      }
     }
     if (!tscPath) {
       // Try project-local npx tsc (node_modules/.bin)
-      const localBin = path.resolve(this.repoRoot, "node_modules", ".bin", "tsc");
+      const localBin = path.resolve(this.repoRoot, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc");
       try {
-        await execFileAsync(localBin, ["--version"]);
+        await execFileAsync(localBin, ["--version"], { shell: process.platform === "win32" });
         tscPath = localBin;
       } catch {
         // not available locally
@@ -81,6 +86,7 @@ export class TscCheck extends BaseCheck {
           await execFileAsync(deps.tscPath, args, {
             cwd: this.repoRoot,
             maxBuffer: 10 * 1024 * 1024,
+            shell: process.platform === "win32",
           });
         } catch (err) {
           if (err.code === "ENOENT") {

@@ -4931,11 +4931,12 @@ var BaseCheck = class {
    * @returns {Promise<boolean>}
    */
   async appliesTo(file) {
+    const normalizedFile = file.replace(/\\/g, "/");
     if (this.#includePaths.length > 0) {
-      if (!this.#includePaths.some((p) => file.includes(p))) return false;
+      if (!this.#includePaths.some((p) => normalizedFile.includes(p))) return false;
     }
     for (const p of this.#excludePaths) {
-      if (file.includes(p)) return false;
+      if (normalizedFile.includes(p)) return false;
     }
     if (this.#extensions.length > 0) {
       const ext = path.extname(file).toLowerCase();
@@ -13795,11 +13796,14 @@ var TscCheck = class extends BaseCheck {
     let tscPath;
     if (shouldSearchInPath) {
       tscPath = checkInPath("tsc");
+      if (tscPath && process.platform === "win32" && !tscPath.endsWith(".cmd") && !tscPath.endsWith(".exe")) {
+        tscPath = tscPath + ".cmd";
+      }
     }
     if (!tscPath) {
-      const localBin = path12.resolve(this.repoRoot, "node_modules", ".bin", "tsc");
+      const localBin = path12.resolve(this.repoRoot, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc");
       try {
-        await execFileAsync4(localBin, ["--version"]);
+        await execFileAsync4(localBin, ["--version"], { shell: process.platform === "win32" });
         tscPath = localBin;
       } catch {
       }
@@ -13821,7 +13825,8 @@ var TscCheck = class extends BaseCheck {
         try {
           await execFileAsync4(deps.tscPath, args, {
             cwd: this.repoRoot,
-            maxBuffer: 10 * 1024 * 1024
+            maxBuffer: 10 * 1024 * 1024,
+            shell: process.platform === "win32"
           });
         } catch (err) {
           if (err.code === "ENOENT") {
@@ -18860,7 +18865,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "5d20be3" : "unknown";
+var LINTER_COMMIT = true ? "e1a20bd" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

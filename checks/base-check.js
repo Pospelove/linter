@@ -101,14 +101,18 @@ export class BaseCheck {
    * @returns {Promise<boolean>}
    */
   async appliesTo(file) {
+    // Normalize to forward slashes so includePaths/excludePaths (always written
+    // with forward slashes) match correctly on Windows too.
+    const normalizedFile = file.replace(/\\/g, "/");
+
     // includePaths check (if set, file must match at least one)
     if (this.#includePaths.length > 0) {
-      if (!this.#includePaths.some((p) => file.includes(p))) return false;
+      if (!this.#includePaths.some((p) => normalizedFile.includes(p))) return false;
     }
 
     // excludePaths check
     for (const p of this.#excludePaths) {
-      if (file.includes(p)) return false;
+      if (normalizedFile.includes(p)) return false;
     }
 
     // extensions filter (empty = all extensions allowed)
