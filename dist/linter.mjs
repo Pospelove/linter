@@ -4564,7 +4564,7 @@ var require_dist2 = __commonJS({
 });
 
 // linter.js
-import fs21 from "fs";
+import fs22 from "fs";
 import path17 from "path";
 import { fileURLToPath } from "url";
 import { spawnSync as spawnSync3, execSync } from "child_process";
@@ -14026,8 +14026,96 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
   return violations;
 }
 
+// checks/custom-check.js
+import { promises as fs16 } from "fs";
+import { spawn as spawn3 } from "child_process";
+var CustomCheck = class extends BaseCheck {
+  #name;
+  #lintCommand;
+  #fixCommand;
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    const base = options.command ?? null;
+    this.#lintCommand = options.lintCommand ?? base;
+    this.#fixCommand = options.fixCommand ?? base;
+    if (!this.#lintCommand) {
+      throw new Error("CustomCheck requires options.command or options.lintCommand");
+    }
+    this.#name = options.name ?? `Custom (${this.#lintCommand})`;
+  }
+  get name() {
+    return this.#name;
+  }
+  async lint(file, _deps, entry = null) {
+    const env = this.#buildEnv(file, "lint", entry);
+    const { code, output } = await this.#run(this.#lintCommand, env);
+    if (code === 0) return { status: "pass" };
+    if (code === 1) return { status: "fail", output };
+    return { status: "error", output };
+  }
+  async fix(file, _deps, entry = null) {
+    if (!this.#fixCommand) {
+      return { status: "error", output: "CustomCheck: no fixCommand configured" };
+    }
+    let before;
+    try {
+      before = await fs16.readFile(file);
+    } catch (err) {
+      return { status: "error", output: `cannot read file before fix: ${err.message}` };
+    }
+    const env = this.#buildEnv(file, "fix", entry);
+    const { code, output } = await this.#run(this.#fixCommand, env);
+    if (code !== 0) return { status: "error", output };
+    let after;
+    try {
+      after = await fs16.readFile(file);
+    } catch (err) {
+      return { status: "error", output: `cannot read file after fix: ${err.message}` };
+    }
+    return before.equals(after) ? { status: "pass" } : { status: "fixed" };
+  }
+  #buildEnv(file, mode, entry) {
+    return {
+      ...process.env,
+      LINTER_FILE: file,
+      LINTER_REPO_ROOT: this.repoRoot,
+      LINTER_MODE: mode,
+      LINTER_ENTRY_ID: entry?.id ?? file,
+      LINTER_ENTRY_SOURCE_FILE: entry?.sourceFile ?? file,
+      LINTER_ENTRY_METADATA: JSON.stringify(entry?.metadata ?? {})
+    };
+  }
+  /** Run a shell command, capturing stdout+stderr, resolving to { code, output }. */
+  #run(command, env) {
+    return new Promise((resolve) => {
+      const proc = spawn3(command, [], {
+        shell: true,
+        cwd: this.repoRoot,
+        env
+      });
+      const chunks = [];
+      proc.stdout.on("data", (d) => chunks.push(d));
+      proc.stderr.on("data", (d) => chunks.push(d));
+      proc.on("close", (code) => {
+        const output = Buffer.concat(chunks).toString().trim();
+        resolve({ code: code ?? 1, output });
+      });
+      proc.on("error", (err) => {
+        resolve({ code: -1, output: err.message });
+      });
+    });
+  }
+  static getHelp() {
+    return {
+      name: "CustomCheck",
+      description: "Delegates lint and fix to user-provided shell commands. File details are passed via environment variables (LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE, LINTER_ENTRY_ID, LINTER_ENTRY_SOURCE_FILE, LINTER_ENTRY_METADATA). Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error.",
+      options: "command \u2014 shell command for both modes; lintCommand \u2014 overrides command for lint; fixCommand \u2014 overrides command for fix; name \u2014 display name for the check"
+    };
+  }
+};
+
 // file-sources/all-files-source.js
-import fs16 from "fs";
+import fs17 from "fs";
 import path14 from "path";
 
 // node_modules/simple-git/dist/esm/index.js
@@ -14035,7 +14123,7 @@ var import_file_exists = __toESM(require_dist(), 1);
 var import_debug = __toESM(require_src(), 1);
 var import_promise_deferred = __toESM(require_dist2(), 1);
 var import_promise_deferred2 = __toESM(require_dist2(), 1);
-import { spawn as spawn3 } from "child_process";
+import { spawn as spawn4 } from "child_process";
 import { EventEmitter } from "node:events";
 var __defProp2 = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -15445,7 +15533,7 @@ var init_git_executor_chain = __esm({
                 rejection = reason || rejection;
               }
             }));
-            const spawned = spawn3(command, args, spawnOptions);
+            const spawned = spawn4(command, args, spawnOptions);
             spawned.stdout.on(
               "data",
               onDataReceived(stdOut, "stdOut", logger, outputLogger.step("stdOut"))
@@ -18635,7 +18723,7 @@ var AllFilesSource = class extends BaseFileSource {
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
-          await fs16.promises.access(filePath, fs16.constants.F_OK);
+          await fs17.promises.access(filePath, fs17.constants.F_OK);
           return filePath;
         } catch {
           return null;
@@ -18678,7 +18766,7 @@ function matchGlob(pattern, filePath) {
 }
 
 // file-sources/staged-files-source.js
-import fs17 from "fs";
+import fs18 from "fs";
 import path15 from "path";
 var StagedFilesSource = class extends BaseFileSource {
   get name() {
@@ -18691,7 +18779,7 @@ var StagedFilesSource = class extends BaseFileSource {
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
-          await fs17.promises.access(filePath, fs17.constants.F_OK);
+          await fs18.promises.access(filePath, fs18.constants.F_OK);
           return filePath;
         } catch {
           return null;
@@ -18710,7 +18798,7 @@ var StagedFilesSource = class extends BaseFileSource {
 };
 
 // file-sources/diff-base-source.js
-import fs18 from "fs";
+import fs19 from "fs";
 import path16 from "path";
 var DiffBaseSource = class extends BaseFileSource {
   get name() {
@@ -18725,7 +18813,7 @@ var DiffBaseSource = class extends BaseFileSource {
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
-          await fs18.promises.access(filePath, fs18.constants.F_OK);
+          await fs19.promises.access(filePath, fs19.constants.F_OK);
           return filePath;
         } catch {
           return null;
@@ -18763,10 +18851,10 @@ var DiffBaseSource = class extends BaseFileSource {
 };
 
 // expanders/json-array-expander.js
-import fs20 from "fs/promises";
+import fs21 from "fs/promises";
 
 // entries/json-array-entry.js
-import { promises as fs19 } from "fs";
+import { promises as fs20 } from "fs";
 var JsonArrayEntry = class extends BaseEntry {
   #filePath;
   #index;
@@ -18790,7 +18878,7 @@ var JsonArrayEntry = class extends BaseEntry {
     return true;
   }
   async readContent() {
-    const text = await fs19.readFile(this.#filePath, "utf-8");
+    const text = await fs20.readFile(this.#filePath, "utf-8");
     const parsed = JSON.parse(text);
     if (!Array.isArray(parsed)) {
       throw new Error(`File ${this.#filePath} is no longer a JSON array`);
@@ -18798,7 +18886,7 @@ var JsonArrayEntry = class extends BaseEntry {
     return JSON.stringify(parsed[this.#index], null, 2);
   }
   async writeBack(content) {
-    const text = await fs19.readFile(this.#filePath, "utf-8");
+    const text = await fs20.readFile(this.#filePath, "utf-8");
     const parsed = JSON.parse(text);
     if (!Array.isArray(parsed)) {
       throw new Error(`File ${this.#filePath} is no longer a JSON array`);
@@ -18810,14 +18898,14 @@ var JsonArrayEntry = class extends BaseEntry {
       throw new Error(`writeBack content is not valid JSON for ${this.id}: ${err.message}`);
     }
     parsed[this.#index] = newElement;
-    await fs19.writeFile(this.#filePath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
+    await fs20.writeFile(this.#filePath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
   }
 };
 
 // expanders/json-array-expander.js
 var JsonArrayExpander = class extends BaseExpander {
   async expand(file) {
-    const text = await fs20.readFile(file, "utf8");
+    const text = await fs21.readFile(file, "utf8");
     const parsed = JSON.parse(text);
     if (!Array.isArray(parsed)) return [];
     return parsed.map((element, index) => new JsonArrayEntry(file, index, element));
@@ -18844,7 +18932,8 @@ var builtinChecks = {
   CompositeCheck,
   TscCheck,
   AlwaysFailCheck,
-  LocalizationKeyCheck
+  LocalizationKeyCheck,
+  CustomCheck
 };
 var builtinFileSources = {
   AllFilesSource,
@@ -18865,7 +18954,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "e1a20bd" : "unknown";
+var LINTER_COMMIT = true ? "38be258" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -18891,7 +18980,7 @@ var resolveClass = async (entry) => {
 };
 var loadConfig = async (mode) => {
   const configPath = path17.join(REPO_ROOT, "linter-config.json");
-  const config = JSON.parse(await fs21.promises.readFile(configPath, "utf-8"));
+  const config = JSON.parse(await fs22.promises.readFile(configPath, "utf-8"));
   const toolsDir = config.toolsDir ? path17.resolve(REPO_ROOT, config.toolsDir) : path17.join(REPO_ROOT, "tools");
   const modeConfig = config.modes[mode];
   if (!modeConfig) {
@@ -19165,13 +19254,13 @@ var installHook = () => {
   const hookContent = `#!/bin/sh
 node "${relLinterPath}" --fix --mode hook
 `;
-  if (fs21.existsSync(hookPath)) {
+  if (fs22.existsSync(hookPath)) {
     const backup = hookPath + ".bak";
-    fs21.copyFileSync(hookPath, backup);
+    fs22.copyFileSync(hookPath, backup);
     console.log(`Existing pre-commit hook backed up to ${path17.basename(backup)}`);
   }
-  fs21.mkdirSync(hooksDir, { recursive: true });
-  fs21.writeFileSync(hookPath, hookContent, { mode: 493 });
+  fs22.mkdirSync(hooksDir, { recursive: true });
+  fs22.writeFileSync(hookPath, hookContent, { mode: 493 });
   console.log(`Installed pre-commit hook at ${path17.relative(REPO_ROOT, hookPath)}`);
 };
 var detectInstallMethod = () => {
@@ -19232,20 +19321,20 @@ var upgrade = () => {
         );
       } catch {
         try {
-          fs21.unlinkSync(tmpPath);
+          fs22.unlinkSync(tmpPath);
         } catch {
         }
         console.error("Download failed.");
         process.exit(1);
       }
-      const head = fs21.readFileSync(tmpPath, "utf-8").slice(0, 100);
+      const head = fs22.readFileSync(tmpPath, "utf-8").slice(0, 100);
       if (!head.startsWith("#!/")) {
-        fs21.unlinkSync(tmpPath);
+        fs22.unlinkSync(tmpPath);
         console.error("Downloaded file does not look like a valid linter bundle. Aborting.");
         process.exit(1);
       }
-      fs21.renameSync(tmpPath, __filename);
-      fs21.chmodSync(__filename, 493);
+      fs22.renameSync(tmpPath, __filename);
+      fs22.chmodSync(__filename, 493);
       console.log(`Updated ${__filename}`);
       try {
         execSync(`node "${__filename}" --version`, { stdio: "inherit" });
@@ -19323,7 +19412,7 @@ var printHelp = () => {
 };
 var initConfig = () => {
   const configPath = path17.join(REPO_ROOT, "linter-config.json");
-  if (fs21.existsSync(configPath)) {
+  if (fs22.existsSync(configPath)) {
     console.error(`linter-config.json already exists at ${configPath}`);
     process.exit(1);
   }
@@ -19342,7 +19431,7 @@ var initConfig = () => {
     },
     checks: checkEntries
   };
-  fs21.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+  fs22.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
   console.log(`Created ${path17.relative(REPO_ROOT, configPath)}`);
 };
 var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
@@ -19534,7 +19623,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const baseCommand = relScript.startsWith("..") ? `node ${process.argv[1]}` : `node ${relScript}`;
       const prd = buildPrd(runResult.failedPairs || [], prdConfig, checkEntries, baseCommand);
       const absOutputPrdPath = path17.isAbsolute(outputPrdPath) ? outputPrdPath : path17.resolve(process.cwd(), outputPrdPath);
-      fs21.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
+      fs22.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
       console.log(`PRD written to ${absOutputPrdPath}`);
     }
     if (files.length === 0) {
