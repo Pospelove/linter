@@ -13915,6 +13915,7 @@ var LocalizationKeyCheck = class extends BaseCheck {
   #registrationFiles;
   #lFunctionName;
   #registerFunctionName;
+  #registryPattern;
   #language;
   #excludeRegistrationFiles;
   /** @type {Set<string> | null} */
@@ -13931,6 +13932,7 @@ var LocalizationKeyCheck = class extends BaseCheck {
     );
     this.#lFunctionName = options.lFunctionName ?? "_L";
     this.#registerFunctionName = options.registerFunctionName ?? "_LRegisterTranslationImpl";
+    this.#registryPattern = options.registryPattern ?? null;
     this.#language = options.language ?? null;
     this.#excludeRegistrationFiles = options.excludeRegistrationFiles ?? true;
   }
@@ -13949,11 +13951,16 @@ var LocalizationKeyCheck = class extends BaseCheck {
     if (this.#registeredKeys !== null) return;
     this.#registeredKeys = /* @__PURE__ */ new Set();
     this.#registryErrors = [];
-    const fn = escapeRegex(this.#registerFunctionName);
-    const re = new RegExp(
-      `${fn}\\s*\\(\\s*(?:"([^"]*)"\\s*,\\s*"([^"]*)"|'([^']*)'\\s*,\\s*'([^']*)')`,
-      "g"
-    );
+    let re;
+    if (this.#registryPattern !== null) {
+      re = new RegExp(this.#registryPattern, "g");
+    } else {
+      const fn = escapeRegex(this.#registerFunctionName);
+      re = new RegExp(
+        `${fn}\\s*\\(\\s*(?:"([^"]*)"\\s*,\\s*"([^"]*)"|'([^']*)'\\s*,\\s*'([^']*)')`,
+        "g"
+      );
+    }
     for (const filePath of this.#registrationFiles) {
       let content;
       try {
@@ -13966,10 +13973,15 @@ var LocalizationKeyCheck = class extends BaseCheck {
       }
       let m;
       while ((m = re.exec(content)) !== null) {
-        const lang = m[1] ?? m[3];
-        const key = m[2] ?? m[4];
-        if (this.#language === null || lang === this.#language) {
-          this.#registeredKeys.add(key);
+        if (this.#registryPattern !== null) {
+          const key = m[1];
+          if (key !== void 0) this.#registeredKeys.add(key);
+        } else {
+          const lang = m[1] ?? m[3];
+          const key = m[2] ?? m[4];
+          if (this.#language === null || lang === this.#language) {
+            this.#registeredKeys.add(key);
+          }
         }
       }
     }
@@ -14001,7 +14013,7 @@ ${violations.join("\n")}`
     return {
       name: "LocalizationKeyCheck",
       description: 'Ensures every _L("key") call has a matching _LRegisterTranslationImpl entry, preventing missing or misspelled localization keys.',
-      options: "registrationFiles (required), lFunctionName, registerFunctionName, language, excludeRegistrationFiles"
+      options: "registrationFiles (required), lFunctionName, registerFunctionName, registryPattern, language, excludeRegistrationFiles"
     };
   }
 };
@@ -18954,7 +18966,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "38be258" : "unknown";
+var LINTER_COMMIT = true ? "826b164" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
