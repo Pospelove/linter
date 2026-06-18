@@ -12,12 +12,12 @@ import {
 
 const VERSION = "21.1.8";
 
-function checkVersion(exePath) {
+function checkVersion(exePath: string): string {
   try {
     const child = spawnSync(exePath, ["--version"], { encoding: "utf-8", stdio: "pipe" });
     if (child.error || child.status !== 0) return "unknown";
     const match = child.stdout.match(/\bclang-format\s+version\s+([0-9]+(?:\.[0-9]+)*)\b/i);
-    return match ? match[1] : "unknown";
+    return (match && match[1]) ? match[1] : "unknown";
   } catch {
     return "unknown";
   }
@@ -25,10 +25,8 @@ function checkVersion(exePath) {
 
 /**
  * Resolve clang-format binary path.
- * @param {{ shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }} options
- * @returns {Promise<string|undefined>} Path to binary, or undefined if unavailable.
  */
-export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir }) {
+export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir }: { shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }): Promise<string|undefined> {
   const { cachePath: CACHE_PATH, extractedPath: EXTRACTED_PATH } = getToolPaths(toolsDir);
   const exeName = os.platform() === "win32" ? "clang-format.exe" : "clang-format";
 
@@ -36,8 +34,8 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
     const systemPath = checkInPath(exeName);
     if (systemPath) {
       const systemVersion = checkVersion(systemPath);
-      const systemMajor = parseInt(systemVersion.split(".")[0], 10);
-      const requiredMajor = parseInt(VERSION.split(".")[0], 10);
+      const systemMajor = parseInt((systemVersion ?? "0").split(".")[0] ?? "0", 10);
+      const requiredMajor = parseInt(VERSION.split(".")[0] ?? "0", 10);
       if (systemMajor >= requiredMajor) {
         console.log(`Using ${systemPath} from system path (version ${systemVersion})`);
         return systemPath;
@@ -87,6 +85,7 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
 
   ensureDirExists(extractDir);
   console.log(`Extracting clang-format from ${archiveName} (single binary, not full LLVM)...`);
+  // @ts-expect-error - members is string[] but extracted from untyped tool-utils
   await extractArchive(archivePath, extractDir, [archivePathToClangFormat]);
 
   if (fs.existsSync(expectedExe)) {

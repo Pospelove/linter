@@ -9,10 +9,11 @@ import { builtinRegistry, builtinChecks, builtinFileSources, builtinExpanders } 
 import { CompositeCheck } from "./checks/composite-check.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /* global __LINTER_VERSION__, __LINTER_COMMIT__ */
+// @ts-expect-error - global
 const LINTER_VERSION = typeof __LINTER_VERSION__ !== "undefined" ? __LINTER_VERSION__ : "dev";
+// @ts-expect-error - global
 const LINTER_COMMIT = typeof __LINTER_COMMIT__ !== "undefined" ? __LINTER_COMMIT__ : "unknown";
 
 const UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
@@ -23,7 +24,7 @@ const getRepoRoot = () => {
     encoding: "utf-8",
   });
   if (result.error || result.status !== 0) {
-    console.warn("Warning: not a git repository, using cwd as repo root");
+    console.warn("Warning: not a git repository, using cwd for repo root");
     return process.cwd();
   }
   return result.stdout.trim();
@@ -34,8 +35,9 @@ const REPO_ROOT = getRepoRoot();
 /**
  * Resolve a class from config entry by looking up "export" in the built-in registry.
  */
-const resolveClass = async (entry) => {
+const resolveClass = async (entry: { export: string }) => {
   const exportName = entry.export;
+  // @ts-expect-error - indexing builtinRegistry
   const Cls = builtinRegistry[exportName];
   if (!Cls) {
     throw new Error(
@@ -49,7 +51,7 @@ const resolveClass = async (entry) => {
 /**
  * Load config, instantiate file source and checks for the given mode.
  */
-const loadConfig = async (mode) => {
+const loadConfig = async (mode: string) => {
   const configPath = path.join(REPO_ROOT, "linter-config.json");
   const config = JSON.parse(await fs.promises.readFile(configPath, "utf-8"));
 
@@ -81,8 +83,7 @@ const loadConfig = async (mode) => {
       const fixer = new FixClass(REPO_ROOT, { ...entry.options, ...entry.fixWith.options });
       check = new CompositeCheck(check, fixer);
     }
-    // Assign config name as own property so it can be filtered by --checks
-    Object.defineProperty(check, "name", { value: entry.name, configurable: true, writable: true });
+    check.name = entry.name;
     check._prdConfig = entry.prd || null;
     if (entry.expander) {
       const ExpanderClass = await resolveClass(entry.expander);
@@ -100,7 +101,7 @@ const loadConfig = async (mode) => {
 /**
  * Make path relative to REPO_ROOT for compact output.
  */
-const relPath = (file) => {
+const relPath = (file: string) => {
   if (file.startsWith(REPO_ROOT + path.sep)) {
     return file.slice(REPO_ROOT.length + 1);
   }
@@ -114,20 +115,16 @@ const relPath = (file) => {
  * If every check fixed   → single line: [FIXED] rel/path [Check1, Check2, ...]
  * If mixed pass+fixed    → single line: [OK] rel/path [passed: A, B | fixed: C]
  * Otherwise              → one line per failed/errored check with details.
- *
- * @param {{ res: CheckResult, checkName: string }[]} results
- * @param {string} file  Absolute path.
- * @returns {{ lines: string[], isFail: boolean, stats: { pass: number, fixed: number, fail: number, error: number } }}
  */
-const formatFileResults = (results, file) => {
+const formatFileResults = (results: { res: any, checkName: string }[], file: string) => {
   const rel = relPath(file);
-  const lines = [];
+  const lines: string[] = [];
   let isFail = false;
   const stats = { pass: 0, fixed: 0, fail: 0, error: 0 };
 
-  const passed = [];
-  const fixed = [];
-  const bad = [];
+  const passed: string[] = [];
+  const fixed: string[] = [];
+  const bad: { res: any, checkName: string }[] = [];
 
   for (const { res, checkName } of results) {
     switch (res.status) {
@@ -158,7 +155,7 @@ const formatFileResults = (results, file) => {
     } else if (passed.length === 0) {
       lines.push(`[FIXED] ${rel} [${fixed.join(", ")}]`);
     } else {
-      const parts = [];
+      const parts: string[] = [];
       if (passed.length) parts.push(`passed: ${passed.join(", ")}`);
       if (fixed.length) parts.push(`fixed: ${fixed.join(", ")}`);
       lines.push(`[OK] ${rel} [${parts.join(" | ")}]`);
@@ -187,7 +184,7 @@ const formatFileResults = (results, file) => {
  * A virtual entry (e.g. one element of a JSON array) cannot be processed by a
  * check that does its own raw file I/O — that would corrupt the surrounding file.
  */
-const assertEntrySupported = (check, entry) => {
+const assertEntrySupported = (check: any, entry: any) => {
   if (entry.isVirtual && !check.supportsInMemory) {
     throw new Error(
       `Check "${check.name}" does not support in-memory entries (supportsInMemory === false), ` +
@@ -201,7 +198,7 @@ const assertEntrySupported = (check, entry) => {
  * Run a single (check, entry) pair in lint-only mode.
  * Routes to lintInMemory when the check supports it; otherwise falls back to file-based lint.
  */
-const runEntryLint = async (check, entry, fallbackFile, deps) => {
+const runEntryLint = async (check: any, entry: any, fallbackFile: string, deps: any) => {
   assertEntrySupported(check, entry);
   if (check.supportsInMemory) {
     const content = await entry.readContent();
@@ -215,7 +212,7 @@ const runEntryLint = async (check, entry, fallbackFile, deps) => {
  * Routes to lintAndFixInMemory/fixInMemory when supported, writing the result back via entry.writeBack.
  * Otherwise falls back to file-based lintAndFix/fix.
  */
-const runEntryFix = async (check, entry, fallbackFile, deps) => {
+const runEntryFix = async (check: any, entry: any, fallbackFile: string, deps: any) => {
   assertEntrySupported(check, entry);
   if (check.supportsInMemory) {
     const content = await entry.readContent();
@@ -241,13 +238,13 @@ const runEntryFix = async (check, entry, fallbackFile, deps) => {
  * Returns { extraFiles, failed, failedPairs } instead of calling process.exit(1).
  * failedPairs: Array<{ file: string, checkName: string }>
  */
-const runChecks = async (files, checks, { lintOnly = false, verbose = false, ...deps }) => {
+const runChecks = async (files: string[], checks: any[], { lintOnly = false, verbose = false, ...deps }: any) => {
 
-  const extraFiles = new Set();
-  const failedPairs = [];
+  const extraFiles = new Set<string>();
+  const failedPairs: { file: string, checkName: string }[] = [];
 
   // Group checks by file instead of a sequential flat array
-  const fileToChecks = new Map();
+  const fileToChecks = new Map<string, any[]>();
   let totalChecks = 0;
 
   for (const check of checks) {
@@ -260,20 +257,20 @@ const runChecks = async (files, checks, { lintOnly = false, verbose = false, ...
         if (!fileToChecks.has(file)) {
           fileToChecks.set(file, []);
         }
-        fileToChecks.get(file).push(check);
+        fileToChecks.get(file)!.push(check);
         totalChecks++;
       }
     }
   }
 
   const groupedWork = Array.from(fileToChecks.entries()).map(([file, fileChecks]) => {
-    fileChecks.sort((a, b) => a.priority - b.priority);
+    fileChecks.sort((a: any, b: any) => a.priority - b.priority);
     return { file, checks: fileChecks };
   });
 
   if (groupedWork.length === 0) {
     console.log("No matching files found for checks.");
-    return { extraFiles: new Set(), failed: false, failedPairs: [] };
+    return { extraFiles: new Set<string>(), failed: false, failedPairs: [] };
   }
 
   console.log(`${lintOnly ? "Linting" : "Fixing"} ${totalChecks} check(s) across ${groupedWork.length} file(s)...`);
@@ -289,13 +286,13 @@ const runChecks = async (files, checks, { lintOnly = false, verbose = false, ...
         limit(async () => {
           // For each check, expand the file into entries, then lint each entry
           const rawResults = await Promise.all(
-            checks.map(async (check) => {
+            checks.map(async (check: any) => {
               const entries = await check.expand(file);
-              return Promise.all(entries.map(async (entry) => {
+              return Promise.all(entries.map(async (entry: any) => {
                 try {
                   const res = await runEntryLint(check, entry, file, deps);
                   return { res, checkName: check.name, entryId: entry.id };
-                } catch (err) {
+                } catch (err: any) {
                   return { res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id };
                 }
               }));
@@ -304,10 +301,10 @@ const runChecks = async (files, checks, { lintOnly = false, verbose = false, ...
           const results = rawResults.flat();
 
           // Group results by entryId and format each group independently
-          const byEntry = new Map();
+          const byEntry = new Map<string, any[]>();
           for (const r of results) {
             if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
-            byEntry.get(r.entryId).push(r);
+            byEntry.get(r.entryId)!.push(r);
           }
           for (const [entryId, entryResults] of byEntry) {
             const { lines, isFail, stats } = formatFileResults(entryResults, entryId);
@@ -337,26 +334,26 @@ const runChecks = async (files, checks, { lintOnly = false, verbose = false, ...
   } else {
     // Sequential fix: file by file, check by check to avoid file races
     for (const { file, checks } of groupedWork) {
-      const fileResults = [];
+      const fileResults: any[] = [];
 
       for (const check of checks) {
         const entries = await check.expand(file);
         for (const entry of entries) {
           try {
             const res = await runEntryFix(check, entry, file, deps);
-            if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
+            if (res.extraFiles) res.extraFiles.forEach((f: string) => extraFiles.add(f));
             fileResults.push({ res, checkName: check.name, entryId: entry.id });
-          } catch (err) {
+          } catch (err: any) {
             fileResults.push({ res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id });
           }
         }
       }
 
       // Group by entryId for display
-      const byEntry = new Map();
+      const byEntry = new Map<string, any[]>();
       for (const r of fileResults) {
         if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
-        byEntry.get(r.entryId).push(r);
+        byEntry.get(r.entryId)!.push(r);
       }
       for (const [entryId, entryResults] of byEntry) {
         const { lines, isFail, stats } = formatFileResults(entryResults, entryId);
@@ -399,8 +396,7 @@ const runChecks = async (files, checks, { lintOnly = false, verbose = false, ...
 };
 
 /**
- * Install the linter as a git pre-commit hook.
- *
+ * Install the linter into a git pre-commit hook.
  * Writes a small shell script into .git/hooks/pre-commit that invokes
  * dist/linter.mjs with --fix --mode hook. If a hook already exists
  * it is backed up to pre-commit.bak before overwriting.
@@ -552,7 +548,7 @@ const printHelp = () => {
   lines.push("COMMANDS:");
   lines.push("  --lint                Run checks in read-only mode (exit 1 on failure)");
   lines.push("  --fix                 Run checks in fix mode (modify files in-place)");
-  lines.push("  --install-hook        Install as a git pre-commit hook and exit");
+  lines.push("  --install-hook        Install into a git pre-commit hook and exit");
   lines.push("  --init                Generate a minimal linter-config.json in the repo root");
   lines.push("");
   lines.push("  --help                Show this help message");
@@ -605,6 +601,7 @@ const printHelp = () => {
       const h = Cls.getHelp();
       lines.push(`  ${exportName}`);
       lines.push(`    ${h.description}`);
+      // @ts-expect-error - options might not exist on all expanders
       if (h.options) lines.push(`    Options: ${h.options}`);
     } else {
       lines.push(`  ${exportName}`);
@@ -658,56 +655,56 @@ const initConfig = () => {
  * @param {object[]} checkEntries  Raw check entries from linter-config.json (for per-check prd config).
  * @returns {object}  PRD object ready to JSON.stringify.
  */
-const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
+const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig: any, checkEntries: any[], baseCommand: string) => {
   const project = prdConfig.project || "Project";
   const branchName = prdConfig.branchName || "ralph/lint-fixes";
   const description = prdConfig.description || "Fix outstanding lint issues";
 
   // Build a lookup: checkName -> prd config from check entry
-  const checkPrdMap = {};
+  const checkPrdMap: Record<string, any> = {};
   for (const entry of checkEntries || []) {
     if (entry.prd) {
       checkPrdMap[entry.name] = entry.prd;
     }
   }
 
-  const userStories = [];
+  const userStories: any[] = [];
   let counter = 1;
 
   // Group by check name, sort files within each check alphabetically
-  const byCheck = new Map();
+  const byCheck = new Map<string, string[]>();
   for (const { file, checkName } of failedPairs) {
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
-    byCheck.get(checkName).push(file);
+    byCheck.get(checkName)!.push(file);
   }
-  for (const files of byCheck.values()) files.sort((a, b) => a.localeCompare(b));
+  for (const files of byCheck.values()) files.sort((a: string, b: string) => a.localeCompare(b));
 
   // Sort checks alphabetically for stable output
   const sortedChecks = [...byCheck.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   // Build a lookup of ALL check names per group from the full config (not just failing ones)
-  const groupToAllCheckNames = new Map();
+  const groupToAllCheckNames = new Map<string, string[]>();
   for (const entry of checkEntries || []) {
     if (entry.prd?.group) {
       if (!groupToAllCheckNames.has(entry.prd.group)) groupToAllCheckNames.set(entry.prd.group, []);
-      groupToAllCheckNames.get(entry.prd.group).push(entry.name);
+      groupToAllCheckNames.get(entry.prd.group)!.push(entry.name);
     }
   }
 
   // Separate checks into prd-grouped vs ungrouped
-  const prdGroups = new Map(); // groupName -> [{ checkName, files, checkPrd }]
-  const ungroupedChecks = [];
+  const prdGroups = new Map<string, any[]>(); // groupName -> [{ checkName, files, checkPrd }]
+  const ungroupedChecks: any[] = [];
   for (const [checkName, files] of sortedChecks) {
     const checkPrd = checkPrdMap[checkName] || {};
     if (checkPrd.group) {
       if (!prdGroups.has(checkPrd.group)) prdGroups.set(checkPrd.group, []);
-      prdGroups.get(checkPrd.group).push({ checkName, files, checkPrd });
+      prdGroups.get(checkPrd.group)!.push({ checkName, files, checkPrd });
     } else {
       ungroupedChecks.push({ checkName, files, checkPrd });
     }
   }
 
-  const pushStory = (title, storyDescription, acceptanceCriteria) => {
+  const pushStory = (title: string, storyDescription: string | null, acceptanceCriteria: string[]) => {
     const idStr = `US-${String(counter).padStart(3, "0")}`;
     userStories.push({
       id: idStr,
@@ -724,32 +721,31 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   // Emit stories per prd group, respecting filesPerStory
   for (const [groupName, members] of [...prdGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     // Use groupTitle / groupDescription from the first member that defines them
-    const groupTitleTemplate = members.map(m => m.checkPrd.groupTitle).find(Boolean);
-    const groupDescTemplate = members.map(m => m.checkPrd.groupDescription).find(Boolean);
-    const filesPerStory = members.map(m => m.checkPrd.filesPerStory).find(v => v != null) ?? 1;
+    const groupTitleTemplate = members.map((m: any) => m.checkPrd.groupTitle).find(Boolean);
+    const groupDescTemplate = members.map((m: any) => m.checkPrd.groupDescription).find(Boolean);
+    const filesPerStory = members.map((m: any) => m.checkPrd.filesPerStory).find((v: any) => v != null) ?? 1;
 
     // Description: groupDescription wins; fall back to merging userStoryDescription from all members
-    const resolveDesc = (v) => Array.isArray(v) ? v.join("\n") : v;
-    const memberDescs = members.map(m => resolveDesc(m.checkPrd.userStoryDescription)).filter(Boolean);
+    const resolveDesc = (v: any) => Array.isArray(v) ? v.join("\n") : v;
+    const memberDescs = members.map((m: any) => resolveDesc(m.checkPrd.userStoryDescription)).filter(Boolean);
     const rawDescTemplate = groupDescTemplate
       ? resolveDesc(groupDescTemplate)
       : memberDescs.length
-        ? memberDescs.map((d, i) => `${i + 1}) ${d}`).join("\n\n")
+        ? memberDescs.map((d: any, i: number) => `${i + 1}) ${d}`).join("\n\n")
         : null;
 
-    const allChecks = members.map(m => m.checkName).join(", ");
+    const allChecks = members.map((m: any) => m.checkName).join(", ");
     // Collect any additionalAcceptanceCriteria from all members (deduplicated)
-    const extraCriteria = [...new Set(members.flatMap(m => m.checkPrd.additionalAcceptanceCriteria || []))];
+    const extraCriteria = [...new Set(members.flatMap((m: any) => m.checkPrd.additionalAcceptanceCriteria || []))];
 
-    // Union of all files across the group, sorted — used for chunking
-    const allFiles = [...new Set(members.flatMap(m => m.files))].sort((a, b) => a.localeCompare(b));
+    const allFiles = [...new Set(members.flatMap((m: any) => m.files))].sort((a: any, b: any) => a.localeCompare(b));
 
     for (let i = 0; i < allFiles.length; i += filesPerStory) {
       const chunkSet = new Set(allFiles.slice(i, i + filesPerStory));
       const chunkRelFiles = [...chunkSet].map(relPath);
       const fileCount = chunkRelFiles.length;
 
-      const applyGroupPlaceholders = (str) =>
+      const applyGroupPlaceholders = (str: string) =>
         str
           .replace(/\{files?\}/g, chunkRelFiles.join(", "))
           .replace(/\{fileCount\}/g, String(fileCount))
@@ -768,9 +764,9 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
 
       // One acceptance criterion for the whole group using all check names (including non-failing),
       // comma-separated. Checks with prd.prdOnly: true are excluded.
-      const allGroupCheckNames = (groupToAllCheckNames.get(groupName) || members.map(m => m.checkName))
-        .filter((name) => {
-          const entry = (checkEntries || []).find((e) => e.name === name);
+      const allGroupCheckNames = (groupToAllCheckNames.get(groupName) || members.map((m: any) => m.checkName))
+        .filter((name: string) => {
+          const entry = (checkEntries || []).find((e: any) => e.name === name);
           return !entry?.prd?.prdOnly;
         });
       const mainCriteria = allGroupCheckNames.length > 0
@@ -793,7 +789,7 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const filesStr = relFiles.join(",");
       const fileCount = chunk.length;
 
-      const applyPlaceholders = (str) =>
+      const applyPlaceholders = (str: string) =>
         str
           .replace(/\{files?\}/g, relFiles.join(", "))
           .replace(/\{fileCount\}/g, String(fileCount))
@@ -836,7 +832,7 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
  *   --no-download    Do not download tools if missing
  *   --no-path        Do not search for tools in PATH
  *   --mode <mode>    Execution mode (key in config.modes, default: manual)
- *   --install-hook   Install as a git pre-commit hook and exit
+ *   --install-hook   Install into a git pre-commit hook and exit
  *   --help           Show help message
  *   --version        Show version and install method
  *   --upgrade        Upgrade to the latest version
@@ -892,16 +888,19 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   }
 
   const modeIndex = args.indexOf("--mode");
-  const mode = modeIndex !== -1 && args[modeIndex + 1] ? args[modeIndex + 1] : "manual";
+  const modeParam = modeIndex !== -1 ? args[modeIndex + 1] : null;
+  const mode = modeParam ?? "manual";
 
   const checksIndex = args.indexOf("--checks");
-  const checksFilter = checksIndex !== -1 && args[checksIndex + 1]
-    ? args[checksIndex + 1].split(",").map((s) => s.trim()).filter(Boolean)
+  const checksArg = checksIndex !== -1 ? args[checksIndex + 1] : null;
+  const checksFilter = checksArg
+    ? checksArg.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
 
   const filesIndex = args.indexOf("--files");
-  const filesArg = filesIndex !== -1 && args[filesIndex + 1]
-    ? args[filesIndex + 1].split(",").map((s) => s.trim()).filter(Boolean)
+  const filesParam = filesIndex !== -1 ? args[filesIndex + 1] : null;
+  const filesArg = filesParam
+    ? filesParam.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
 
   if (!shouldLint && !shouldFix) {
@@ -963,8 +962,9 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
 
     // Write PRD if requested (before any exit calls)
     if (outputPrdPath !== null) {
-      const relScript = path.relative(REPO_ROOT, process.argv[1]);
-      const baseCommand = relScript.startsWith("..") ? `node ${process.argv[1]}` : `node ${relScript}`;
+      const scriptPath = process.argv[1] ?? "";
+      const relScript = path.relative(REPO_ROOT, scriptPath);
+      const baseCommand = relScript.startsWith("..") ? `node ${scriptPath}` : `node ${relScript}`;
       const prd = buildPrd(runResult.failedPairs || [], prdConfig, checkEntries, baseCommand);
       const absOutputPrdPath = path.isAbsolute(outputPrdPath) ? outputPrdPath : path.resolve(process.cwd(), outputPrdPath);
       fs.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
@@ -990,7 +990,7 @@ const buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
         ensureCleanExit(spawnSync("git", ["add", file], { stdio: "inherit" }))
       );
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error during processing:", err.message);
     process.exit(1);
   }

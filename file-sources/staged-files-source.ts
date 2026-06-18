@@ -8,11 +8,11 @@ import { BaseFileSource } from "./base-file-source.js";
  * Typical use: pre-commit hook.
  */
 export class StagedFilesSource extends BaseFileSource {
-  get name() {
+  override get name() {
     return "Staged files";
   }
 
-  async resolve() {
+  override async resolve() {
     const git = simpleGit(this.repoRoot);
     const output = await git.diff(["--name-only", "--diff-filter=ACMR", "--cached"]);
     const files = output
@@ -34,7 +34,7 @@ export class StagedFilesSource extends BaseFileSource {
     return existing.filter((filePath) => filePath !== null);
   }
 
-  static getHelp() {
+  static override getHelp() {
     return {
       name: "StagedFilesSource",
       description: "Files currently staged in git (git diff --cached). Typical use: pre-commit hook.",

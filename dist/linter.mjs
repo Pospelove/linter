@@ -5503,7 +5503,7 @@ function checkVersion(exePath) {
     const child = spawnSync2(exePath, ["--version"], { encoding: "utf-8", stdio: "pipe" });
     if (child.error || child.status !== 0) return "unknown";
     const match = child.stdout.match(/\bclang-format\s+version\s+([0-9]+(?:\.[0-9]+)*)\b/i);
-    return match ? match[1] : "unknown";
+    return match && match[1] ? match[1] : "unknown";
   } catch {
     return "unknown";
   }
@@ -5515,8 +5515,8 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
     const systemPath = checkInPath(exeName);
     if (systemPath) {
       const systemVersion = checkVersion(systemPath);
-      const systemMajor = parseInt(systemVersion.split(".")[0], 10);
-      const requiredMajor = parseInt(VERSION2.split(".")[0], 10);
+      const systemMajor = parseInt((systemVersion ?? "0").split(".")[0] ?? "0", 10);
+      const requiredMajor = parseInt(VERSION2.split(".")[0] ?? "0", 10);
       if (systemMajor >= requiredMajor) {
         console.log(`Using ${systemPath} from system path (version ${systemVersion})`);
         return systemPath;
@@ -18971,9 +18971,8 @@ var builtinRegistry = {
 
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "04d4dac" : "unknown";
+var LINTER_COMMIT = true ? "c30d6fe" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -18981,7 +18980,7 @@ var getRepoRoot = () => {
     encoding: "utf-8"
   });
   if (result.error || result.status !== 0) {
-    console.warn("Warning: not a git repository, using cwd as repo root");
+    console.warn("Warning: not a git repository, using cwd for repo root");
     return process.cwd();
   }
   return result.stdout.trim();
@@ -19021,7 +19020,7 @@ var loadConfig = async (mode) => {
       const fixer = new FixClass(REPO_ROOT, { ...entry.options, ...entry.fixWith.options });
       check = new CompositeCheck(check, fixer);
     }
-    Object.defineProperty(check, "name", { value: entry.name, configurable: true, writable: true });
+    check.name = entry.name;
     check._prdConfig = entry.prd || null;
     if (entry.expander) {
       const ExpanderClass = await resolveClass(entry.expander);
@@ -19373,7 +19372,7 @@ var printHelp = () => {
   lines.push("COMMANDS:");
   lines.push("  --lint                Run checks in read-only mode (exit 1 on failure)");
   lines.push("  --fix                 Run checks in fix mode (modify files in-place)");
-  lines.push("  --install-hook        Install as a git pre-commit hook and exit");
+  lines.push("  --install-hook        Install into a git pre-commit hook and exit");
   lines.push("  --init                Generate a minimal linter-config.json in the repo root");
   lines.push("");
   lines.push("  --help                Show this help message");
@@ -19587,11 +19586,14 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     process.exit(1);
   }
   const modeIndex = args.indexOf("--mode");
-  const mode = modeIndex !== -1 && args[modeIndex + 1] ? args[modeIndex + 1] : "manual";
+  const modeParam = modeIndex !== -1 ? args[modeIndex + 1] : null;
+  const mode = modeParam ?? "manual";
   const checksIndex = args.indexOf("--checks");
-  const checksFilter = checksIndex !== -1 && args[checksIndex + 1] ? args[checksIndex + 1].split(",").map((s) => s.trim()).filter(Boolean) : null;
+  const checksArg = checksIndex !== -1 ? args[checksIndex + 1] : null;
+  const checksFilter = checksArg ? checksArg.split(",").map((s) => s.trim()).filter(Boolean) : null;
   const filesIndex = args.indexOf("--files");
-  const filesArg = filesIndex !== -1 && args[filesIndex + 1] ? args[filesIndex + 1].split(",").map((s) => s.trim()).filter(Boolean) : null;
+  const filesParam = filesIndex !== -1 ? args[filesIndex + 1] : null;
+  const filesArg = filesParam ? filesParam.split(",").map((s) => s.trim()).filter(Boolean) : null;
   if (!shouldLint && !shouldFix) {
     console.error("Either --lint or --fix must be specified. Run --help for usage.");
     process.exit(127);
@@ -19638,8 +19640,9 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     const timeStr = minutes > 0 ? `${minutes} minutes, ${seconds} seconds` : `${seconds} seconds`;
     console.log(`Completed in ${timeStr}`);
     if (outputPrdPath !== null) {
-      const relScript = path17.relative(REPO_ROOT, process.argv[1]);
-      const baseCommand = relScript.startsWith("..") ? `node ${process.argv[1]}` : `node ${relScript}`;
+      const scriptPath = process.argv[1] ?? "";
+      const relScript = path17.relative(REPO_ROOT, scriptPath);
+      const baseCommand = relScript.startsWith("..") ? `node ${scriptPath}` : `node ${relScript}`;
       const prd = buildPrd(runResult.failedPairs || [], prdConfig, checkEntries, baseCommand);
       const absOutputPrdPath = path17.isAbsolute(outputPrdPath) ? outputPrdPath : path17.resolve(process.cwd(), outputPrdPath);
       fs22.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
