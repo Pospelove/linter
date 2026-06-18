@@ -26,16 +26,20 @@
       }
     },
     {
-      "name": "tsc",
-      "export": "TscCheck",
+      "name": "no-ts-any-type",
+      "export": "RegexCheck",
       "modes": ["manual", "hook", "ci"],
-      "options": {},
+      "options": {
+        "extensions": [".ts"],
+        "pattern": "(:\\s*any\\b|\\bany\\s*\\[\\s*\\]|<\\s*any\\s*>|,\\s*any\\s*>)",
+        "message": "The TypeScript 'any' type is banned. Use proper typing, or use 'unknown' if the type is truly not known at compile time."
+      },
       "prd": {
         "group": "ts-migration",
-        "groupTitle": "Fix TypeScript errors in {fileCount} file(s)",
+        "groupTitle": "Fix TypeScript errors and ban 'any' type in {fileCount} file(s)",
         "groupDescription": [
-          "As a developer, I need to resolve TypeScript compiler errors in {files}.",
-          "This is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules."
+          "As a developer, I need to resolve TypeScript compiler errors in {files} while strictly avoiding the 'any' type.",
+          "This is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules."
         ],
         "filesPerStory": 3,
         "additionalAcceptanceCriteria": [
@@ -43,7 +47,31 @@
           "No functional changes are made to the code; the runtime behavior remains identical",
           "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
           "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-          "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+          "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+          "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
+        ]
+      }
+    },
+    {
+      "name": "tsc",
+      "export": "TscCheck",
+      "modes": ["manual", "hook", "ci"],
+      "options": {},
+      "prd": {
+        "group": "ts-migration",
+        "groupTitle": "Fix TypeScript errors and ban 'any' type in {fileCount} file(s)",
+        "groupDescription": [
+          "As a developer, I need to resolve TypeScript compiler errors in {files} while strictly avoiding the 'any' type.",
+          "This is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules."
+        ],
+        "filesPerStory": 3,
+        "additionalAcceptanceCriteria": [
+          "Code compiles without any strict TypeScript errors",
+          "No functional changes are made to the code; the runtime behavior remains identical",
+          "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
+          "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
+          "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+          "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
         ]
       }
     },
