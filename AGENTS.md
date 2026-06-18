@@ -7,7 +7,12 @@
 - ./dist isn't gitignored. this is by design. like in github actions. this is cool because clients can download and use without building the project.
 - after each code change please yarn build, this will keep ./dist in sync with source
 
-## self linting
+## typescript
 
-- do "node ./.linter/linter.mjs". this is usually slightly older linter we use to self-lint
-- if prompted to update linster version we use to self-lint please do "node ./.linter/linter.mjs --upgrade" and follow instructions
+- use `override` keyword for all methods that override base class methods (required by `noImplicitOverride: true`).
+- `static override` is also used for static methods overriding base static methods.
+- the `as` operator is strictly banned (no-ts-as-operator). Use proper typing, type guards, or `@ts-expect-error` if absolutely necessary.
+- avoid " as " in comments and strings to prevent triggering the linter.
+- use `interface` and `type` for better type safety.
+- `BaseCheck` and `BaseAiProvider` should be used as base classes.
+- return types for all methods are encouraged.

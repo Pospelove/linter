@@ -1,17 +1,17 @@
 import OpenAI from "openai";
-import { BaseAiProvider } from "./base-ai-provider.js";
+import { BaseAiProvider, type AiProviderOptions } from "./base-ai-provider.js";
 
 /**
  * AI provider that talks to any OpenAI-compatible endpoint via the OpenAI SDK.
  */
 export class OpenAICompatibleProvider extends BaseAiProvider {
-  #client;
-  #model;
+  #client: OpenAI;
+  #model: string;
 
   /**
-   * @param {{ apiKey: string, baseURL?: string, model?: string }} options
+   * @param {{ apiKey?: string, baseURL?: string, model?: string }} options
    */
-  constructor({ apiKey, baseURL, model } = {}) {
+  constructor({ apiKey, baseURL, model }: { apiKey?: string; baseURL?: string; model?: string } = {}) {
     super();
     this.#model = model || "gpt-4o";
     this.#client = new OpenAI({
@@ -20,20 +20,20 @@ export class OpenAICompatibleProvider extends BaseAiProvider {
     });
   }
 
-  get name() {
+  override get name(): string {
     return `OpenAI-compatible (${this.#model})`;
   }
 
-  checkDeps() {
+  override checkDeps(): boolean {
     return true;
   }
 
   /**
    * @param {string} prompt
-   * @param {{ timeout?: number }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
-  async call(prompt, options = {}) {
+  override async call(prompt: string, options: AiProviderOptions = {}): Promise<string> {
     const response = await this.#client.chat.completions.create(
       {
         model: this.#model,
@@ -45,7 +45,7 @@ export class OpenAICompatibleProvider extends BaseAiProvider {
     return response.choices[0]?.message?.content?.trim() ?? "";
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string } {
     return {
       name: "OpenAICompatibleProvider",
       description:

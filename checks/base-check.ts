@@ -6,11 +6,18 @@ import { FileExpander } from "../expanders/file-expander.js";
  * @typedef {"pass" | "fail" | "fixed" | "error"} CheckStatus
  */
 
+export type CheckStatus = "pass" | "fail" | "fixed" | "error";
+
 /**
  * @typedef {Object} CheckResult
  * @property {CheckStatus} status  - Outcome of the check.
  * @property {string}      [output] - Optional diagnostic text (diff, error message, etc.).
  */
+
+export interface CheckResult {
+  status: CheckStatus;
+  output?: string;
+}
 
 /**
  * Base class for all linter checks.
@@ -29,16 +36,17 @@ import { FileExpander } from "../expanders/file-expander.js";
  * Checks must NOT write to stdout/stderr directly.
  */
 export class BaseCheck {
-  #extensions;
-  #includePaths;
-  #excludePaths;
-  #textOnly;
-  #priority;
-  #expander;
+  repoRoot: string;
+  #extensions: string[];
+  #includePaths: string[];
+  #excludePaths: string[];
+  #textOnly: boolean;
+  #priority: number;
+  #expander: import("../expanders/base-expander.js").BaseExpander | null;
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     this.repoRoot = repoRoot;
-    this.#extensions = (options.extensions || []).map((e) => e.toLowerCase());
+    this.#extensions = (options.extensions || []).map((e: string) => e.toLowerCase());
     this.#includePaths = options.includePaths || [];
     this.#excludePaths = options.excludePaths || [];
     this.#textOnly = options.textOnly ?? false;
@@ -49,14 +57,14 @@ export class BaseCheck {
   /**
    * @returns {number} Numeric priority (lower runs first).
    */
-  get priority() {
+  get priority(): number {
     return this.#priority;
   }
 
   /**
    * @returns {string} Human-readable name of the check.
    */
-  get name() {
+  get name(): string {
     throw new Error("Not implemented: name");
   }
 
@@ -65,7 +73,7 @@ export class BaseCheck {
    * Called by the runner when "expander" is configured for this check.
    * @param {import("../expanders/base-expander.js").BaseExpander} expander
    */
-  setExpander(expander) {
+  setExpander(expander: import("../expanders/base-expander.js").BaseExpander): void {
     this.#expander = expander;
   }
 
@@ -77,7 +85,7 @@ export class BaseCheck {
    * @param {string} file - Absolute path to the file.
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
-  async expand(file) {
+  async expand(file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
     if (!this.#expander) {
       this.#expander = new FileExpander();
     }
@@ -89,7 +97,7 @@ export class BaseCheck {
    * @param {object} deps - Resolved dependencies (e.g. { clangFormatPath }).
    * @returns {boolean}
    */
-  checkDeps(deps) {
+  checkDeps(_deps: any): boolean {
     return true;
   }
 
@@ -100,7 +108,7 @@ export class BaseCheck {
    * @param {string} file - Absolute path to the file.
    * @returns {Promise<boolean>}
    */
-  async appliesTo(file) {
+  async appliesTo(file: string): Promise<boolean> {
     // Normalize to forward slashes so includePaths/excludePaths (always written
     // with forward slashes) match correctly on Windows too.
     const normalizedFile = file.replace(/\\/g, "/");
@@ -149,7 +157,7 @@ export class BaseCheck {
    * @param {{ shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }} options
    * @returns {Promise<object>} Key-value pairs to merge into deps.
    */
-  async resolveDeps(_options) {
+  async resolveDeps(_options: any): Promise<any> {
     return {};
   }
 
@@ -160,7 +168,7 @@ export class BaseCheck {
    * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async lint(file, deps, entry = null) {
+  async lint(_file: string, _deps: any, _entry: any = null): Promise<CheckResult> {
     throw new Error("Not implemented: lint");
   }
 
@@ -171,7 +179,7 @@ export class BaseCheck {
    * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async fix(file, deps, entry = null) {
+  async fix(_file: string, _deps: any, _entry: any = null): Promise<CheckResult> {
     throw new Error("Not implemented: fix");
   }
 
@@ -185,7 +193,7 @@ export class BaseCheck {
    * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult | null>}
    */
-  async lintAndFix(file, deps, entry = null) {
+  async lintAndFix(_file: string, _deps: any, _entry: any = null): Promise<CheckResult | null> {
     return null;
   }
 
@@ -205,7 +213,7 @@ export class BaseCheck {
    * Whether this check implements the in-memory (*InMemory) interface.
    * @returns {boolean}
    */
-  get supportsInMemory() {
+  get supportsInMemory(): boolean {
     return false;
   }
 
@@ -216,7 +224,7 @@ export class BaseCheck {
    * @param {import("../entries/base-entry.js").BaseEntry} entry - The entry being processed (for id, sourceFile, metadata).
    * @returns {Promise<CheckResult>}
    */
-  async lintInMemory(content, deps, entry) {
+  async lintInMemory(_content: string, _deps: any, _entry: any): Promise<CheckResult> {
     throw new Error("Not implemented: lintInMemory");
   }
 
@@ -229,7 +237,7 @@ export class BaseCheck {
    * @param {import("../entries/base-entry.js").BaseEntry} entry
    * @returns {Promise<CheckResult & { content?: string }>}
    */
-  async fixInMemory(content, deps, entry) {
+  async fixInMemory(_content: string, _deps: any, _entry: any): Promise<CheckResult & { content?: string }> {
     throw new Error("Not implemented: fixInMemory");
   }
 
@@ -241,7 +249,7 @@ export class BaseCheck {
    * @param {import("../entries/base-entry.js").BaseEntry} entry
    * @returns {Promise<(CheckResult & { content?: string }) | null>}
    */
-  async lintAndFixInMemory(content, deps, entry) {
+  async lintAndFixInMemory(_content: string, _deps: any, _entry: any): Promise<(CheckResult & { content?: string }) | null> {
     return null;
   }
 
@@ -252,7 +260,7 @@ export class BaseCheck {
    * @param {object} [context] - Contextual info (e.g. { file, repoRoot }).
    * @returns {Record<string, (ctx: object) => string>}
    */
-  getTemplates() {
+  getTemplates(): Record<string, (ctx: any) => string> {
     return {};
   }
 
@@ -262,7 +270,7 @@ export class BaseCheck {
    * @param {object} context  - Passed to each template function.
    * @returns {string}
    */
-  resolveTemplate(template, context) {
+  resolveTemplate(template: string, context: any): string {
     let result = template;
     for (const [placeholder, fn] of Object.entries(this.getTemplates())) {
       result = result.replaceAll(placeholder, fn(context));
@@ -275,7 +283,7 @@ export class BaseCheck {
    * Subclasses should override to provide specific details.
    * @returns {{ name: string, description: string, options: string }}
    */
-  static getHelp() {
+  static getHelp(): { name: string; description: string; options: string } {
     return { name: "BaseCheck", description: "Abstract base class for checks.", options: "extensions, includePaths, excludePaths, textOnly, priority, expander" };
   }
 }

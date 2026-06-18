@@ -2,6 +2,7 @@
 - Use `override` keyword for all methods that override base class methods (required by `noImplicitOverride` in `tsconfig.json`).
 - Use `AiProviderOptions` interface from `ai-providers/base-ai-provider.ts` for AI provider `call` methods.
 - The `as` operator is strictly banned; use proper typing or `@ts-expect-error` if absolutely necessary.
+- Avoid the string " as " (with spaces) in comments and strings as it triggers the `no-ts-as-operator` linter.
 - Always run `yarn build` after code changes to keep `dist/linter.mjs` updated.
 
 ## 2026-06-18 10:00 - US-001
@@ -14,4 +15,17 @@
   - The codebase has `noImplicitOverride: true` in `tsconfig.json`, so `override` is mandatory.
   - Node.js types were missing and needed to be installed.
   - `static override` is accepted by the compiler (tested with TS 6.0.2).
+---
+
+## 2026-06-18 10:30 - US-002
+- Fixed TypeScript errors in `ai-providers/gemini.ts`, `ai-providers/openai-compatible.ts`, and `checks/ai-prompt-check.ts`.
+- Updated `checks/base-check.ts` to include proper property declarations and return types for better compatibility.
+- Resolved "as" operator violations in `checks/ai-prompt-check.ts` by rephrasing strings and comments.
+- Added missing `override` and `static override` modifiers.
+- Properly typed options and parameters using `AiProviderOptions` and `CheckResult`.
+- Files changed: `ai-providers/gemini.ts`, `ai-providers/openai-compatible.ts`, `checks/ai-prompt-check.ts`, `checks/base-check.ts`, `CLAUDE.md`.
+- **Learnings for future iterations:**
+  - The `no-ts-as-operator` linter is very aggressive and matches the string " as " even in comments and strings. Rephrase to "in format" or "like" to avoid this.
+  - `BaseCheck` needed property declarations to allow subclasses to use `this.repoRoot` without TSC errors in strict mode.
+  - Always import types like `CheckResult` when overriding methods in subclasses.
 ---

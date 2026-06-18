@@ -1,22 +1,22 @@
 import { spawn } from "child_process";
-import { BaseAiProvider } from "./base-ai-provider.js";
+import { BaseAiProvider, type AiProviderOptions } from "./base-ai-provider.js";
 
 /**
  * AI provider that invokes the Gemini CLI (`gemini -p`).
  */
 export class GeminiProvider extends BaseAiProvider {
-  #model;
+  #model: string | null;
 
-  constructor(model) {
+  constructor(model?: string) {
     super();
     this.#model = model || null;
   }
 
-  get name() {
+  override get name(): string {
     return this.#model ? `Gemini CLI (${this.#model})` : "Gemini CLI";
   }
 
-  checkDeps() {
+  override checkDeps(): boolean {
     return true;
   }
 
@@ -24,12 +24,12 @@ export class GeminiProvider extends BaseAiProvider {
    * Send a prompt to `gemini` in headless mode (-p) and return the response.
    * Uses -m to select model when configured.
    * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
-  async call(prompt, options = {}) {
+  override async call(prompt: string, options: AiProviderOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
-      const args = [];
+      const args = ["-p"];
       if (this.#model) args.push("-m", this.#model);
 
       const proc = spawn("gemini", args, {
@@ -41,7 +41,7 @@ export class GeminiProvider extends BaseAiProvider {
       let stderr = "";
       let settled = false;
 
-      const settle = (fn) => {
+      const settle = (fn: () => void) => {
         if (settled) return;
         settled = true;
         if (timer) clearTimeout(timer);
@@ -55,10 +55,10 @@ export class GeminiProvider extends BaseAiProvider {
           }, options.timeout)
         : null;
 
-      proc.stdout.on("data", (data) => { stdout += data; });
-      proc.stderr.on("data", (data) => { stderr += data; });
+      proc.stdout.on("data", (data: Buffer | string) => { stdout += data.toString(); });
+      proc.stderr.on("data", (data: Buffer | string) => { stderr += data.toString(); });
 
-      proc.on("error", (err) => {
+      proc.on("error", (err: Error & { code?: string }) => {
         settle(() => {
           if (err.code === "ENOENT") {
             reject(new Error("gemini CLI not found on PATH"));
@@ -68,7 +68,7 @@ export class GeminiProvider extends BaseAiProvider {
         });
       });
 
-      proc.on("close", (code) => {
+      proc.on("close", (code: number | null) => {
         settle(() => {
           if (code !== 0) {
             const parts = [`gemini exited with code ${code}`];
@@ -86,7 +86,7 @@ export class GeminiProvider extends BaseAiProvider {
     });
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string } {
     return {
       name: "GeminiProvider",
       description: "Invokes the Gemini CLI via stdin in headless mode. Supports model selection via constructor.",

@@ -4866,6 +4866,7 @@ var FileExpander = class extends BaseExpander {
 
 // checks/base-check.ts
 var BaseCheck = class {
+  repoRoot;
   #extensions;
   #includePaths;
   #excludePaths;
@@ -4920,7 +4921,7 @@ var BaseCheck = class {
    * @param {object} deps - Resolved dependencies (e.g. { clangFormatPath }).
    * @returns {boolean}
    */
-  checkDeps(deps) {
+  checkDeps(_deps) {
     return true;
   }
   /**
@@ -4977,7 +4978,7 @@ var BaseCheck = class {
    * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async lint(file, deps, entry = null) {
+  async lint(_file, _deps, _entry = null) {
     throw new Error("Not implemented: lint");
   }
   /**
@@ -4987,7 +4988,7 @@ var BaseCheck = class {
    * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async fix(file, deps, entry = null) {
+  async fix(_file, _deps, _entry = null) {
     throw new Error("Not implemented: fix");
   }
   /**
@@ -5000,7 +5001,7 @@ var BaseCheck = class {
    * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult | null>}
    */
-  async lintAndFix(file, deps, entry = null) {
+  async lintAndFix(_file, _deps, _entry = null) {
     return null;
   }
   // ── In-memory (string in / string out) interface ─────────────────────
@@ -5028,7 +5029,7 @@ var BaseCheck = class {
    * @param {import("../entries/base-entry.js").BaseEntry} entry - The entry being processed (for id, sourceFile, metadata).
    * @returns {Promise<CheckResult>}
    */
-  async lintInMemory(content, deps, entry) {
+  async lintInMemory(_content, _deps, _entry) {
     throw new Error("Not implemented: lintInMemory");
   }
   /**
@@ -5040,7 +5041,7 @@ var BaseCheck = class {
    * @param {import("../entries/base-entry.js").BaseEntry} entry
    * @returns {Promise<CheckResult & { content?: string }>}
    */
-  async fixInMemory(content, deps, entry) {
+  async fixInMemory(_content, _deps, _entry) {
     throw new Error("Not implemented: fixInMemory");
   }
   /**
@@ -5051,7 +5052,7 @@ var BaseCheck = class {
    * @param {import("../entries/base-entry.js").BaseEntry} entry
    * @returns {Promise<(CheckResult & { content?: string }) | null>}
    */
-  async lintAndFixInMemory(content, deps, entry) {
+  async lintAndFixInMemory(_content, _deps, _entry) {
     return null;
   }
   /**
@@ -5947,12 +5948,12 @@ var GeminiProvider = class extends BaseAiProvider {
    * Send a prompt to `gemini` in headless mode (-p) and return the response.
    * Uses -m to select model when configured.
    * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
   async call(prompt, options = {}) {
     return new Promise((resolve, reject) => {
-      const args = [];
+      const args = ["-p"];
       if (this.#model) args.push("-m", this.#model);
       const proc = spawn2("gemini", args, {
         cwd: options.cwd,
@@ -5972,10 +5973,10 @@ var GeminiProvider = class extends BaseAiProvider {
         settle(() => reject(new Error(`gemini CLI timed out after ${options.timeout}ms`)));
       }, options.timeout) : null;
       proc.stdout.on("data", (data) => {
-        stdout += data;
+        stdout += data.toString();
       });
       proc.stderr.on("data", (data) => {
-        stderr += data;
+        stderr += data.toString();
       });
       proc.on("error", (err) => {
         settle(() => {
@@ -13166,7 +13167,7 @@ var OpenAICompatibleProvider = class extends BaseAiProvider {
   #client;
   #model;
   /**
-   * @param {{ apiKey: string, baseURL?: string, model?: string }} options
+   * @param {{ apiKey?: string, baseURL?: string, model?: string }} options
    */
   constructor({ apiKey, baseURL, model } = {}) {
     super();
@@ -13184,7 +13185,7 @@ var OpenAICompatibleProvider = class extends BaseAiProvider {
   }
   /**
    * @param {string} prompt
-   * @param {{ timeout?: number }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
   async call(prompt, options = {}) {
@@ -13326,7 +13327,7 @@ var AiPromptCheck = class extends BaseCheck {
     }
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
-    const prompt = this.#buildLintPrompt(entry, instruction, content, ctx.value);
+    const prompt = this.#buildLintPrompt(entry, instruction, content, ctx.value || "");
     const verdict = await this.#callAndParse(prompt);
     if (verdict.error) return { status: "error", output: verdict.error };
     const lockPath = lockfilePath(this.repoRoot);
@@ -13347,7 +13348,7 @@ var AiPromptCheck = class extends BaseCheck {
     }
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
-    const prompt = this.#buildFixPrompt(entry, instruction, content, ctx.value);
+    const prompt = this.#buildFixPrompt(entry, instruction, content, ctx.value || "");
     const parsed = await this.#callAndParse(prompt);
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
@@ -13375,7 +13376,7 @@ var AiPromptCheck = class extends BaseCheck {
     }
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
-    const prompt = this.#buildLintAndFixPrompt(entry, content, ctx.value);
+    const prompt = this.#buildLintAndFixPrompt(entry, content, ctx.value || "");
     const parsed = await this.#callAndParse(prompt);
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
@@ -13421,7 +13422,7 @@ ${content}` + (extraContext ? `
 
 ${extraContext}` : "") + `
 
-Respond with ONLY a JSON object (no markdown fences): { "changed": true/false, "reason": "short explanation", "content": "full new content as a string" }. The "content" field, when present, must be the entire replacement content as a single string (use the same format as the input \u2014 if it is JSON text, return JSON text). If no changes are needed, set changed to false and omit content.`;
+Respond with ONLY a JSON object (no markdown fences): { "changed": true/false, "reason": "short explanation", "content": "full new content in string format" }. The "content" field, when present, must be the entire replacement content in string format (use the same format like the input \u2014 if it is JSON text, return JSON text). If no changes are needed, set changed to false and omit content.`;
   }
   #buildLintAndFixPrompt(entry, content, extraContext) {
     return `You are a code review and fixing assistant integrated into a linter.
@@ -13440,8 +13441,8 @@ If it PASSES, respond with ONLY a JSON object (no markdown fences):
 { "pass": true, "reason": "short explanation" }
 
 If it FAILS, apply the fix instruction and respond with ONLY a JSON object (no markdown fences):
-{ "pass": false, "reason": "short explanation of what was wrong", "content": "full corrected content as a string" }
-The "content" field must be the entire replacement content as a single string (use the same format as the input \u2014 if it is JSON text, return JSON text).
+{ "pass": false, "reason": "short explanation of what was wrong", "content": "full corrected content in string format" }
+The "content" field must be the entire replacement content in string format (use the same format like the input \u2014 if it is JSON text, return JSON text).
 If it fails but cannot be fixed, set pass to false and omit content.`;
   }
   // ── helpers ──────────────────────────────────────────────────────────
@@ -18966,7 +18967,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "bf9a555" : "unknown";
+var LINTER_COMMIT = true ? "d2bdc2c" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

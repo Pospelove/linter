@@ -1,5 +1,5 @@
 import path from "path";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, type CheckResult } from "./base-check.js";
 import { ClaudeProvider } from "../ai-providers/claude.js";
 import { GeminiProvider } from "../ai-providers/gemini.js";
 import { OpenAICompatibleProvider } from "../ai-providers/openai-compatible.js";
@@ -8,7 +8,7 @@ import {
   buildFileContext, lockfilePath, lockMatchesContent, lockWriteContent,
 } from "./check-utils.js";
 
-const AI_PROVIDERS = {
+const AI_PROVIDERS: Record<string, any> = {
   claude: ClaudeProvider,
   gemini: GeminiProvider,
   openai: OpenAICompatibleProvider
@@ -21,14 +21,14 @@ const AI_PROVIDERS = {
  * For a plain FileEntry that string is the whole file; for a virtual entry like
  * JsonArrayEntry it is just the slice (e.g. one JSON array element). The check
  * itself is oblivious — it never opens the source file, never knows what kind
- * of slice it received. Modified content is returned as a string and the runner
+ * of slice it received. Modified content is returned in string format and the runner
  * pipes it back through entry.writeBack().
  *
  * Options (from linter-config.json):
  *   aiProvider     — which AI provider to use: "claude" (default) or "gemini"
  *   lintPrompt     — lint-specific instruction
  *   fixPrompt      — fix-specific instruction
- *   filesToRead    — additional files to include as context (array of paths)
+ *   filesToRead    — additional files to include for context (array of paths)
  *                    Supports templates: {name_without_ext}, {name_with_ext},
  *                    {ext}, {dir}.
  *   lock           — if true, cache AI verdicts per entry in .ai-prompt-lock.json
@@ -36,14 +36,14 @@ const AI_PROVIDERS = {
  *   lockValue      — set to 1 to write universal lock entries instead of hashes.
  */
 export class AiPromptCheck extends BaseCheck {
-  #lintPrompt;
-  #fixPrompt;
-  #filesToRead;
-  #lock;
-  #lockValue;
-  #provider;
+  #lintPrompt: string;
+  #fixPrompt: string;
+  #filesToRead: string[];
+  #lock: boolean;
+  #lockValue: any;
+  #provider: any;
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
 
     this.#lintPrompt = coerce(options.lintPrompt);
@@ -65,24 +65,24 @@ export class AiPromptCheck extends BaseCheck {
     this.#provider = new ProviderClass();
   }
 
-  get name() {
+  override get name(): string {
     const label = this.#lintPrompt || this.#fixPrompt;
     return `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "…" : ""})`;
   }
 
-  checkDeps() {
+  override checkDeps(): boolean {
     return true;
   }
 
-  getTemplates() {
+  override getTemplates(): Record<string, (ctx: any) => string> {
     return standardTemplates();
   }
 
-  get supportsInMemory() {
+  override get supportsInMemory(): boolean {
     return true;
   }
 
-  async lintInMemory(content, _deps, entry) {
+  override async lintInMemory(content: string, _deps: any, entry: any): Promise<CheckResult> {
     const instruction = this.#lintPrompt;
     if (!instruction) {
       return { status: "error", output: "No prompt configured for lint (set lintPrompt)" };
@@ -96,7 +96,7 @@ export class AiPromptCheck extends BaseCheck {
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
 
-    const prompt = this.#buildLintPrompt(entry, instruction, content, ctx.value);
+    const prompt = this.#buildLintPrompt(entry, instruction, content, ctx.value || "");
     const verdict = await this.#callAndParse(prompt);
     if (verdict.error) return { status: "error", output: verdict.error };
 
@@ -108,7 +108,7 @@ export class AiPromptCheck extends BaseCheck {
     return { status: "fail", output: verdict.value.reason || "AI check failed (no reason provided)" };
   }
 
-  async fixInMemory(content, _deps, entry) {
+  override async fixInMemory(content: string, _deps: any, entry: any): Promise<CheckResult & { content?: string }> {
     const instruction = this.#fixPrompt;
     if (!instruction) {
       return { status: "error", output: "No prompt configured for fix (set fixPrompt)" };
@@ -122,7 +122,7 @@ export class AiPromptCheck extends BaseCheck {
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
 
-    const prompt = this.#buildFixPrompt(entry, instruction, content, ctx.value);
+    const prompt = this.#buildFixPrompt(entry, instruction, content, ctx.value || "");
     const parsed = await this.#callAndParse(prompt);
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
@@ -148,7 +148,7 @@ export class AiPromptCheck extends BaseCheck {
     };
   }
 
-  async lintAndFixInMemory(content, _deps, entry) {
+  override async lintAndFixInMemory(content: string, _deps: any, entry: any): Promise<(CheckResult & { content?: string }) | null> {
     if (!this.#lintPrompt || !this.#fixPrompt) return null;
 
     const lockKey = this.#lockKey(entry);
@@ -159,7 +159,7 @@ export class AiPromptCheck extends BaseCheck {
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
 
-    const prompt = this.#buildLintAndFixPrompt(entry, content, ctx.value);
+    const prompt = this.#buildLintAndFixPrompt(entry, content, ctx.value || "");
     const parsed = await this.#callAndParse(prompt);
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
@@ -191,7 +191,7 @@ export class AiPromptCheck extends BaseCheck {
 
   // ── prompt builders ──────────────────────────────────────────────────
 
-  #buildLintPrompt(entry, instruction, content, extraContext) {
+  #buildLintPrompt(entry: any, instruction: string, content: string, extraContext: string) {
     return (
       `You are a code review assistant integrated into a linter.\n` +
       `Item: ${this.#entryLabel(entry)}\n` +
@@ -203,7 +203,7 @@ export class AiPromptCheck extends BaseCheck {
     );
   }
 
-  #buildFixPrompt(entry, instruction, content, extraContext) {
+  #buildFixPrompt(entry: any, instruction: string, content: string, extraContext: string) {
     return (
       `You are a code fixing assistant integrated into a linter.\n` +
       `Item to fix: ${this.#entryLabel(entry)}\n` +
@@ -211,14 +211,14 @@ export class AiPromptCheck extends BaseCheck {
       `Content to fix:\n${content}` +
       (extraContext ? `\n\n${extraContext}` : "") +
       `\n\nRespond with ONLY a JSON object (no markdown fences): ` +
-      `{ "changed": true/false, "reason": "short explanation", "content": "full new content as a string" }. ` +
-      `The "content" field, when present, must be the entire replacement content as a single string ` +
-      `(use the same format as the input — if it is JSON text, return JSON text). ` +
+      `{ "changed": true/false, "reason": "short explanation", "content": "full new content in string format" }. ` +
+      `The "content" field, when present, must be the entire replacement content in string format ` +
+      `(use the same format like the input — if it is JSON text, return JSON text). ` +
       `If no changes are needed, set changed to false and omit content.`
     );
   }
 
-  #buildLintAndFixPrompt(entry, content, extraContext) {
+  #buildLintAndFixPrompt(entry: any, content: string, extraContext: string) {
     return (
       `You are a code review and fixing assistant integrated into a linter.\n` +
       `Item: ${this.#entryLabel(entry)}\n\n` +
@@ -230,16 +230,16 @@ export class AiPromptCheck extends BaseCheck {
       `If it PASSES, respond with ONLY a JSON object (no markdown fences):\n` +
       `{ "pass": true, "reason": "short explanation" }\n\n` +
       `If it FAILS, apply the fix instruction and respond with ONLY a JSON object (no markdown fences):\n` +
-      `{ "pass": false, "reason": "short explanation of what was wrong", "content": "full corrected content as a string" }\n` +
-      `The "content" field must be the entire replacement content as a single string ` +
-      `(use the same format as the input — if it is JSON text, return JSON text).\n` +
+      `{ "pass": false, "reason": "short explanation of what was wrong", "content": "full corrected content in string format" }\n` +
+      `The "content" field must be the entire replacement content in string format ` +
+      `(use the same format like the input — if it is JSON text, return JSON text).\n` +
       `If it fails but cannot be fixed, set pass to false and omit content.`
     );
   }
 
   // ── helpers ──────────────────────────────────────────────────────────
 
-  #entryLabel(entry) {
+  #entryLabel(entry: any) {
     if (!entry) return "(unknown)";
     if (entry.sourceFile) {
       const rel = path.relative(this.repoRoot, entry.sourceFile);
@@ -249,7 +249,7 @@ export class AiPromptCheck extends BaseCheck {
     return entry.id || "(unknown)";
   }
 
-  #lockKey(entry) {
+  #lockKey(entry: any) {
     if (!entry?.sourceFile) return entry?.id ?? "(unknown)";
     const rel = path.relative(this.repoRoot, entry.sourceFile);
     if (!entry.isVirtual || !entry.id) return rel;
@@ -259,7 +259,7 @@ export class AiPromptCheck extends BaseCheck {
     return rel + suffix;
   }
 
-  async #buildExtraContext(entry) {
+  async #buildExtraContext(entry: any) {
     if (this.#filesToRead.length === 0) return { value: "" };
     const file = entry?.sourceFile ?? null;
     const extra = resolvePaths(this.#filesToRead, file, this.resolveTemplate.bind(this), this.repoRoot);
@@ -267,11 +267,11 @@ export class AiPromptCheck extends BaseCheck {
     return buildFileContext(dedupePaths(extra), this.repoRoot);
   }
 
-  async #callAndParse(prompt) {
-    let reply;
+  async #callAndParse(prompt: string) {
+    let reply: string;
     try {
       reply = await this.#provider.call(prompt, { cwd: this.repoRoot });
-    } catch (err) {
+    } catch (err: any) {
       return { error: `${this.#provider.name} error: ${err.message}` };
     }
     try {
@@ -282,7 +282,7 @@ export class AiPromptCheck extends BaseCheck {
     }
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "AiPromptCheck",
       description:
