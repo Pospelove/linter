@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import { BaseCheck, CheckResult } from "./base-check.js";
 
 export class CrlfCheck extends BaseCheck {
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
   }
 
@@ -10,19 +10,20 @@ export class CrlfCheck extends BaseCheck {
     return "CRLF";
   }
 
-  override async lint(file: string, _deps: any): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     try {
       const content = await fs.readFile(file);
       if (content.includes("\r\n")) {
         return { status: "fail", output: "contains CRLF line endings" };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
 
-  override async fix(file: string, _deps: any): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     try {
       const before = await fs.readFile(file);
       if (before.includes("\r\n")) {
@@ -31,8 +32,9 @@ export class CrlfCheck extends BaseCheck {
         return { status: "fixed" };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
 

@@ -212,3 +212,15 @@
   - Shared utilities like `coerceArray` and `standardTemplates` should use wider types (`unknown[]`, `Record<string, unknown>`) to be compatible with base class signatures and avoid breaking dependents.
   - Catch block errors in TSC strict mode are `unknown`; use type guards like `if (err && typeof err === "object" && "message" in err)` to safely access properties without `as`.
 ---
+
+## 2026-06-18 17:30 - US-003
+- Fixed TypeScript errors and removed 'any' types in checks/composite-check.ts, checks/crlf-check.ts, and checks/custom-check.ts.
+- Rephrased comments in composite-check.ts to avoid 'no-ts-as-operator' violations.
+- Properly typed child_process.spawn usage and environment building in custom-check.ts.
+- Added explicit type guards for catch block errors.
+- Files changed: checks/composite-check.ts, checks/crlf-check.ts, checks/custom-check.ts, CLAUDE.md, ralph/prd.json, dist/linter.mjs.
+- **Learnings for future iterations:**
+  - Even innocuous phrases like "as it delegates" in comments trigger the 'no-ts-as-operator' linter. Use "because it" instead.
+  - When overriding BaseCheck methods, use import("../entries/base-entry.js").BaseEntry for the entry parameter to maintain consistency and avoid cycles.
+  - Use instanceof Error type guards in catch blocks to safely access the .message property in strict mode.
+---

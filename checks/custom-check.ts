@@ -48,25 +48,26 @@ export class CustomCheck extends BaseCheck {
   #lintCommand: string | null;
   #fixCommand: string | null;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
 
-    const base = options.command ?? null;
-    this.#lintCommand = options.lintCommand ?? base;
-    this.#fixCommand = options.fixCommand ?? base;
+    const base = typeof options["command"] === "string" ? options["command"] : null;
+    this.#lintCommand = typeof options["lintCommand"] === "string" ? options["lintCommand"] : base;
+    this.#fixCommand = typeof options["fixCommand"] === "string" ? options["fixCommand"] : base;
 
     if (!this.#lintCommand) {
       throw new Error("CustomCheck requires options.command or options.lintCommand");
     }
 
-    this.#name = options.name ?? `Custom (${this.#lintCommand})`;
+    const name = typeof options["name"] === "string" ? options["name"] : null;
+    this.#name = name ?? `Custom (${this.#lintCommand})`;
   }
 
   override get name(): string {
     return this.#name;
   }
 
-  override async lint(file: string, _deps: any, entry: any = null): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     const env = this.#buildEnv(file, "lint", entry);
     const { code, output } = await this.#run(this.#lintCommand!, env);
 
@@ -75,7 +76,7 @@ export class CustomCheck extends BaseCheck {
     return { status: "error", output };
   }
 
-  override async fix(file: string, _deps: any, entry: any = null): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     if (!this.#fixCommand) {
       return { status: "error", output: "CustomCheck: no fixCommand configured" };
     }
@@ -83,8 +84,9 @@ export class CustomCheck extends BaseCheck {
     let before: Buffer;
     try {
       before = await fs.readFile(file);
-    } catch (err: any) {
-      return { status: "error", output: `cannot read file before fix: ${err.message}` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read file before fix: ${message}` };
     }
 
     const env = this.#buildEnv(file, "fix", entry);
@@ -95,14 +97,15 @@ export class CustomCheck extends BaseCheck {
     let after: Buffer;
     try {
       after = await fs.readFile(file);
-    } catch (err: any) {
-      return { status: "error", output: `cannot read file after fix: ${err.message}` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read file after fix: ${message}` };
     }
 
     return before.equals(after) ? { status: "pass" } : { status: "fixed" };
   }
 
-  #buildEnv(file: string, mode: string, entry: any): NodeJS.ProcessEnv {
+  #buildEnv(file: string, mode: string, entry: import("../entries/base-entry.js").BaseEntry | null): NodeJS.ProcessEnv {
     return {
       ...process.env,
       LINTER_FILE: file,

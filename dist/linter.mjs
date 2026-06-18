@@ -5100,7 +5100,7 @@ var CrlfCheck = class extends BaseCheck {
   get name() {
     return "CRLF";
   }
-  async lint(file, _deps) {
+  async lint(file, _deps, _entry = null) {
     try {
       const content = await fs3.readFile(file);
       if (content.includes("\r\n")) {
@@ -5108,10 +5108,11 @@ var CrlfCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
-  async fix(file, _deps) {
+  async fix(file, _deps, _entry = null) {
     try {
       const before = await fs3.readFile(file);
       if (before.includes("\r\n")) {
@@ -5121,7 +5122,8 @@ var CrlfCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
   static getHelp() {
@@ -13856,18 +13858,22 @@ var CompositeCheck = class extends BaseCheck {
     const b = await this.#fixer.resolveDeps(options);
     return { ...a, ...b };
   }
-  async lint(file, deps) {
-    return this.#linter.lint(file, deps);
+  async lint(file, deps, entry = null) {
+    return this.#linter.lint(file, deps, entry);
   }
-  async fix(file, deps) {
-    return this.lintAndFix(file, deps);
+  async fix(file, deps, entry = null) {
+    const res = await this.lintAndFix(file, deps, entry);
+    if (!res) {
+      return { status: "error", output: "CompositeCheck: lintAndFix returned null" };
+    }
+    return res;
   }
-  async lintAndFix(file, deps) {
-    const lintRes = await this.#linter.lint(file, deps);
+  async lintAndFix(file, deps, entry = null) {
+    const lintRes = await this.#linter.lint(file, deps, entry);
     if (lintRes.status !== "fail") {
       return lintRes;
     }
-    return this.#fixer.fix(file, deps);
+    return this.#fixer.fix(file, deps, entry);
   }
   static getHelp() {
     return {
@@ -14154,13 +14160,14 @@ var CustomCheck = class extends BaseCheck {
   #fixCommand;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const base = options.command ?? null;
-    this.#lintCommand = options.lintCommand ?? base;
-    this.#fixCommand = options.fixCommand ?? base;
+    const base = typeof options["command"] === "string" ? options["command"] : null;
+    this.#lintCommand = typeof options["lintCommand"] === "string" ? options["lintCommand"] : base;
+    this.#fixCommand = typeof options["fixCommand"] === "string" ? options["fixCommand"] : base;
     if (!this.#lintCommand) {
       throw new Error("CustomCheck requires options.command or options.lintCommand");
     }
-    this.#name = options.name ?? `Custom (${this.#lintCommand})`;
+    const name = typeof options["name"] === "string" ? options["name"] : null;
+    this.#name = name ?? `Custom (${this.#lintCommand})`;
   }
   get name() {
     return this.#name;
@@ -14180,7 +14187,8 @@ var CustomCheck = class extends BaseCheck {
     try {
       before = await fs16.readFile(file);
     } catch (err) {
-      return { status: "error", output: `cannot read file before fix: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read file before fix: ${message}` };
     }
     const env = this.#buildEnv(file, "fix", entry);
     const { code, output } = await this.#run(this.#fixCommand, env);
@@ -14189,7 +14197,8 @@ var CustomCheck = class extends BaseCheck {
     try {
       after = await fs16.readFile(file);
     } catch (err) {
-      return { status: "error", output: `cannot read file after fix: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read file after fix: ${message}` };
     }
     return before.equals(after) ? { status: "pass" } : { status: "fixed" };
   }
@@ -19074,7 +19083,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "c852c76" : "unknown";
+var LINTER_COMMIT = true ? "1d75bb2" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
