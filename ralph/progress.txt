@@ -2,7 +2,7 @@
 - Use `override` keyword for all methods that override base class methods (required by `noImplicitOverride` in `tsconfig.json`).
 - Use `AiProviderOptions` interface from `ai-providers/base-ai-provider.ts` for AI provider `call` methods.
 - The `as` operator is strictly banned; use proper typing or `@ts-expect-error` if absolutely necessary.
-- Avoid the string " as " (with spaces) in comments and strings as it triggers the `no-ts-as-operator` linter.
+- Avoid the string " as " (with spaces) in comments and strings as it triggers the `no-ts-as-operator` linter. Rephrase to "to be a" or "in format".
 - Always run `yarn build` after code changes to keep `dist/linter.mjs` updated.
 - Use local variables for private fields after null checks to satisfy strict TSC null checks.
 - Explicitly declare all class properties, especially in base classes.
@@ -11,6 +11,7 @@
 - Use `p.charAt(i)` instead of `p[i]` for string indexing when `noUncheckedIndexedAccess` is enabled to avoid `undefined` types.
 - Always run `npm run build` after changing `linter.ts` or its dependencies.
 - Ensure all files end with a newline to satisfy `linelint`.
+- Shared utilities like `coerceArray` and `standardTemplates` should use wider types (`unknown[]`, `Record<string, unknown>`) to be compatible with base class signatures.
 
 ## 2026-06-18 10:00 - US-001
 - Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
@@ -197,4 +198,17 @@
   - The 'as' operator is strictly banned, even for common casts like 'as string[]'. Use type guards with Array.isArray and filter(item: item is string) instead.
   - With 'exactOptionalPropertyTypes: true', you cannot pass { key: undefined } to a function expecting { key?: Type }. Use an intermediate object and only set the property if it is defined.
   - Base classes like BaseCheck should use Record<string, unknown> for flexible options instead of any.
+---
+
+## 2026-06-18 17:00 - US-002
+- Fixed TypeScript errors and removed 'any' types in `checks/check-utils.ts`, `checks/clang-format-check.ts`, and `checks/codegen-check.ts`.
+- Rephrased strings in `checks/codegen-check.ts` to avoid `no-ts-as-operator` violations.
+- Fixed regressions in `checks/ai-prompt-check.ts` caused by utility type updates.
+- Removed unused `@ts-expect-error` directives.
+- Properly typed catch block errors and dependency bags.
+- Files changed: `checks/check-utils.ts`, `checks/clang-format-check.ts`, `checks/codegen-check.ts`, `checks/ai-prompt-check.ts`, `dist/linter.mjs`, `ralph/prd.json`, `ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - The `no-ts-as-operator` linter is extremely aggressive and matches " as " even in strings like "as a string". Use "to be a string" instead.
+  - Shared utilities like `coerceArray` and `standardTemplates` should use wider types (`unknown[]`, `Record<string, unknown>`) to be compatible with base class signatures and avoid breaking dependents.
+  - Catch block errors in TSC strict mode are `unknown`; use type guards like `if (err && typeof err === "object" && "message" in err)` to safely access properties without `as`.
 ---

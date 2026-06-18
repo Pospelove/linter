@@ -8,25 +8,37 @@ const LOCKFILE_NAME = ".ai-prompt-lock.json";
  * Coerce a value to a string (joining arrays with newlines).
  * Returns undefined for null/undefined.
  */
-export const coerce = (v: any): string | undefined => (v == null ? undefined : Array.isArray(v) ? v.join("\n") : v);
+export const coerce = (v: unknown): string | undefined => {
+  if (v == null) return undefined;
+  if (Array.isArray(v)) return v.join("\n");
+  return String(v);
+};
 
 /**
  * Coerce a value to an array.
  * Returns [] for null/undefined, wraps scalars in [].
  */
-export const coerceArray = (v: any): any[] => {
+export const coerceArray = <T>(v: T | T[] | null | undefined): T[] => {
   if (v == null) return [];
   return Array.isArray(v) ? v : [v];
 };
 
 /**
+ * Template context for path expansion.
+ */
+export interface TemplateContext {
+  file: string;
+  repoRoot: string;
+}
+
+/**
  * Standard file-path template placeholders.
  */
-export const standardTemplates = (): Record<string, (ctx: any) => string> => ({
-  "{name_without_ext}": (ctx: any) => path.basename(ctx.file, path.extname(ctx.file)),
-  "{name_with_ext}":    (ctx: any) => path.basename(ctx.file),
-  "{ext}":              (ctx: any) => path.extname(ctx.file),
-  "{dir}":              (ctx: any) => path.dirname(path.relative(ctx.repoRoot, ctx.file)),
+export const standardTemplates = (): Record<string, (ctx: Record<string, unknown>) => string> => ({
+  "{name_without_ext}": (ctx) => path.basename(String(ctx["file"] || ""), path.extname(String(ctx["file"] || ""))),
+  "{name_with_ext}":    (ctx) => path.basename(String(ctx["file"] || "")),
+  "{ext}":              (ctx) => path.extname(String(ctx["file"] || "")),
+  "{dir}":              (ctx) => path.dirname(path.relative(String(ctx["repoRoot"] || ""), String(ctx["file"] || ""))),
 });
 
 /**
@@ -37,7 +49,7 @@ export const standardTemplates = (): Record<string, (ctx: any) => string> => ({
  * @param {string} repoRoot - Absolute repo root.
  * @returns {string[]} Absolute resolved paths.
  */
-export const resolvePaths = (paths: string[], file: string | null, resolveTemplate: (tmpl: string, ctx: any) => string, repoRoot: string): string[] =>
+export const resolvePaths = (paths: string[], file: string | null, resolveTemplate: (tmpl: string, ctx: Record<string, unknown>) => string, repoRoot: string): string[] =>
   paths.map((p) => {
     const expanded = file
       ? resolveTemplate(p, { file: path.resolve(file), repoRoot })
@@ -66,8 +78,9 @@ export const buildFileContext = async (absPaths: string[], repoRoot: string): Pr
     let content: string;
     try {
       content = await fs.readFile(absPath, "utf-8");
-    } catch (err: any) {
-      return { error: `cannot read context file ${rel}: ${err.message}` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `cannot read context file ${rel}: ${message}` };
     }
     chunks.push(`--- file: ${rel} ---\n${content}\n--- end file: ${rel} ---`);
   }
@@ -88,8 +101,9 @@ export const buildFilesMap = async (absPaths: string[], repoRoot: string): Promi
     let content: string;
     try {
       content = await fs.readFile(absPath, "utf-8");
-    } catch (err: any) {
-      return { error: `cannot read file ${rel}: ${err.message}` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `cannot read file ${rel}: ${message}` };
     }
     filesMap[rel] = content;
   }
@@ -106,9 +120,10 @@ export const lockfilePath = (repoRoot: string): string => path.join(repoRoot, LO
 /**
  * Read and parse the lockfile. Returns {} on any error.
  */
-export const readLockfile = async (repoRoot: string): Promise<Record<string, any>> => {
+export const readLockfile = async (repoRoot: string): Promise<Record<string, Record<string, string | number> | undefined>> => {
   try {
-    return JSON.parse(await fs.readFile(lockfilePath(repoRoot), "utf-8"));
+    const content = await fs.readFile(lockfilePath(repoRoot), "utf-8");
+    return JSON.parse(content);
   } catch {
     return {};
   }
@@ -139,7 +154,9 @@ export const getStringHash = (str: string): string =>
  */
 export const lockMatches = async (checkName: string, relFile: string, absFile: string, repoRoot: string): Promise<boolean> => {
   const lock = await readLockfile(repoRoot);
-  const entry = lock[checkName]?.[relFile];
+  const section = lock[checkName];
+  if (section == null || typeof section !== "object") return false;
+  const entry = section[relFile];
 
   if (entry == null) return false;
   if (entry === 1) return true;
@@ -164,10 +181,14 @@ export const lockMatches = async (checkName: string, relFile: string, absFile: s
 export const lockWrite = async (checkName: string, relFile: string, absFile: string, repoRoot: string, opts: { lockValue?: number | string } = {}): Promise<void> => {
   const lp = lockfilePath(repoRoot);
   const lock = await readLockfile(repoRoot);
-  if (!lock[checkName]) lock[checkName] = {};
+  let section = lock[checkName];
+  if (section == null || typeof section !== "object") {
+    section = {};
+    lock[checkName] = section;
+  }
 
   const writeUniversal = opts.lockValue === 1 || opts.lockValue === "1";
-  lock[checkName][relFile] = writeUniversal ? 1 : await getFileHash(absFile);
+  section[relFile] = writeUniversal ? 1 : await getFileHash(absFile);
 
   await fs.writeFile(lp, JSON.stringify(lock, null, 2) + "\n", "utf-8");
 };
@@ -178,7 +199,9 @@ export const lockWrite = async (checkName: string, relFile: string, absFile: str
  */
 export const lockMatchesContent = async (checkName: string, key: string, content: string, repoRoot: string): Promise<boolean> => {
   const lock = await readLockfile(repoRoot);
-  const entry = lock[checkName]?.[key];
+  const section = lock[checkName];
+  if (section == null || typeof section !== "object") return false;
+  const entry = section[key];
   if (entry == null) return false;
   if (entry === 1) return true;
   if (typeof entry !== "string") return false;
@@ -191,8 +214,12 @@ export const lockMatchesContent = async (checkName: string, key: string, content
 export const lockWriteContent = async (checkName: string, key: string, content: string, repoRoot: string, opts: { lockValue?: number | string } = {}): Promise<void> => {
   const lp = lockfilePath(repoRoot);
   const lock = await readLockfile(repoRoot);
-  if (!lock[checkName]) lock[checkName] = {};
+  let section = lock[checkName];
+  if (section == null || typeof section !== "object") {
+    section = {};
+    lock[checkName] = section;
+  }
   const writeUniversal = opts.lockValue === 1 || opts.lockValue === "1";
-  lock[checkName][key] = writeUniversal ? 1 : getStringHash(content);
+  section[key] = writeUniversal ? 1 : getStringHash(content);
   await fs.writeFile(lp, JSON.stringify(lock, null, 2) + "\n", "utf-8");
 };

@@ -7,7 +7,7 @@ import { getClangFormatPath } from "../tool-resolve/clang-format.js";
 const execFileAsync = promisify(execFile);
 
 export class ClangFormatCheck extends BaseCheck {
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
   }
 
@@ -15,43 +15,80 @@ export class ClangFormatCheck extends BaseCheck {
     return "Clang Format";
   }
 
-  override async resolveDeps(options: any): Promise<any> {
-    const clangFormatPath = await getClangFormatPath(options);
+  override async resolveDeps(options: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const clangFormatPath = await getClangFormatPath({
+      shouldDownload: options["shouldDownload"] !== false,
+      shouldSearchInPath: options["shouldSearchInPath"] !== false,
+      toolsDir: typeof options["toolsDir"] === "string" ? options["toolsDir"] : ".linter/tools",
+    });
     return { clangFormatPath };
   }
 
-  override checkDeps(deps: any): boolean {
-    return deps.clangFormatPath !== undefined;
+  override checkDeps(deps: Record<string, unknown>): boolean {
+    return typeof deps["clangFormatPath"] === "string";
   }
 
-  override async lint(file: string, deps: any): Promise<CheckResult> {
+  override async lint(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
+    const clangFormatPath = deps["clangFormatPath"];
+    if (typeof clangFormatPath !== "string") {
+      return { status: "error", output: "clangFormatPath dependency is missing or not a string" };
+    }
+
     try {
-      await execFileAsync(deps.clangFormatPath, ["--dry-run", "--Werror", file]);
+      await execFileAsync(clangFormatPath, ["--dry-run", "--Werror", file]);
       return { status: "pass" };
-    } catch (err: any) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        const message = "message" in err ? String(err.message) : "File not found";
+        return { status: "error", output: message };
       }
-      const output = (err.stderr || err.stdout || "").toString().trim();
+      let stderr = "";
+      let stdout = "";
+      if (err && typeof err === "object") {
+        if ("stderr" in err && (typeof err.stderr === "string" || Buffer.isBuffer(err.stderr))) {
+          stderr = err.stderr.toString();
+        }
+        if ("stdout" in err && (typeof err.stdout === "string" || Buffer.isBuffer(err.stdout))) {
+          stdout = err.stdout.toString();
+        }
+      }
+      const output = (stderr || stdout || "").trim();
       return { status: "fail", output };
     }
   }
 
-  override async fix(file: string, deps: any): Promise<CheckResult> {
+  override async fix(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
+    const clangFormatPath = deps["clangFormatPath"];
+    if (typeof clangFormatPath !== "string") {
+      return { status: "error", output: "clangFormatPath dependency is missing or not a string" };
+    }
+
     let before: Buffer;
     try {
       before = await fs.readFile(file);
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
 
     try {
-      await execFileAsync(deps.clangFormatPath, ["-i", file]);
-    } catch (err: any) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      await execFileAsync(clangFormatPath, ["-i", file]);
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        const message = "message" in err ? String(err.message) : "File not found";
+        return { status: "error", output: message };
       }
-      const output = (err.stderr || err.stdout || "").toString().trim();
+      let stderr = "";
+      let stdout = "";
+      if (err && typeof err === "object") {
+        if ("stderr" in err && (typeof err.stderr === "string" || Buffer.isBuffer(err.stderr))) {
+          stderr = err.stderr.toString();
+        }
+        if ("stdout" in err && (typeof err.stdout === "string" || Buffer.isBuffer(err.stdout))) {
+          stdout = err.stdout.toString();
+        }
+      }
+      const output = (stderr || stdout || "").trim();
       return { status: "error", output };
     }
 
@@ -61,8 +98,9 @@ export class ClangFormatCheck extends BaseCheck {
         return { status: "fixed" };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
 

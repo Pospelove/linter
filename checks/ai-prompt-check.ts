@@ -54,7 +54,8 @@ export class AiPromptCheck extends BaseCheck {
       throw new Error("AiPromptCheck requires at least one of: lintPrompt, fixPrompt");
     }
 
-    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"]);
+    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"])
+      .filter((f): f is string => typeof f === "string");
     this.#lock = !!options["lock"];
     this.#lockValue = options["lockValue"];
 

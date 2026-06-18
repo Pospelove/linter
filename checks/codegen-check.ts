@@ -33,17 +33,21 @@ export class CodegenCheck extends BaseCheck {
   #absInput: string;
   #absOutput: string;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-    if (!options.command) throw new Error("CodegenCheck requires options.command");
-    if (!options.inputFile) throw new Error("CodegenCheck requires options.inputFile");
-    if (!options.outputFile) throw new Error("CodegenCheck requires options.outputFile");
+    const command = options["command"];
+    const inputFile = options["inputFile"];
+    const outputFile = options["outputFile"];
 
-    this.#command = options.command;
-    this.#inputFile = options.inputFile;
-    this.#outputFile = options.outputFile;
-    this.#absInput = path.resolve(repoRoot, options.inputFile);
-    this.#absOutput = path.resolve(repoRoot, options.outputFile);
+    if (typeof command !== "string") throw new Error("CodegenCheck requires options.command to be a string");
+    if (typeof inputFile !== "string") throw new Error("CodegenCheck requires options.inputFile to be a string");
+    if (typeof outputFile !== "string") throw new Error("CodegenCheck requires options.outputFile to be a string");
+
+    this.#command = command;
+    this.#inputFile = inputFile;
+    this.#outputFile = outputFile;
+    this.#absInput = path.resolve(repoRoot, inputFile);
+    this.#absOutput = path.resolve(repoRoot, outputFile);
   }
 
   override get name(): string {
@@ -58,7 +62,7 @@ export class CodegenCheck extends BaseCheck {
     return path.resolve(file) === this.#absInput;
   }
 
-  override async lint(_file: string, _deps: any): Promise<CheckResult> {
+  override async lint(_file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     // TODO: consider more efficient impl — e.g. run command writing to a temp
     // file instead of overwriting the real output and rolling back.
 
@@ -66,30 +70,32 @@ export class CodegenCheck extends BaseCheck {
     let original: Buffer | null;
     try {
       original = await fs.readFile(this.#absOutput);
-    } catch (err: any) {
-      if (err.code === "ENOENT") {
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
         original = null; // output does not exist yet
       } else {
-        return { status: "error", output: `cannot read output file: ${err.message}` };
+        const message = err instanceof Error ? err.message : String(err);
+        return { status: "error", output: `cannot read output file: ${message}` };
       }
     }
 
     // 2. Run the generator command
     try {
       await this.#runCommand();
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Restore before returning error
       await this.#restore(original);
-      return { status: "error", output: `command failed: ${err}` };
+      return { status: "error", output: `command failed: ${String(err)}` };
     }
 
     // 3. Read generated output
     let generated: Buffer;
     try {
       generated = await fs.readFile(this.#absOutput);
-    } catch (err: any) {
+    } catch (err: unknown) {
       await this.#restore(original);
-      return { status: "error", output: `cannot read generated output: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read generated output: ${message}` };
     }
 
     // 4. Restore original contents (rollback without git)
@@ -105,12 +111,12 @@ export class CodegenCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  override async fix(_file: string, _deps: any): Promise<CheckResult> {
+  override async fix(_file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     // Just run the command — let it write the output file
     try {
       await this.#runCommand();
-    } catch (err: any) {
-      return { status: "error", output: `command failed: ${err}` };
+    } catch (err: unknown) {
+      return { status: "error", output: `command failed: ${String(err)}` };
     }
     // @ts-expect-error extraFiles is a valid property but not in CheckResult interface yet
     return { status: "fixed", extraFiles: [this.#absOutput] };
@@ -119,8 +125,8 @@ export class CodegenCheck extends BaseCheck {
   async #runCommand(): Promise<void> {
     const parts = this.#command.split(/\s+/);
     const cmd = parts[0];
+    if (!cmd) throw new Error("Command is empty");
     const args = parts.slice(1);
-    // @ts-expect-error promisified execFile overload issues
     await execFileAsync(cmd, args, { cwd: this.repoRoot });
   }
 

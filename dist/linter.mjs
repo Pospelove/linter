@@ -5584,38 +5584,73 @@ var ClangFormatCheck = class extends BaseCheck {
     return "Clang Format";
   }
   async resolveDeps(options) {
-    const clangFormatPath = await getClangFormatPath(options);
+    const clangFormatPath = await getClangFormatPath({
+      shouldDownload: options["shouldDownload"] !== false,
+      shouldSearchInPath: options["shouldSearchInPath"] !== false,
+      toolsDir: typeof options["toolsDir"] === "string" ? options["toolsDir"] : ".linter/tools"
+    });
     return { clangFormatPath };
   }
   checkDeps(deps) {
-    return deps.clangFormatPath !== void 0;
+    return typeof deps["clangFormatPath"] === "string";
   }
   async lint(file, deps) {
+    const clangFormatPath = deps["clangFormatPath"];
+    if (typeof clangFormatPath !== "string") {
+      return { status: "error", output: "clangFormatPath dependency is missing or not a string" };
+    }
     try {
-      await execFileAsync2(deps.clangFormatPath, ["--dry-run", "--Werror", file]);
+      await execFileAsync2(clangFormatPath, ["--dry-run", "--Werror", file]);
       return { status: "pass" };
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        const message = "message" in err ? String(err.message) : "File not found";
+        return { status: "error", output: message };
       }
-      const output = (err.stderr || err.stdout || "").toString().trim();
+      let stderr = "";
+      let stdout = "";
+      if (err && typeof err === "object") {
+        if ("stderr" in err && (typeof err.stderr === "string" || Buffer.isBuffer(err.stderr))) {
+          stderr = err.stderr.toString();
+        }
+        if ("stdout" in err && (typeof err.stdout === "string" || Buffer.isBuffer(err.stdout))) {
+          stdout = err.stdout.toString();
+        }
+      }
+      const output = (stderr || stdout || "").trim();
       return { status: "fail", output };
     }
   }
   async fix(file, deps) {
+    const clangFormatPath = deps["clangFormatPath"];
+    if (typeof clangFormatPath !== "string") {
+      return { status: "error", output: "clangFormatPath dependency is missing or not a string" };
+    }
     let before;
     try {
       before = await fs9.readFile(file);
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
     try {
-      await execFileAsync2(deps.clangFormatPath, ["-i", file]);
+      await execFileAsync2(clangFormatPath, ["-i", file]);
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        const message = "message" in err ? String(err.message) : "File not found";
+        return { status: "error", output: message };
       }
-      const output = (err.stderr || err.stdout || "").toString().trim();
+      let stderr = "";
+      let stdout = "";
+      if (err && typeof err === "object") {
+        if ("stderr" in err && (typeof err.stderr === "string" || Buffer.isBuffer(err.stderr))) {
+          stderr = err.stderr.toString();
+        }
+        if ("stdout" in err && (typeof err.stdout === "string" || Buffer.isBuffer(err.stdout))) {
+          stdout = err.stdout.toString();
+        }
+      }
+      const output = (stderr || stdout || "").trim();
       return { status: "error", output };
     }
     try {
@@ -5625,7 +5660,8 @@ var ClangFormatCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
   static getHelp() {
@@ -5743,14 +5779,17 @@ var CodegenCheck = class extends BaseCheck {
   #absOutput;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    if (!options.command) throw new Error("CodegenCheck requires options.command");
-    if (!options.inputFile) throw new Error("CodegenCheck requires options.inputFile");
-    if (!options.outputFile) throw new Error("CodegenCheck requires options.outputFile");
-    this.#command = options.command;
-    this.#inputFile = options.inputFile;
-    this.#outputFile = options.outputFile;
-    this.#absInput = path6.resolve(repoRoot, options.inputFile);
-    this.#absOutput = path6.resolve(repoRoot, options.outputFile);
+    const command = options["command"];
+    const inputFile = options["inputFile"];
+    const outputFile = options["outputFile"];
+    if (typeof command !== "string") throw new Error("CodegenCheck requires options.command to be a string");
+    if (typeof inputFile !== "string") throw new Error("CodegenCheck requires options.inputFile to be a string");
+    if (typeof outputFile !== "string") throw new Error("CodegenCheck requires options.outputFile to be a string");
+    this.#command = command;
+    this.#inputFile = inputFile;
+    this.#outputFile = outputFile;
+    this.#absInput = path6.resolve(repoRoot, inputFile);
+    this.#absOutput = path6.resolve(repoRoot, outputFile);
   }
   get name() {
     return `Codegen (${this.#inputFile} \u2192 ${this.#outputFile})`;
@@ -5767,24 +5806,26 @@ var CodegenCheck = class extends BaseCheck {
     try {
       original = await fs11.readFile(this.#absOutput);
     } catch (err) {
-      if (err.code === "ENOENT") {
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
         original = null;
       } else {
-        return { status: "error", output: `cannot read output file: ${err.message}` };
+        const message = err instanceof Error ? err.message : String(err);
+        return { status: "error", output: `cannot read output file: ${message}` };
       }
     }
     try {
       await this.#runCommand();
     } catch (err) {
       await this.#restore(original);
-      return { status: "error", output: `command failed: ${err}` };
+      return { status: "error", output: `command failed: ${String(err)}` };
     }
     let generated;
     try {
       generated = await fs11.readFile(this.#absOutput);
     } catch (err) {
       await this.#restore(original);
-      return { status: "error", output: `cannot read generated output: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read generated output: ${message}` };
     }
     await this.#restore(original);
     if (original === null) {
@@ -5799,13 +5840,14 @@ var CodegenCheck = class extends BaseCheck {
     try {
       await this.#runCommand();
     } catch (err) {
-      return { status: "error", output: `command failed: ${err}` };
+      return { status: "error", output: `command failed: ${String(err)}` };
     }
     return { status: "fixed", extraFiles: [this.#absOutput] };
   }
   async #runCommand() {
     const parts = this.#command.split(/\s+/);
     const cmd = parts[0];
+    if (!cmd) throw new Error("Command is empty");
     const args = parts.slice(1);
     await execFileAsync3(cmd, args, { cwd: this.repoRoot });
   }
@@ -13221,16 +13263,20 @@ import fs12 from "fs/promises";
 import path8 from "path";
 import { createHash } from "crypto";
 var LOCKFILE_NAME = ".ai-prompt-lock.json";
-var coerce = (v) => v == null ? void 0 : Array.isArray(v) ? v.join("\n") : v;
+var coerce = (v) => {
+  if (v == null) return void 0;
+  if (Array.isArray(v)) return v.join("\n");
+  return String(v);
+};
 var coerceArray = (v) => {
   if (v == null) return [];
   return Array.isArray(v) ? v : [v];
 };
 var standardTemplates = () => ({
-  "{name_without_ext}": (ctx) => path8.basename(ctx.file, path8.extname(ctx.file)),
-  "{name_with_ext}": (ctx) => path8.basename(ctx.file),
-  "{ext}": (ctx) => path8.extname(ctx.file),
-  "{dir}": (ctx) => path8.dirname(path8.relative(ctx.repoRoot, ctx.file))
+  "{name_without_ext}": (ctx) => path8.basename(String(ctx["file"] || ""), path8.extname(String(ctx["file"] || ""))),
+  "{name_with_ext}": (ctx) => path8.basename(String(ctx["file"] || "")),
+  "{ext}": (ctx) => path8.extname(String(ctx["file"] || "")),
+  "{dir}": (ctx) => path8.dirname(path8.relative(String(ctx["repoRoot"] || ""), String(ctx["file"] || "")))
 });
 var resolvePaths = (paths, file, resolveTemplate, repoRoot) => paths.map((p) => {
   const expanded = file ? resolveTemplate(p, { file: path8.resolve(file), repoRoot }) : p;
@@ -13249,7 +13295,8 @@ var buildFileContext = async (absPaths, repoRoot) => {
     try {
       content = await fs12.readFile(absPath, "utf-8");
     } catch (err) {
-      return { error: `cannot read context file ${rel}: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `cannot read context file ${rel}: ${message}` };
     }
     chunks.push(`--- file: ${rel} ---
 ${content}
@@ -13260,7 +13307,8 @@ ${content}
 var lockfilePath = (repoRoot) => path8.join(repoRoot, LOCKFILE_NAME);
 var readLockfile = async (repoRoot) => {
   try {
-    return JSON.parse(await fs12.readFile(lockfilePath(repoRoot), "utf-8"));
+    const content = await fs12.readFile(lockfilePath(repoRoot), "utf-8");
+    return JSON.parse(content);
   } catch {
     return {};
   }
@@ -13268,7 +13316,9 @@ var readLockfile = async (repoRoot) => {
 var getStringHash = (str2) => createHash("sha256").update(str2).digest("hex");
 var lockMatchesContent = async (checkName, key, content, repoRoot) => {
   const lock = await readLockfile(repoRoot);
-  const entry = lock[checkName]?.[key];
+  const section = lock[checkName];
+  if (section == null || typeof section !== "object") return false;
+  const entry = section[key];
   if (entry == null) return false;
   if (entry === 1) return true;
   if (typeof entry !== "string") return false;
@@ -13277,9 +13327,13 @@ var lockMatchesContent = async (checkName, key, content, repoRoot) => {
 var lockWriteContent = async (checkName, key, content, repoRoot, opts = {}) => {
   const lp = lockfilePath(repoRoot);
   const lock = await readLockfile(repoRoot);
-  if (!lock[checkName]) lock[checkName] = {};
+  let section = lock[checkName];
+  if (section == null || typeof section !== "object") {
+    section = {};
+    lock[checkName] = section;
+  }
   const writeUniversal = opts.lockValue === 1 || opts.lockValue === "1";
-  lock[checkName][key] = writeUniversal ? 1 : getStringHash(content);
+  section[key] = writeUniversal ? 1 : getStringHash(content);
   await fs12.writeFile(lp, JSON.stringify(lock, null, 2) + "\n", "utf-8");
 };
 
@@ -13303,7 +13357,7 @@ var AiPromptCheck = class extends BaseCheck {
     if (!this.#lintPrompt && !this.#fixPrompt) {
       throw new Error("AiPromptCheck requires at least one of: lintPrompt, fixPrompt");
     }
-    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"]);
+    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"]).filter((f) => typeof f === "string");
     this.#lock = !!options["lock"];
     this.#lockValue = options["lockValue"];
     const providerName = String(options["aiProvider"] || "claude").toLowerCase();
@@ -19020,7 +19074,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "b9de86d" : "unknown";
+var LINTER_COMMIT = true ? "c852c76" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
