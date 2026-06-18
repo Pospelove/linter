@@ -37,7 +37,7 @@ function isValidUtf8(buf: Buffer): boolean {
   }
 }
 
-function normalizeEncoding(name: any): string | null {
+function normalizeEncoding(name: unknown): string | null {
   if (typeof name !== "string") return null;
   const k = name.toLowerCase().replace(/_/g, "-");
   if (k === "utf8" || k === "utf-8") return "utf-8";
@@ -49,11 +49,11 @@ function normalizeEncoding(name: any): string | null {
 export class EncodingCheck extends BaseCheck {
   #encoding: string;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-    const declared = normalizeEncoding(options.encoding);
+    const declared = normalizeEncoding(options["encoding"]);
     if (!declared || !SUPPORTED.has(declared)) {
-      throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options.encoding)}`);
+      throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options["encoding"])}`);
     }
     this.#encoding = declared;
   }
@@ -62,7 +62,7 @@ export class EncodingCheck extends BaseCheck {
     return `encoding(${this.#encoding})`;
   }
 
-  override async lint(file: string, _deps: any): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const buf = await fs.readFile(file);
       const bom = hasBom(buf);
@@ -80,12 +80,12 @@ export class EncodingCheck extends BaseCheck {
         return valid ? { status: "pass" } : { status: "fail", output: "file is not valid UTF-8 (looks like CP1251 or another single-byte encoding)" };
       }
       return valid ? { status: "fail", output: "file decodes in UTF-8 format but CP1251 is required" } : { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
 
-  override async fix(file: string, _deps: any): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const original = await fs.readFile(file);
       const stripped = stripBom(original);
@@ -122,8 +122,8 @@ export class EncodingCheck extends BaseCheck {
       const out = iconv.encode(text, this.#encoding);
       await fs.writeFile(file, out);
       return { status: "fixed" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
 

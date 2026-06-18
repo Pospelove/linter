@@ -7,7 +7,7 @@ import { getLinelintPath } from "../tool-resolve/linelint.js";
 const execFileAsync = promisify(execFile);
 
 export class LinelintCheck extends BaseCheck {
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
   }
 
@@ -15,43 +15,63 @@ export class LinelintCheck extends BaseCheck {
     return "Linelint";
   }
 
-  override async resolveDeps(options: any): Promise<any> {
-    const linelintPath = await getLinelintPath(options);
+  override async resolveDeps(options: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const linelintPath = await getLinelintPath({
+      shouldDownload: !!options["shouldDownload"],
+      shouldSearchInPath: !!options["shouldSearchInPath"],
+      toolsDir: typeof options["toolsDir"] === "string" ? options["toolsDir"] : ".linter/tools",
+    });
     return { linelintPath };
   }
 
-  override checkDeps(deps: any): boolean {
-    return deps.linelintPath !== undefined;
+  override checkDeps(deps: Record<string, unknown>): boolean {
+    return typeof deps["linelintPath"] === "string";
   }
 
-  override async lint(file: string, deps: any): Promise<CheckResult> {
+  override async lint(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
+    const linelintPath = deps["linelintPath"];
+    if (typeof linelintPath !== "string") {
+      return { status: "error", output: "linelint binary path not resolved" };
+    }
+
     try {
-      await execFileAsync(deps.linelintPath, [file], { cwd: this.repoRoot });
+      await execFileAsync(linelintPath, [file], { cwd: this.repoRoot });
       return { status: "pass" };
-    } catch (err: any) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return { status: "error", output: message };
       }
-      const out = (err.stderr || err.stdout || "").toString().trim();
+      const stderr = (err && typeof err === "object" && "stderr" in err && typeof err.stderr === "string") ? err.stderr : "";
+      const stdout = (err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string") ? err.stdout : "";
+      const out = (stderr || stdout || "").trim();
       return { status: "fail", output: out || "linelint failed" };
     }
   }
 
-  override async fix(file: string, deps: any): Promise<CheckResult> {
+  override async fix(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
+    const linelintPath = deps["linelintPath"];
+    if (typeof linelintPath !== "string") {
+      return { status: "error", output: "linelint binary path not resolved" };
+    }
+
     let before: Buffer;
     try {
       before = await fs.readFile(file);
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
 
     try {
-      await execFileAsync(deps.linelintPath, ["-a", file], { cwd: this.repoRoot });
-    } catch (err: any) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      await execFileAsync(linelintPath, ["-a", file], { cwd: this.repoRoot });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return { status: "error", output: message };
       }
-      const out = (err.stderr || err.stdout || "").toString().trim();
+      const stderr = (err && typeof err === "object" && "stderr" in err && typeof err.stderr === "string") ? err.stderr : "";
+      const stdout = (err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string") ? err.stdout : "";
+      const out = (stderr || stdout || "").trim();
       return { status: "error", output: out || "linelint fix failed" };
     }
 
@@ -61,8 +81,8 @@ export class LinelintCheck extends BaseCheck {
         return { status: "fixed" };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
 

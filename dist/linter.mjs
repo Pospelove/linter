@@ -5179,9 +5179,9 @@ var EncodingCheck = class extends BaseCheck {
   #encoding;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const declared = normalizeEncoding(options.encoding);
+    const declared = normalizeEncoding(options["encoding"]);
     if (!declared || !SUPPORTED.has(declared)) {
-      throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options.encoding)}`);
+      throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options["encoding"])}`);
     }
     this.#encoding = declared;
   }
@@ -5207,7 +5207,7 @@ var EncodingCheck = class extends BaseCheck {
       }
       return valid ? { status: "fail", output: "file decodes in UTF-8 format but CP1251 is required" } : { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   async fix(file, _deps) {
@@ -5243,7 +5243,7 @@ var EncodingCheck = class extends BaseCheck {
       await fs4.writeFile(file, out);
       return { status: "fixed" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   static getHelp() {
@@ -5443,38 +5443,56 @@ var LinelintCheck = class extends BaseCheck {
     return "Linelint";
   }
   async resolveDeps(options) {
-    const linelintPath = await getLinelintPath(options);
+    const linelintPath = await getLinelintPath({
+      shouldDownload: !!options["shouldDownload"],
+      shouldSearchInPath: !!options["shouldSearchInPath"],
+      toolsDir: typeof options["toolsDir"] === "string" ? options["toolsDir"] : ".linter/tools"
+    });
     return { linelintPath };
   }
   checkDeps(deps) {
-    return deps.linelintPath !== void 0;
+    return typeof deps["linelintPath"] === "string";
   }
   async lint(file, deps) {
+    const linelintPath = deps["linelintPath"];
+    if (typeof linelintPath !== "string") {
+      return { status: "error", output: "linelint binary path not resolved" };
+    }
     try {
-      await execFileAsync(deps.linelintPath, [file], { cwd: this.repoRoot });
+      await execFileAsync(linelintPath, [file], { cwd: this.repoRoot });
       return { status: "pass" };
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return { status: "error", output: message };
       }
-      const out = (err.stderr || err.stdout || "").toString().trim();
+      const stderr = err && typeof err === "object" && "stderr" in err && typeof err.stderr === "string" ? err.stderr : "";
+      const stdout = err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string" ? err.stdout : "";
+      const out = (stderr || stdout || "").trim();
       return { status: "fail", output: out || "linelint failed" };
     }
   }
   async fix(file, deps) {
+    const linelintPath = deps["linelintPath"];
+    if (typeof linelintPath !== "string") {
+      return { status: "error", output: "linelint binary path not resolved" };
+    }
     let before;
     try {
       before = await fs7.readFile(file);
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
     try {
-      await execFileAsync(deps.linelintPath, ["-a", file], { cwd: this.repoRoot });
+      await execFileAsync(linelintPath, ["-a", file], { cwd: this.repoRoot });
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return { status: "error", output: message };
       }
-      const out = (err.stderr || err.stdout || "").toString().trim();
+      const stderr = err && typeof err === "object" && "stderr" in err && typeof err.stderr === "string" ? err.stderr : "";
+      const stdout = err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string" ? err.stdout : "";
+      const out = (stderr || stdout || "").trim();
       return { status: "error", output: out || "linelint fix failed" };
     }
     try {
@@ -5484,7 +5502,7 @@ var LinelintCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   static getHelp() {
@@ -13720,10 +13738,10 @@ var FirecrawlCheck = class extends BaseCheck {
   #timeout;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    this.#outputFormat = options.outputFormat || "markdown";
-    this.#apiKey = options.apiKey || null;
-    this.#apiUrl = (options.apiUrl || "https://api.firecrawl.dev").replace(/\/+$/, "");
-    this.#timeout = options.timeout ?? 6e4;
+    this.#outputFormat = typeof options["outputFormat"] === "string" ? options["outputFormat"] : "markdown";
+    this.#apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : null;
+    this.#apiUrl = (typeof options["apiUrl"] === "string" ? options["apiUrl"] : "https://api.firecrawl.dev").replace(/\/+$/, "");
+    this.#timeout = typeof options["timeout"] === "number" ? options["timeout"] : 6e4;
   }
   get name() {
     return "Firecrawl";
@@ -13760,7 +13778,7 @@ var FirecrawlCheck = class extends BaseCheck {
     try {
       scraped = await this.#scrape(url.value, apiKey);
     } catch (err) {
-      return { status: "error", output: `Firecrawl API error: ${err.message}` };
+      return { status: "error", output: `Firecrawl API error: ${err instanceof Error ? err.message : String(err)}` };
     }
     if (!scraped) {
       return { status: "error", output: "Firecrawl returned empty content" };
@@ -13773,7 +13791,7 @@ var FirecrawlCheck = class extends BaseCheck {
     try {
       content = await fs14.readFile(path11.resolve(file), "utf-8");
     } catch (err) {
-      return { error: `cannot read file: ${err.message}` };
+      return { error: `cannot read file: ${err instanceof Error ? err.message : String(err)}` };
     }
     const trimmed2 = content.trim();
     if (!trimmed2) {
@@ -19083,7 +19101,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "1d75bb2" : "unknown";
+var LINTER_COMMIT = true ? "f059920" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

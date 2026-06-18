@@ -8,6 +8,15 @@ interface ExtractUrlResult {
   value?: string;
 }
 
+interface FirecrawlResponse {
+  success: boolean;
+  error?: string;
+  data?: {
+    html?: string;
+    markdown?: string;
+  };
+}
+
 /**
  * Firecrawl check — scrapes a URL found in a file using the Firecrawl API
  * and writes the scraped content back to the file.
@@ -37,12 +46,12 @@ export class FirecrawlCheck extends BaseCheck {
   #apiUrl: string;
   #timeout: number;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-    this.#outputFormat = options.outputFormat || "markdown";
-    this.#apiKey = options.apiKey || null;
-    this.#apiUrl = (options.apiUrl || "https://api.firecrawl.dev").replace(/\/+$/, "");
-    this.#timeout = options.timeout ?? 60_000;
+    this.#outputFormat = typeof options["outputFormat"] === "string" ? options["outputFormat"] : "markdown";
+    this.#apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : null;
+    this.#apiUrl = (typeof options["apiUrl"] === "string" ? options["apiUrl"] : "https://api.firecrawl.dev").replace(/\/+$/, "");
+    this.#timeout = typeof options["timeout"] === "number" ? options["timeout"] : 60_000;
   }
 
   override get name(): string {
@@ -53,7 +62,7 @@ export class FirecrawlCheck extends BaseCheck {
     return true;
   }
 
-  override async lint(file: string, _deps: any): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     const url = await this.#extractUrl(file);
     if (url.error) {
       return { status: "error", output: url.error };
@@ -64,7 +73,7 @@ export class FirecrawlCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  override async fix(file: string, _deps: any): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     const url = await this.#extractUrl(file);
     if (url.error) {
       return { status: "error", output: url.error };
@@ -84,8 +93,8 @@ export class FirecrawlCheck extends BaseCheck {
     let scraped: string | undefined;
     try {
       scraped = await this.#scrape(url.value!, apiKey);
-    } catch (err: any) {
-      return { status: "error", output: `Firecrawl API error: ${err.message}` };
+    } catch (err) {
+      return { status: "error", output: `Firecrawl API error: ${err instanceof Error ? err.message : String(err)}` };
     }
 
     if (!scraped) {
@@ -100,8 +109,8 @@ export class FirecrawlCheck extends BaseCheck {
     let content: string;
     try {
       content = await fs.readFile(path.resolve(file), "utf-8");
-    } catch (err: any) {
-      return { error: `cannot read file: ${err.message}` };
+    } catch (err) {
+      return { error: `cannot read file: ${err instanceof Error ? err.message : String(err)}` };
     }
 
     const trimmed = content.trim();
@@ -154,7 +163,7 @@ export class FirecrawlCheck extends BaseCheck {
         throw new Error(`HTTP ${res.status}: ${body.slice(0, 500)}`);
       }
 
-      const data: any = await res.json();
+      const data: FirecrawlResponse = await res.json();
 
       if (!data.success) {
         throw new Error(data.error || "scrape unsuccessful");

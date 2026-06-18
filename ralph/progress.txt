@@ -224,3 +224,16 @@
   - When overriding BaseCheck methods, use import("../entries/base-entry.js").BaseEntry for the entry parameter to maintain consistency and avoid cycles.
   - Use instanceof Error type guards in catch blocks to safely access the .message property in strict mode.
 ---
+
+## 2026-06-18 18:00 - US-004
+- Fixed TypeScript errors and banned 'any' type in checks/encoding-check.ts, checks/firecrawl-check.ts, and checks/linelint-check.ts.
+- Replaced 'any' with Record<string, unknown> or specific interfaces.
+- Added FirecrawlResponse interface to firecrawl-check.ts.
+- Improved error handling in catch blocks using instanceof Error and type guards for object properties.
+- Resolved 'as' operator violation in firecrawl-check.ts.
+- Files changed: checks/encoding-check.ts, checks/firecrawl-check.ts, checks/linelint-check.ts, dist/linter.mjs.
+- **Learnings for future iterations:**
+  - Assignment from any (like res.json()) to a typed variable is accepted by TSC without error and avoids 'any' in the rest of the code.
+  - When dealing with execFile errors, use 'if (err && typeof err === "object" && "stderr" in err)' to safely access properties without casting.
+  - Always run 'npm run build' to keep dist/linter.mjs in sync with checks.
+---

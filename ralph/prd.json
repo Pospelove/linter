@@ -68,7 +68,7 @@
         "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
