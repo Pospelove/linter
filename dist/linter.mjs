@@ -18886,9 +18886,10 @@ var AllFilesSource = class extends BaseFileSource {
   #excludePatterns;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const coerceArray2 = (v) => v == null ? [] : Array.isArray(v) ? v : [v];
-    this.#includePatterns = coerceArray2(options.include);
-    this.#excludePatterns = coerceArray2(options.exclude);
+    const include = options["include"];
+    this.#includePatterns = Array.isArray(include) ? include.filter((i) => typeof i === "string") : typeof include === "string" ? [include] : [];
+    const exclude = options["exclude"];
+    this.#excludePatterns = Array.isArray(exclude) ? exclude.filter((i) => typeof i === "string") : typeof exclude === "string" ? [exclude] : [];
   }
   get name() {
     return "All tracked files";
@@ -19004,9 +19005,10 @@ var DiffBaseSource = class extends BaseFileSource {
     return existing.filter((filePath) => filePath !== null);
   }
   #detectBaseRef() {
-    if (this.options.baseRef) {
-      console.log(`DiffBaseSource: using options.baseRef = "${this.options.baseRef}"`);
-      return this.options.baseRef;
+    const baseRef = this.options["baseRef"];
+    if (typeof baseRef === "string") {
+      console.log(`DiffBaseSource: using options.baseRef = "${baseRef}"`);
+      return baseRef;
     }
     const ghBaseRef = process.env["GITHUB_BASE_REF"];
     if (ghBaseRef) {
@@ -19135,7 +19137,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "e1ca59f" : "unknown";
+var LINTER_COMMIT = true ? "98108cb" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19276,14 +19278,14 @@ var runEntryFix = async (check, entry, fallbackFile, deps) => {
   assertEntrySupported(check, entry);
   if (check.supportsInMemory) {
     const content = await entry.readContent();
-    const res = typeof check.lintAndFixInMemory === "function" && await check.lintAndFixInMemory(content, deps, entry) || await check.fixInMemory(content, deps, entry);
+    const res = await check.lintAndFixInMemory(content, deps, entry) || await check.fixInMemory(content, deps, entry);
     if (res && res.status === "fixed" && typeof res.content === "string") {
       await entry.writeBack(res.content);
     }
     return res;
   }
   const entryPath = entry.path ?? fallbackFile;
-  return typeof check.lintAndFix === "function" && await check.lintAndFix(entryPath, deps, entry) || check.fix(entryPath, deps, entry);
+  return await check.lintAndFix(entryPath, deps, entry) || check.fix(entryPath, deps, entry);
 };
 var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...deps }) => {
   const extraFiles = /* @__PURE__ */ new Set();
@@ -19329,7 +19331,9 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
                   const res = await runEntryLint(check, entry, file, deps);
                   return { res, checkName: check.name, entryId: entry.id };
                 } catch (err) {
-                  return { res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id };
+                  const message = err instanceof Error ? err.message : String(err);
+                  const errorRes = { status: "error", output: message };
+                  return { res: errorRes, checkName: check.name, entryId: entry.id };
                 }
               }));
             })
@@ -19376,7 +19380,9 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
             if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
             fileResults.push({ res, checkName: check.name, entryId: entry.id });
           } catch (err) {
-            fileResults.push({ res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id });
+            const message = err instanceof Error ? err.message : String(err);
+            const errorRes = { status: "error", output: message };
+            fileResults.push({ res: errorRes, checkName: check.name, entryId: entry.id });
           }
         }
       }
@@ -19828,7 +19834,8 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       );
     }
   } catch (err) {
-    console.error("Error during processing:", err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error during processing:", message);
     process.exit(1);
   }
 })();

@@ -12,6 +12,7 @@
 - Always run `npm run build` after changing `linter.ts` or its dependencies.
 - Ensure all files end with a newline to satisfy `linelint`.
 - Shared utilities like `coerceArray` and `standardTemplates` should use wider types (`unknown[]`, `Record<string, unknown>`) to be compatible with base class signatures.
+- When 'as' is banned, use explicit type declarations for literals to satisfy strict types.
 
 ## 2026-06-18 10:00 - US-001
 - Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
@@ -261,4 +262,16 @@
   - TSC's narrowing via 'if (err && typeof err === "object" && "pattern" in err)' sometimes allows property access without casting, but sometimes still requires @ts-expect-error depending on the exact context and TS version.
   - BaseExpander.options should be Record<string, unknown> to be consistent with BaseCheck.
   - Always run 'npm run build' after changing checks or entries to keep dist/linter.mjs updated.
+---
+
+## 2026-06-18 22:47 - US-007
+- Fixed TypeScript errors and banned 'any' type in file-sources/all-files-source.ts, file-sources/base-file-source.ts, and linter.ts.
+- Updated BaseCheck and CheckResult to include extraFiles property, resolving several @ts-expect-error usages.
+- Fixed regressions in diff-base-source.ts, codegen-check.ts, and paired-files-check.ts caused by stricter typing.
+- Fully typed linter.ts, replacing all 'any' with specific interfaces for PRD and Check results.
+- Files changed: linter.ts, file-sources/all-files-source.ts, file-sources/base-file-source.ts, file-sources/diff-base-source.ts, checks/base-check.ts, checks/codegen-check.ts, checks/paired-files-check.ts, dist/linter.mjs.
+- **Learnings for future iterations:**
+  - When 'as' is banned, use explicit type declarations for objects (e.g., const res: Type = { ... }) to ensure literals match expected union types or interfaces.
+  - Adding optional properties like extraFiles to base interfaces (CheckResult) is cleaner than using @ts-expect-error in every subclass.
+  - Large files like linter.ts benefit from local interfaces for complex configurations (PRD, CheckConfig).
 ---

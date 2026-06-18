@@ -118,7 +118,6 @@ export class CodegenCheck extends BaseCheck {
     } catch (err: unknown) {
       return { status: "error", output: `command failed: ${String(err)}` };
     }
-    // @ts-expect-error extraFiles is a valid property but not in CheckResult interface yet
     return { status: "fixed", extraFiles: [this.#absOutput] };
   }
 

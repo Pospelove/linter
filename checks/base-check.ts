@@ -17,6 +17,7 @@ export type CheckStatus = "pass" | "fail" | "fixed" | "error";
 export interface CheckResult {
   status: CheckStatus;
   output?: string;
+  extraFiles?: string[];
 }
 
 /**

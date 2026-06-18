@@ -123,7 +123,6 @@ export class PairedFilesCheck extends BaseCheck {
       const msg = err instanceof Error ? err.message : String(err);
       return { status: "error", output: `failed to create ${pairPath}: ${msg}` };
     }
-    // @ts-expect-error extraFiles is a valid property but not in CheckResult interface yet
     return { status: "fixed", output: `created ${pairPath}`, extraFiles: [pairPath] };
   }
 

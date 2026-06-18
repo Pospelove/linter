@@ -15,11 +15,20 @@ export class AllFilesSource extends BaseFileSource {
   #includePatterns: string[];
   #excludePatterns: string[];
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-    const coerceArray = (v: any) => (v == null ? [] : Array.isArray(v) ? v : [v]);
-    this.#includePatterns = coerceArray(options.include);
-    this.#excludePatterns = coerceArray(options.exclude);
+    const include = options["include"];
+    this.#includePatterns = Array.isArray(include)
+      ? include.filter((i): i is string => typeof i === "string")
+      : typeof include === "string"
+        ? [include]
+        : [];
+    const exclude = options["exclude"];
+    this.#excludePatterns = Array.isArray(exclude)
+      ? exclude.filter((i): i is string => typeof i === "string")
+      : typeof exclude === "string"
+        ? [exclude]
+        : [];
   }
 
   override get name(): string {

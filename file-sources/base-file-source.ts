@@ -4,9 +4,9 @@
  */
 export class BaseFileSource {
   protected repoRoot: string;
-  protected options: any;
+  protected options: Record<string, unknown>;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     this.repoRoot = repoRoot;
     this.options = options;
   }

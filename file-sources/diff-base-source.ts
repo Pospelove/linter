@@ -46,9 +46,10 @@ export class DiffBaseSource extends BaseFileSource {
 
   #detectBaseRef(): string {
     // 1. Explicit config
-    if (this.options.baseRef) {
-      console.log(`DiffBaseSource: using options.baseRef = "${this.options.baseRef}"`);
-      return this.options.baseRef;
+    const baseRef = this.options["baseRef"];
+    if (typeof baseRef === "string") {
+      console.log(`DiffBaseSource: using options.baseRef = "${baseRef}"`);
+      return baseRef;
     }
 
     // 2. GitHub Actions pull_request event

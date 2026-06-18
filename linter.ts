@@ -7,8 +7,48 @@ import pLimit from "p-limit";
 import { ensureCleanExit } from "./util.js";
 import { builtinRegistry, builtinChecks, builtinFileSources, builtinExpanders } from "./registry.js";
 import { CompositeCheck } from "./checks/composite-check.js";
+import { BaseCheck, CheckResult } from "./checks/base-check.js";
+import { BaseEntry } from "./entries/base-entry.js";
 
 const __filename = fileURLToPath(import.meta.url);
+
+interface LinterCheckResult extends CheckResult {
+  content?: string;
+  extraFiles?: string[];
+}
+
+interface ResultGroup {
+  res: LinterCheckResult;
+  checkName: string;
+  entryId: string;
+}
+
+interface CheckPrdConfig {
+  group?: string;
+  groupTitle?: string;
+  groupDescription?: string;
+  filesPerStory?: number;
+  userStoryTitle?: string;
+  userStoryDescription?: string | string[];
+  additionalAcceptanceCriteria?: string[];
+  prdOnly?: boolean;
+}
+
+interface CheckConfigEntry {
+  name: string;
+  export: string;
+  modes: string[];
+  options?: Record<string, unknown>;
+  fixWith?: { export: string; options?: Record<string, unknown> };
+  prd?: CheckPrdConfig;
+  expander?: { export: string; options?: Record<string, unknown> };
+}
+
+interface PrdConfig {
+  project?: string;
+  branchName?: string;
+  description?: string;
+}
 
 /* global __LINTER_VERSION__, __LINTER_COMMIT__ */
 // @ts-expect-error - global
@@ -116,7 +156,7 @@ const relPath = (file: string) => {
  * If mixed pass+fixed    → single line: [OK] rel/path [passed: A, B | fixed: C]
  * Otherwise              → one line per failed/errored check with details.
  */
-const formatFileResults = (results: { res: any, checkName: string }[], file: string) => {
+const formatFileResults = (results: { res: LinterCheckResult; checkName: string }[], file: string) => {
   const rel = relPath(file);
   const lines: string[] = [];
   let isFail = false;
@@ -124,7 +164,7 @@ const formatFileResults = (results: { res: any, checkName: string }[], file: str
 
   const passed: string[] = [];
   const fixed: string[] = [];
-  const bad: { res: any, checkName: string }[] = [];
+  const bad: { res: LinterCheckResult; checkName: string }[] = [];
 
   for (const { res, checkName } of results) {
     switch (res.status) {
@@ -184,7 +224,7 @@ const formatFileResults = (results: { res: any, checkName: string }[], file: str
  * A virtual entry (e.g. one element of a JSON array) cannot be processed by a
  * check that does its own raw file I/O — that would corrupt the surrounding file.
  */
-const assertEntrySupported = (check: any, entry: any) => {
+const assertEntrySupported = (check: BaseCheck, entry: BaseEntry) => {
   if (entry.isVirtual && !check.supportsInMemory) {
     throw new Error(
       `Check "${check.name}" does not support in-memory entries (supportsInMemory === false), ` +
@@ -198,7 +238,7 @@ const assertEntrySupported = (check: any, entry: any) => {
  * Run a single (check, entry) pair in lint-only mode.
  * Routes to lintInMemory when the check supports it; otherwise falls back to file-based lint.
  */
-const runEntryLint = async (check: any, entry: any, fallbackFile: string, deps: any) => {
+const runEntryLint = async (check: BaseCheck, entry: BaseEntry, fallbackFile: string, deps: Record<string, unknown>): Promise<LinterCheckResult> => {
   assertEntrySupported(check, entry);
   if (check.supportsInMemory) {
     const content = await entry.readContent();
@@ -212,12 +252,12 @@ const runEntryLint = async (check: any, entry: any, fallbackFile: string, deps: 
  * Routes to lintAndFixInMemory/fixInMemory when supported, writing the result back via entry.writeBack.
  * Otherwise falls back to file-based lintAndFix/fix.
  */
-const runEntryFix = async (check: any, entry: any, fallbackFile: string, deps: any) => {
+const runEntryFix = async (check: BaseCheck, entry: BaseEntry, fallbackFile: string, deps: Record<string, unknown>): Promise<LinterCheckResult> => {
   assertEntrySupported(check, entry);
   if (check.supportsInMemory) {
     const content = await entry.readContent();
     const res =
-      (typeof check.lintAndFixInMemory === "function" && await check.lintAndFixInMemory(content, deps, entry)) ||
+      (await check.lintAndFixInMemory(content, deps, entry)) ||
       await check.fixInMemory(content, deps, entry);
     if (res && res.status === "fixed" && typeof res.content === "string") {
       await entry.writeBack(res.content);
@@ -225,7 +265,7 @@ const runEntryFix = async (check: any, entry: any, fallbackFile: string, deps: a
     return res;
   }
   const entryPath = entry.path ?? fallbackFile;
-  return (typeof check.lintAndFix === "function" && await check.lintAndFix(entryPath, deps, entry)) ||
+  return (await check.lintAndFix(entryPath, deps, entry)) ||
     check.fix(entryPath, deps, entry);
 };
 
@@ -238,13 +278,13 @@ const runEntryFix = async (check: any, entry: any, fallbackFile: string, deps: a
  * Returns { extraFiles, failed, failedPairs } instead of calling process.exit(1).
  * failedPairs: Array<{ file: string, checkName: string }>
  */
-const runChecks = async (files: string[], checks: any[], { lintOnly = false, verbose = false, ...deps }: any) => {
+const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = false, verbose = false, ...deps }: Record<string, unknown>) => {
 
   const extraFiles = new Set<string>();
   const failedPairs: { file: string, checkName: string }[] = [];
 
   // Group checks by file instead of a sequential flat array
-  const fileToChecks = new Map<string, any[]>();
+  const fileToChecks = new Map<string, BaseCheck[]>();
   let totalChecks = 0;
 
   for (const check of checks) {
@@ -264,7 +304,7 @@ const runChecks = async (files: string[], checks: any[], { lintOnly = false, ver
   }
 
   const groupedWork = Array.from(fileToChecks.entries()).map(([file, fileChecks]) => {
-    fileChecks.sort((a: any, b: any) => a.priority - b.priority);
+    fileChecks.sort((a, b) => a.priority - b.priority);
     return { file, checks: fileChecks };
   });
 
@@ -286,22 +326,25 @@ const runChecks = async (files: string[], checks: any[], { lintOnly = false, ver
         limit(async () => {
           // For each check, expand the file into entries, then lint each entry
           const rawResults = await Promise.all(
-            checks.map(async (check: any) => {
+            checks.map(async (check) => {
               const entries = await check.expand(file);
-              return Promise.all(entries.map(async (entry: any) => {
+              return Promise.all(entries.map(async (entry) => {
                 try {
                   const res = await runEntryLint(check, entry, file, deps);
                   return { res, checkName: check.name, entryId: entry.id };
-                } catch (err: any) {
-                  return { res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id };
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : String(err);
+                  const errorRes: LinterCheckResult = { status: "error", output: message };
+                  return { res: errorRes, checkName: check.name, entryId: entry.id };
                 }
               }));
             })
           );
+
           const results = rawResults.flat();
 
           // Group results by entryId and format each group independently
-          const byEntry = new Map<string, any[]>();
+          const byEntry = new Map<string, ResultGroup[]>();
           for (const r of results) {
             if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
             byEntry.get(r.entryId)!.push(r);
@@ -334,23 +377,25 @@ const runChecks = async (files: string[], checks: any[], { lintOnly = false, ver
   } else {
     // Sequential fix: file by file, check by check to avoid file races
     for (const { file, checks } of groupedWork) {
-      const fileResults: any[] = [];
+      const fileResults: ResultGroup[] = [];
 
       for (const check of checks) {
         const entries = await check.expand(file);
         for (const entry of entries) {
           try {
             const res = await runEntryFix(check, entry, file, deps);
-            if (res.extraFiles) res.extraFiles.forEach((f: string) => extraFiles.add(f));
+            if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
             fileResults.push({ res, checkName: check.name, entryId: entry.id });
-          } catch (err: any) {
-            fileResults.push({ res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const errorRes: LinterCheckResult = { status: "error", output: message };
+            fileResults.push({ res: errorRes, checkName: check.name, entryId: entry.id });
           }
         }
       }
 
       // Group by entryId for display
-      const byEntry = new Map<string, any[]>();
+      const byEntry = new Map<string, ResultGroup[]>();
       for (const r of fileResults) {
         if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
         byEntry.get(r.entryId)!.push(r);
@@ -647,28 +692,38 @@ const initConfig = () => {
   console.log(`Created ${path.relative(REPO_ROOT, configPath)}`);
 };
 
+interface UserStory {
+  id: string;
+  title: string;
+  description: string | null;
+  acceptanceCriteria: string[];
+  priority: number;
+  passes: boolean;
+  notes: string;
+}
+
 /**
  * Build a ralph-compatible PRD JSON from failed (file, check) pairs.
  *
  * @param {Array<{ file: string, checkName: string }>} failedPairs
- * @param {object} prdConfig  Top-level `prd` object from linter-config.json (may be empty).
- * @param {object[]} checkEntries  Raw check entries from linter-config.json (for per-check prd config).
+ * @param {PrdConfig} prdConfig  Top-level `prd` object from linter-config.json (may be empty).
+ * @param {CheckConfigEntry[]} checkEntries  Raw check entries from linter-config.json (for per-check prd config).
  * @returns {object}  PRD object ready to JSON.stringify.
  */
-const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig: any, checkEntries: any[], baseCommand: string) => {
+const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig: PrdConfig, checkEntries: CheckConfigEntry[], baseCommand: string) => {
   const project = prdConfig.project || "Project";
   const branchName = prdConfig.branchName || "ralph/lint-fixes";
   const description = prdConfig.description || "Fix outstanding lint issues";
 
   // Build a lookup: checkName -> prd config from check entry
-  const checkPrdMap: Record<string, any> = {};
+  const checkPrdMap: Record<string, CheckPrdConfig> = {};
   for (const entry of checkEntries || []) {
     if (entry.prd) {
       checkPrdMap[entry.name] = entry.prd;
     }
   }
 
-  const userStories: any[] = [];
+  const userStories: UserStory[] = [];
   let counter = 1;
 
   // Group by check name, sort files within each check alphabetically
@@ -692,8 +747,8 @@ const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig:
   }
 
   // Separate checks into prd-grouped vs ungrouped
-  const prdGroups = new Map<string, any[]>(); // groupName -> [{ checkName, files, checkPrd }]
-  const ungroupedChecks: any[] = [];
+  const prdGroups = new Map<string, { checkName: string; files: string[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, files, checkPrd }]
+  const ungroupedChecks: { checkName: string; files: string[]; checkPrd: CheckPrdConfig }[] = [];
   for (const [checkName, files] of sortedChecks) {
     const checkPrd = checkPrdMap[checkName] || {};
     if (checkPrd.group) {
@@ -721,24 +776,24 @@ const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig:
   // Emit stories per prd group, respecting filesPerStory
   for (const [groupName, members] of [...prdGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     // Use groupTitle / groupDescription from the first member that defines them
-    const groupTitleTemplate = members.map((m: any) => m.checkPrd.groupTitle).find(Boolean);
-    const groupDescTemplate = members.map((m: any) => m.checkPrd.groupDescription).find(Boolean);
-    const filesPerStory = members.map((m: any) => m.checkPrd.filesPerStory).find((v: any) => v != null) ?? 1;
+    const groupTitleTemplate = members.map((m) => m.checkPrd.groupTitle).find(Boolean);
+    const groupDescTemplate = members.map((m) => m.checkPrd.groupDescription).find(Boolean);
+    const filesPerStory = members.map((m) => m.checkPrd.filesPerStory).find((v) => v != null) ?? 1;
 
     // Description: groupDescription wins; fall back to merging userStoryDescription from all members
-    const resolveDesc = (v: any) => Array.isArray(v) ? v.join("\n") : v;
-    const memberDescs = members.map((m: any) => resolveDesc(m.checkPrd.userStoryDescription)).filter(Boolean);
+    const resolveDesc = (v: string | string[] | undefined) => Array.isArray(v) ? v.join("\n") : v;
+    const memberDescs = members.map((m) => resolveDesc(m.checkPrd.userStoryDescription)).filter(Boolean);
     const rawDescTemplate = groupDescTemplate
       ? resolveDesc(groupDescTemplate)
       : memberDescs.length
-        ? memberDescs.map((d: any, i: number) => `${i + 1}) ${d}`).join("\n\n")
+        ? memberDescs.map((d, i) => `${i + 1}) ${d}`).join("\n\n")
         : null;
 
-    const allChecks = members.map((m: any) => m.checkName).join(", ");
+    const allChecks = members.map((m) => m.checkName).join(", ");
     // Collect any additionalAcceptanceCriteria from all members (deduplicated)
-    const extraCriteria = [...new Set(members.flatMap((m: any) => m.checkPrd.additionalAcceptanceCriteria || []))];
+    const extraCriteria = [...new Set(members.flatMap((m) => m.checkPrd.additionalAcceptanceCriteria || []))];
 
-    const allFiles = [...new Set(members.flatMap((m: any) => m.files))].sort((a: any, b: any) => a.localeCompare(b));
+    const allFiles = [...new Set(members.flatMap((m) => m.files))].sort((a, b) => a.localeCompare(b));
 
     for (let i = 0; i < allFiles.length; i += filesPerStory) {
       const chunkSet = new Set(allFiles.slice(i, i + filesPerStory));
@@ -764,9 +819,9 @@ const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig:
 
       // One acceptance criterion for the whole group using all check names (including non-failing),
       // comma-separated. Checks with prd.prdOnly: true are excluded.
-      const allGroupCheckNames = (groupToAllCheckNames.get(groupName) || members.map((m: any) => m.checkName))
-        .filter((name: string) => {
-          const entry = (checkEntries || []).find((e: any) => e.name === name);
+      const allGroupCheckNames = (groupToAllCheckNames.get(groupName) || members.map((m) => m.checkName))
+        .filter((name) => {
+          const entry = (checkEntries || []).find((e) => e.name === name);
           return !entry?.prd?.prdOnly;
         });
       const mainCriteria = allGroupCheckNames.length > 0
@@ -990,8 +1045,9 @@ const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig:
         ensureCleanExit(spawnSync("git", ["add", file], { stdio: "inherit", encoding: "utf-8" }))
       );
     }
-  } catch (err: any) {
-    console.error("Error during processing:", err.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error during processing:", message);
     process.exit(1);
   }
 })();
