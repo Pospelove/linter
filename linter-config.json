@@ -13,10 +13,16 @@
   },
   "checks": [
     {
+      "name": "tsc",
+      "export": "TscCheck",
+      "modes": ["manual", "hook", "ci"],
+      "options": {}
+    },
+    {
       "name": "crlf",
       "export": "CrlfCheck",
       "modes": ["manual", "hook", "ci"],
-      "options": { "extensions": [".js", ".json", ".md"] }
+      "options": { "extensions": [".js", ".ts", ".json", ".md"] }
     },
     {
       "name": "linelint",
@@ -30,7 +36,7 @@
       "modes": ["manual", "hook", "ci"],
       "options": {
         "command": "node esbuild.config.js",
-        "inputFile": "linter.js",
+        "inputFile": "linter.ts",
         "outputFile": "dist/linter.mjs"
       }
     }
