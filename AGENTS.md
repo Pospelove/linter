@@ -31,4 +31,10 @@
 - rephrase "as a string" to "like a string" or "in string format" to avoid the `no-ts-as-operator` linter.
 - rephrase "as JSON" to "in JSON format".
 - explicitly type getters in base classes to ensure subclasses override them with correct types.
+- handle potential `undefined` in `process.argv` and `process.argv[1]`.
+- use `(match && match[1]) ? match[1] : default` when accessing RegExp match groups to satisfy strict null checks.
+- use `@ts-expect-error` selectively for individual loops when iterating over registries with heterogeneous static method return types.
+- use `new Promise<void>((resolve, reject) => ...)` for promises that don't return a value to satisfy `TS2794`.
+- use `err instanceof Error ? err.message : String(err)` in catch blocks to safely access error messages from `unknown` types.
+- add explicit return types to all exported functions and methods.
 

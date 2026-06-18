@@ -9,20 +9,20 @@ import os from "os";
  * @param {string} toolsDir  Absolute path to the tools directory.
  * @returns {{ cachePath: string, extractedPath: string }}
  */
-export function getToolPaths(toolsDir) {
+export function getToolPaths(toolsDir: string): { cachePath: string; extractedPath: string } {
   return {
     cachePath: path.join(toolsDir, "cache"),
     extractedPath: path.join(toolsDir, "extracted"),
   };
 }
 
-export function ensureDirExists(dirPath) {
+export function ensureDirExists(dirPath: string): void {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
 }
 
-export function checkInPath(exeName) {
+export function checkInPath(exeName: string): string | null {
   const command = os.platform() === "win32" ? "where" : "which";
   try {
     const result = spawnSync(command, [exeName], { encoding: "utf8", stdio: "pipe" });
@@ -40,8 +40,8 @@ export function checkInPath(exeName) {
  * Compute SHA256 of a file and compare to expected hash.
  * @returns {Promise<void>} Resolves on match, rejects on mismatch.
  */
-function verifySha256(filePath, expectedSha256) {
-  return new Promise((resolve, reject) => {
+function verifySha256(filePath: string, expectedSha256: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const hash = crypto.createHash("sha256");
     const stream = fs.createReadStream(filePath);
     stream.on("data", (chunk) => hash.update(chunk));
@@ -62,7 +62,7 @@ function verifySha256(filePath, expectedSha256) {
  * Validates SHA256 after download. Uses atomic temp-file + rename so that
  * interrupted downloads never leave a corrupt file at the final cache path.
  */
-export async function downloadFile(url, destPath, expectedSha256) {
+export async function downloadFile(url: string, destPath: string, expectedSha256: string): Promise<void> {
   // Clean up leftover temp file from a previously interrupted download
   const tmpPath = destPath + ".downloading";
   try { fs.unlinkSync(tmpPath); } catch {}
@@ -73,7 +73,8 @@ export async function downloadFile(url, destPath, expectedSha256) {
       await verifySha256(destPath, expectedSha256);
       return; // cache valid
     } catch (err) {
-      console.warn(`Cached file is corrupted: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`Cached file is corrupted: ${message}`);
       console.warn(`Deleting and re-downloading...`);
       fs.unlinkSync(destPath);
     }
@@ -81,12 +82,12 @@ export async function downloadFile(url, destPath, expectedSha256) {
 
   console.log(`Downloading ${path.basename(destPath)} from ${url}...`);
 
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     execFile(
       "curl",
       ["-fSL", "--retry", "3", "--retry-delay", "5", "-o", tmpPath, url],
       { maxBuffer: 10 * 1024 * 1024 },
-      (error, stdout, stderr) => {
+      (error, _stdout, stderr) => {
         if (error) {
           // Clean up partial download
           try { fs.unlinkSync(tmpPath); } catch {}
@@ -115,10 +116,10 @@ export async function downloadFile(url, destPath, expectedSha256) {
  * @param {string} destDir - Directory to extract into.
  * @param {string[]} [members] - Optional specific members to extract (tar only).
  */
-export function extractArchive(archivePath, destDir, members = []) {
-  return new Promise((resolve, reject) => {
+export function extractArchive(archivePath: string, destDir: string, members: string[] = []): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const platform = os.platform();
-    let command, args;
+    let command: string, args: string[];
 
     if (platform === "win32") {
       command = "powershell";

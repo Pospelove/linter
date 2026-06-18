@@ -5319,7 +5319,8 @@ async function downloadFile(url, destPath, expectedSha256) {
       await verifySha256(destPath, expectedSha256);
       return;
     } catch (err) {
-      console.warn(`Cached file is corrupted: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`Cached file is corrupted: ${message}`);
       console.warn(`Deleting and re-downloading...`);
       fs5.unlinkSync(destPath);
     }
@@ -5330,7 +5331,7 @@ async function downloadFile(url, destPath, expectedSha256) {
       "curl",
       ["-fSL", "--retry", "3", "--retry-delay", "5", "-o", tmpPath, url],
       { maxBuffer: 10 * 1024 * 1024 },
-      (error, stdout, stderr) => {
+      (error, _stdout, stderr) => {
         if (error) {
           try {
             fs5.unlinkSync(tmpPath);
@@ -5379,7 +5380,11 @@ function extractArchive(archivePath, destDir, members = []) {
 
 // tool-resolve/linelint.ts
 var VERSION = "0.0.6";
-async function getLinelintPath({ shouldDownload, shouldSearchInPath, toolsDir }) {
+async function getLinelintPath({
+  shouldDownload,
+  shouldSearchInPath,
+  toolsDir
+}) {
   const { cachePath: CACHE_PATH } = getToolPaths(toolsDir);
   const exeName = os2.platform() === "win32" ? "linelint.exe" : "linelint";
   if (shouldSearchInPath) {
@@ -18972,7 +18977,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "c30d6fe" : "unknown";
+var LINTER_COMMIT = true ? "9200e68" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

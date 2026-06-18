@@ -1,7 +1,6 @@
-/**
- * @param {import('child_process').SpawnSyncReturns<string>} child
- */
-export function ensureCleanExit(child) {
+import { SpawnSyncReturns } from "child_process";
+
+export function ensureCleanExit(child: SpawnSyncReturns<string>): SpawnSyncReturns<string> {
   if (child.error) {
     throw child.error;
   }

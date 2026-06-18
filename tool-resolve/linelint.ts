@@ -15,7 +15,15 @@ const VERSION = "0.0.6";
  * @param {{ shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }} options
  * @returns {Promise<string|undefined>} Path to binary, or undefined if unavailable.
  */
-export async function getLinelintPath({ shouldDownload, shouldSearchInPath, toolsDir }) {
+export async function getLinelintPath({
+  shouldDownload,
+  shouldSearchInPath,
+  toolsDir,
+}: {
+  shouldDownload: boolean;
+  shouldSearchInPath: boolean;
+  toolsDir: string;
+}): Promise<string | undefined> {
   const { cachePath: CACHE_PATH } = getToolPaths(toolsDir);
   const exeName = os.platform() === "win32" ? "linelint.exe" : "linelint";
 
