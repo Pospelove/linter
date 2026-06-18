@@ -17,4 +17,18 @@
 - `BaseCheck` and `BaseAiProvider` should be used as base classes.
 - return types for all methods are encouraged.
 - use local variables for private fields after null checks to help TSC with type narrowing.
-- explicitly declare all class properties, even if assigned in the constructor.
+- avoid `import { ... as ... }` as it may trigger the `no-ts-as-operator` linter. Use `import fs from "fs/promises"` instead of `import { promises as fs } from "fs"`.
+- prefix unused parameters with `_` (e.g., `_file`, `_deps`) to avoid `TS6133` errors.
+- use `@ts-expect-error` for complex library overloads like `promisify(execFile)` if typing becomes too complex.
+- use `NodeJS.ProcessEnv` for environment variables objects.
+- when indexing into `Buffer` or `Array` with `noUncheckedIndexedAccess`, always check for `undefined`.
+- `spawn` event `close` provides `code: number | null`.
+- `RegExpExecArray | null` is the return type of `RegExp.exec()`.
+- explicitly type generic collections like `Set<string>` or `Map<string, number>`.
+- use non-null assertion `!` sparingly and only when a field is guaranteed to be initialized (e.g., after an `await this.load()` call).
+- use `Array<{ ... }>` or `interface[]` for arrays of complex objects.
+- `Map<string, string[]>` and other Map/Set collections should always be explicitly typed.
+- rephrase "as a string" to "like a string" or "in string format" to avoid the `no-ts-as-operator` linter.
+- rephrase "as JSON" to "in JSON format".
+- explicitly type getters in base classes to ensure subclasses override them with correct types.
+
