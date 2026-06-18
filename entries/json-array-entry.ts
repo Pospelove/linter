@@ -10,9 +10,9 @@ import { BaseEntry } from "./base-entry.js";
 export class JsonArrayEntry extends BaseEntry {
   #filePath: string;
   #index: number;
-  #element: any;
+  #element: unknown;
 
-  constructor(filePath: string, index: number, element: any) {
+  constructor(filePath: string, index: number, element: unknown) {
     super();
     this.#filePath = filePath;
     this.#index = index;
@@ -37,7 +37,7 @@ export class JsonArrayEntry extends BaseEntry {
 
   override async readContent(): Promise<string> {
     const text = await fs.readFile(this.#filePath, "utf-8");
-    const parsed = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
     if (!Array.isArray(parsed)) {
       throw new Error(`File ${this.#filePath} is no longer a JSON array`);
     }
@@ -46,15 +46,16 @@ export class JsonArrayEntry extends BaseEntry {
 
   override async writeBack(content: string): Promise<void> {
     const text = await fs.readFile(this.#filePath, "utf-8");
-    const parsed = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
     if (!Array.isArray(parsed)) {
       throw new Error(`File ${this.#filePath} is no longer a JSON array`);
     }
-    let newElement: any;
+    let newElement: unknown;
     try {
       newElement = JSON.parse(content);
-    } catch (err: any) {
-      throw new Error(`writeBack content is not valid JSON for ${this.id}: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`writeBack content is not valid JSON for ${this.id}: ${msg}`);
     }
     parsed[this.#index] = newElement;
     await fs.writeFile(this.#filePath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");

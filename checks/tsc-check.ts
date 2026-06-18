@@ -28,20 +28,26 @@ export class TscCheck extends BaseCheck {
   #errorMessages: { re: RegExp; message: string }[];
   #resultPromise: Promise<Map<string, string[]>> | null = null;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-    this.#tsconfigPath = options.tsconfigPath ?? "tsconfig.json";
-    this.#errorMessages = (options.errorMessages || []).map((e: any) => ({
-      re: new RegExp(e.pattern),
-      message: e.message,
-    }));
+    // @ts-expect-error - tsconfigPath is unknown
+    this.#tsconfigPath = options["tsconfigPath"] ?? "tsconfig.json";
+    const messages = options["errorMessages"] || [];
+    this.#errorMessages = (Array.isArray(messages) ? messages : []).map((e: unknown) => {
+      const pattern = (e && typeof e === "object" && "pattern" in e) ? String(e.pattern) : "";
+      const message = (e && typeof e === "object" && "message" in e) ? String(e.message) : "";
+      return {
+        re: new RegExp(pattern),
+        message: message,
+      };
+    });
   }
 
   override get name(): string {
     return "TypeScript";
   }
 
-  override async resolveDeps(options: { shouldSearchInPath: boolean }): Promise<any> {
+  override async resolveDeps(options: { shouldSearchInPath: boolean }): Promise<Record<string, unknown>> {
     const { shouldSearchInPath } = options;
     let tscPath: string | null | undefined;
     if (shouldSearchInPath) {
@@ -65,15 +71,15 @@ export class TscCheck extends BaseCheck {
     return { tscPath: tscPath ?? undefined };
   }
 
-  override checkDeps(deps: any): boolean {
-    return deps.tscPath !== undefined;
+  override checkDeps(deps: Record<string, unknown>): boolean {
+    return deps["tscPath"] !== undefined;
   }
 
   /**
    * Run tsc once and return a Map<absolutePath, diagnosticLines[]>.
    * The promise is shared so concurrent lint() calls wait on the same run.
    */
-  #runTsc(deps: any): Promise<Map<string, string[]>> {
+  #runTsc(deps: Record<string, unknown>): Promise<Map<string, string[]>> {
     if (!this.#resultPromise) {
       this.#resultPromise = (async () => {
         const errors = new Map<string, string[]>();
@@ -81,17 +87,24 @@ export class TscCheck extends BaseCheck {
         const args = ["--noEmit", "--pretty", "false", "-p", path.resolve(this.repoRoot, this.#tsconfigPath)];
 
         try {
-          await execFileAsync(deps.tscPath, args, {
+          const tscPath = deps["tscPath"];
+          if (typeof tscPath !== "string") {
+            throw new Error("tscPath is not a string");
+          }
+          await execFileAsync(tscPath, args, {
             cwd: this.repoRoot,
             maxBuffer: 10 * 1024 * 1024,
             shell: process.platform === "win32",
           });
-        } catch (err: any) {
-          if (err.code === "ENOENT") {
-            errors.set("__global__", [`tsc not found: ${err.message}`]);
+        } catch (err: unknown) {
+          if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+            const msg = "message" in err ? String(err.message) : "unknown error";
+            errors.set("__global__", [`tsc not found: ${msg}`]);
             return errors;
           }
-          const output: string = (err.stdout || err.stderr || "").toString();
+          const stdout = err && typeof err === "object" && "stdout" in err ? String(err.stdout) : "";
+          const stderr = err && typeof err === "object" && "stderr" in err ? String(err.stderr) : "";
+          const output: string = (stdout || stderr || "").toString();
           // Parse tsc output lines like:  src/foo.ts(10,5): error TS2322: ...
           for (const line of output.split("\n")) {
             const match = line.match(/^(.+?)\(\d+,\d+\):\s*error\s+TS\d+:/);
@@ -124,7 +137,7 @@ export class TscCheck extends BaseCheck {
     return line;
   }
 
-  override async lint(file: string, deps: any): Promise<CheckResult> {
+  override async lint(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
     const errors = await this.#runTsc(deps);
 
     // Global (non-file) error
@@ -141,7 +154,7 @@ export class TscCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  override async fix(file: string, deps: any): Promise<CheckResult> {
+  override async fix(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
     // No autofix for TypeScript type errors
     return this.lint(file, deps);
   }

@@ -13932,11 +13932,16 @@ var TscCheck = class extends BaseCheck {
   #resultPromise = null;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    this.#tsconfigPath = options.tsconfigPath ?? "tsconfig.json";
-    this.#errorMessages = (options.errorMessages || []).map((e) => ({
-      re: new RegExp(e.pattern),
-      message: e.message
-    }));
+    this.#tsconfigPath = options["tsconfigPath"] ?? "tsconfig.json";
+    const messages = options["errorMessages"] || [];
+    this.#errorMessages = (Array.isArray(messages) ? messages : []).map((e) => {
+      const pattern = e && typeof e === "object" && "pattern" in e ? String(e.pattern) : "";
+      const message = e && typeof e === "object" && "message" in e ? String(e.message) : "";
+      return {
+        re: new RegExp(pattern),
+        message
+      };
+    });
   }
   get name() {
     return "TypeScript";
@@ -13961,7 +13966,7 @@ var TscCheck = class extends BaseCheck {
     return { tscPath: tscPath ?? void 0 };
   }
   checkDeps(deps) {
-    return deps.tscPath !== void 0;
+    return deps["tscPath"] !== void 0;
   }
   /**
    * Run tsc once and return a Map<absolutePath, diagnosticLines[]>.
@@ -13973,17 +13978,24 @@ var TscCheck = class extends BaseCheck {
         const errors = /* @__PURE__ */ new Map();
         const args = ["--noEmit", "--pretty", "false", "-p", path12.resolve(this.repoRoot, this.#tsconfigPath)];
         try {
-          await execFileAsync4(deps.tscPath, args, {
+          const tscPath = deps["tscPath"];
+          if (typeof tscPath !== "string") {
+            throw new Error("tscPath is not a string");
+          }
+          await execFileAsync4(tscPath, args, {
             cwd: this.repoRoot,
             maxBuffer: 10 * 1024 * 1024,
             shell: process.platform === "win32"
           });
         } catch (err) {
-          if (err.code === "ENOENT") {
-            errors.set("__global__", [`tsc not found: ${err.message}`]);
+          if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+            const msg = "message" in err ? String(err.message) : "unknown error";
+            errors.set("__global__", [`tsc not found: ${msg}`]);
             return errors;
           }
-          const output = (err.stdout || err.stderr || "").toString();
+          const stdout = err && typeof err === "object" && "stdout" in err ? String(err.stdout) : "";
+          const stderr = err && typeof err === "object" && "stderr" in err ? String(err.stderr) : "";
+          const output = (stdout || stderr || "").toString();
           for (const line of output.split("\n")) {
             const match = line.match(/^(.+?)\(\d+,\d+\):\s*error\s+TS\d+:/);
             if (match) {
@@ -19064,7 +19076,8 @@ var JsonArrayEntry = class extends BaseEntry {
     try {
       newElement = JSON.parse(content);
     } catch (err) {
-      throw new Error(`writeBack content is not valid JSON for ${this.id}: ${err.message}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`writeBack content is not valid JSON for ${this.id}: ${msg}`);
     }
     parsed[this.#index] = newElement;
     await fs20.writeFile(this.#filePath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
@@ -19122,7 +19135,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "63196cc" : "unknown";
+var LINTER_COMMIT = true ? "e1ca59f" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

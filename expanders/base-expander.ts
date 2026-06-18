@@ -11,9 +11,9 @@
  * in a JSON array, one entry per binary record, etc.
  */
 export class BaseExpander {
-  options: any;
+  options: Record<string, unknown>;
 
-  constructor(options = {}) {
+  constructor(options: Record<string, unknown> = {}) {
     this.options = options;
   }
 
