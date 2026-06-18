@@ -4757,7 +4757,7 @@ var BaseExpander = class {
    * @param {string} file - Absolute path to the file.
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
-  async expand(file) {
+  async expand(_file) {
     throw new Error("Not implemented: expand");
   }
   static getHelp() {
@@ -4769,7 +4769,7 @@ var BaseExpander = class {
 };
 
 // entries/base-entry.ts
-import { promises as fs } from "fs";
+import fs from "fs/promises";
 var BaseEntry = class {
   /**
    * Unique identifier for this entry, used in output and reports.
@@ -4815,7 +4815,7 @@ var BaseEntry = class {
     return false;
   }
   /**
-   * Read this entry's content as a string.
+   * Read this entry's content like a string.
    * Default: reads the underlying file at this.path. Virtual entries
    * override this to extract just their slice.
    * @returns {Promise<string>}
@@ -4825,7 +4825,7 @@ var BaseEntry = class {
     return fs.readFile(this.path, "utf-8");
   }
   /**
-   * Write the given content back to disk as this entry's new value.
+   * Write the given content back to disk in form of this entry's new value.
    * Default: overwrites this.path with the string verbatim. Virtual
    * entries override this to splice their slice back into the parent file.
    * @param {string} content
@@ -5098,7 +5098,7 @@ var CrlfCheck = class extends BaseCheck {
   get name() {
     return "CRLF";
   }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       const content = await fs3.readFile(file);
       if (content.includes("\r\n")) {
@@ -5109,7 +5109,7 @@ var CrlfCheck = class extends BaseCheck {
       return { status: "error", output: err.message };
     }
   }
-  async fix(file) {
+  async fix(file, _deps) {
     try {
       const before = await fs3.readFile(file);
       if (before.includes("\r\n")) {
@@ -5150,7 +5150,8 @@ function stripBom(buf) {
 }
 function isAsciiOnly(buf) {
   for (let i = 0; i < buf.length; i++) {
-    if (buf[i] >= 128) return false;
+    const b = buf[i];
+    if (b !== void 0 && b >= 128) return false;
   }
   return true;
 }
@@ -5183,7 +5184,7 @@ var EncodingCheck = class extends BaseCheck {
   get name() {
     return `encoding(${this.#encoding})`;
   }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       const buf = await fs4.readFile(file);
       const bom = hasBom(buf);
@@ -5200,12 +5201,12 @@ var EncodingCheck = class extends BaseCheck {
       if (this.#encoding === "utf-8") {
         return valid ? { status: "pass" } : { status: "fail", output: "file is not valid UTF-8 (looks like CP1251 or another single-byte encoding)" };
       }
-      return valid ? { status: "fail", output: "file decodes as UTF-8 but CP1251 is required" } : { status: "pass" };
+      return valid ? { status: "fail", output: "file decodes in UTF-8 format but CP1251 is required" } : { status: "pass" };
     } catch (err) {
       return { status: "error", output: err.message };
     }
   }
-  async fix(file) {
+  async fix(file, _deps) {
     try {
       const original = await fs4.readFile(file);
       const stripped = stripBom(original);
@@ -5253,7 +5254,7 @@ var EncodingCheck = class extends BaseCheck {
 // checks/linelint-check.ts
 import { execFile as execFile2 } from "child_process";
 import { promisify } from "util";
-import { promises as fs7 } from "fs";
+import fs7 from "fs/promises";
 
 // tool-resolve/linelint.ts
 import fs6 from "fs";
@@ -5487,7 +5488,7 @@ var LinelintCheck = class extends BaseCheck {
 };
 
 // checks/clang-format-check.ts
-import { promises as fs9 } from "fs";
+import fs9 from "fs/promises";
 import { execFile as execFile3 } from "child_process";
 import { promisify as promisify2 } from "util";
 
@@ -5630,7 +5631,7 @@ var ClangFormatCheck = class extends BaseCheck {
 };
 
 // checks/paired-files-check.ts
-import { promises as fs10 } from "fs";
+import fs10 from "fs/promises";
 import path5 from "path";
 var PairedFilesCheck = class extends BaseCheck {
   #absDirs;
@@ -5662,7 +5663,7 @@ var PairedFilesCheck = class extends BaseCheck {
     if (this.#exclude.has(basename)) return false;
     return this.#absDirs.some((d) => file.startsWith(d.abs + path5.sep));
   }
-  async lint(file) {
+  async lint(file, _deps) {
     const ext = path5.extname(file);
     const baseName = path5.basename(file, ext);
     const ownDir = this.#absDirs.find((d) => file.startsWith(d.abs + path5.sep));
@@ -5682,7 +5683,7 @@ var PairedFilesCheck = class extends BaseCheck {
     }
     return { status: "pass" };
   }
-  async fix(file) {
+  async fix(file, _deps) {
     const ext = path5.extname(file);
     const baseName = path5.basename(file, ext);
     const ownDir = this.#absDirs.find((d) => file.startsWith(d.abs + path5.sep));
@@ -5722,7 +5723,7 @@ var PairedFilesCheck = class extends BaseCheck {
 };
 
 // checks/codegen-check.ts
-import { promises as fs11 } from "fs";
+import fs11 from "fs/promises";
 import { execFile as execFile4 } from "child_process";
 import { promisify as promisify3 } from "util";
 import path6 from "path";
@@ -5754,7 +5755,7 @@ var CodegenCheck = class extends BaseCheck {
     if (!await super.appliesTo(file)) return false;
     return path6.resolve(file) === this.#absInput;
   }
-  async lint(file, _deps) {
+  async lint(_file, _deps) {
     let original;
     try {
       original = await fs11.readFile(this.#absOutput);
@@ -5787,7 +5788,7 @@ var CodegenCheck = class extends BaseCheck {
     }
     return { status: "pass" };
   }
-  async fix(file, _deps) {
+  async fix(_file, _deps) {
     try {
       await this.#runCommand();
     } catch (err) {
@@ -13526,7 +13527,7 @@ var RegexCheck = class extends BaseCheck {
       "{dir}": (ctx) => path10.dirname(path10.relative(ctx.repoRoot, ctx.file))
     };
   }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       const content = await fs13.readFile(file, "utf-8");
       const violations = [];
@@ -13546,6 +13547,7 @@ var RegexCheck = class extends BaseCheck {
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
+          if (!line) continue;
           if (this.#skipLineRes.some((skip) => skip.test(line))) continue;
           re.lastIndex = 0;
           let m;
@@ -13567,8 +13569,8 @@ ${violations.join("\n")}`
       return { status: "error", output: err.message };
     }
   }
-  async fix(file) {
-    if (!this.#replacement) return this.lint(file);
+  async fix(file, _deps) {
+    if (!this.#replacement) return this.lint(file, _deps);
     try {
       const original = await fs13.readFile(file, "utf-8");
       const replacement = this.resolveTemplate(this.#replacement, {
@@ -13605,7 +13607,7 @@ ${violations.join("\n")}`
 };
 
 // checks/firecrawl-check.ts
-import { promises as fs14 } from "fs";
+import fs14 from "fs/promises";
 import path11 from "path";
 var FirecrawlCheck = class extends BaseCheck {
   #outputFormat;
@@ -13673,7 +13675,8 @@ var FirecrawlCheck = class extends BaseCheck {
     if (!trimmed2) {
       return { error: "file is empty" };
     }
-    const firstLine = trimmed2.split(/\r?\n/)[0].trim();
+    const lines = trimmed2.split(/\r?\n/);
+    const firstLine = (lines[0] || "").trim();
     try {
       const parsed = new URL(firstLine);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
@@ -13686,7 +13689,7 @@ var FirecrawlCheck = class extends BaseCheck {
     return { isUrlOnly, value: firstLine };
   }
   #resolveApiKey() {
-    return this.#apiKey || process.env.FIRECRAWL_API_KEY || null;
+    return this.#apiKey || process.env["FIRECRAWL_API_KEY"] || null;
   }
   async #scrape(url, apiKey) {
     const endpoint = `${this.#apiUrl}/v1/scrape`;
@@ -13780,9 +13783,7 @@ import { promisify as promisify4 } from "util";
 var execFileAsync4 = promisify4(execFile5);
 var TscCheck = class extends BaseCheck {
   #tsconfigPath;
-  /** @type {{ re: RegExp, message: string }[]} */
   #errorMessages;
-  /** @type {Promise<Map<string, string[]>> | null} */
   #resultPromise = null;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
@@ -13795,7 +13796,8 @@ var TscCheck = class extends BaseCheck {
   get name() {
     return "TypeScript";
   }
-  async resolveDeps({ shouldSearchInPath }) {
+  async resolveDeps(options) {
+    const { shouldSearchInPath } = options;
     let tscPath;
     if (shouldSearchInPath) {
       tscPath = checkInPath("tsc");
@@ -13811,7 +13813,7 @@ var TscCheck = class extends BaseCheck {
       } catch {
       }
     }
-    return { tscPath };
+    return { tscPath: tscPath ?? void 0 };
   }
   checkDeps(deps) {
     return deps.tscPath !== void 0;
@@ -13921,9 +13923,7 @@ var LocalizationKeyCheck = class extends BaseCheck {
   #registryPattern;
   #language;
   #excludeRegistrationFiles;
-  /** @type {Set<string> | null} */
   #registeredKeys = null;
-  /** @type {string[]} */
   #registryErrors = [];
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
@@ -13983,13 +13983,13 @@ var LocalizationKeyCheck = class extends BaseCheck {
           const lang = m[1] ?? m[3];
           const key = m[2] ?? m[4];
           if (this.#language === null || lang === this.#language) {
-            this.#registeredKeys.add(key);
+            if (key) this.#registeredKeys.add(key);
           }
         }
       }
     }
   }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       await this.#loadRegistry();
       if (this.#registryErrors.length > 0) {
@@ -14009,8 +14009,8 @@ ${violations.join("\n")}`
       return { status: "error", output: err.message };
     }
   }
-  async fix(file) {
-    return this.lint(file);
+  async fix(file, deps) {
+    return this.lint(file, deps);
   }
   static getHelp() {
     return {
@@ -14029,11 +14029,13 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
   const violations = [];
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
     re.lastIndex = 0;
     let m;
-    while ((m = re.exec(lines[i])) !== null) {
+    while ((m = re.exec(line)) !== null) {
       const key = m[1] ?? m[2];
-      if (!registeredKeys.has(key)) {
+      if (key && !registeredKeys.has(key)) {
         violations.push(`  line ${i + 1}: ${fnName}("${key}")`);
       }
     }
@@ -14042,7 +14044,7 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
 }
 
 // checks/custom-check.ts
-import { promises as fs16 } from "fs";
+import fs16 from "fs/promises";
 import { spawn as spawn3 } from "child_process";
 var CustomCheck = class extends BaseCheck {
   #name;
@@ -18869,7 +18871,7 @@ var DiffBaseSource = class extends BaseFileSource {
 import fs21 from "fs/promises";
 
 // entries/json-array-entry.ts
-import { promises as fs20 } from "fs";
+import fs20 from "fs/promises";
 var JsonArrayEntry = class extends BaseEntry {
   #filePath;
   #index;
@@ -18969,7 +18971,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "ba23eb1" : "unknown";
+var LINTER_COMMIT = true ? "5d73619" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

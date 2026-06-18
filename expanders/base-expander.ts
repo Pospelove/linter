@@ -22,7 +22,7 @@ export class BaseExpander {
    * @param {string} file - Absolute path to the file.
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
-  async expand(file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
+  async expand(_file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
     throw new Error("Not implemented: expand");
   }
 

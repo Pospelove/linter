@@ -7,14 +7,14 @@ import { JsonArrayEntry } from "../entries/json-array-entry.js";
  * If the file does not contain a JSON array, expand() returns an empty array.
  */
 export class JsonArrayExpander extends BaseExpander {
-  async expand(file) {
+  override async expand(file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
     const text = await fs.readFile(file, "utf8");
     const parsed = JSON.parse(text);
     if (!Array.isArray(parsed)) return [];
     return parsed.map((element, index) => new JsonArrayEntry(file, index, element));
   }
 
-  static getHelp() {
+  static override getHelp() {
     return {
       name: "JsonArrayExpander",
       description: "Yields one entry per element in a JSON array file.",

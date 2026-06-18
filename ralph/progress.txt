@@ -6,6 +6,7 @@
 - Always run `yarn build` after code changes to keep `dist/linter.mjs` updated.
 - Use local variables for private fields after null checks to satisfy strict TSC null checks.
 - Explicitly declare all class properties, especially in base classes.
+- Use inline type imports (e.g., `import("./path").Type`) for return types in base classes and interfaces to avoid circular dependencies.
 
 ## 2026-06-18 10:00 - US-001
 - Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
@@ -110,4 +111,16 @@
 - **Learnings for future iterations:**
   - Common descriptive phrases like "as a string" or "as JSON" trigger the linter. Use "like a string" or "in JSON format".
   - Getters in base classes (like `BaseEntry.id`) should be explicitly typed to enforce correct types in subclasses.
+---
+
+## 2026-06-18 14:00 - US-009
+- Fixed TypeScript errors in `expanders/base-expander.ts` and `expanders/json-array-expander.ts`.
+- Prefixed unused `file` parameter with `_` in `BaseExpander.expand`.
+- Added `override` and `static override` modifiers in `JsonArrayExpander`.
+- Explicitly typed `file: string` and added return type to `JsonArrayExpander.expand`.
+- Updated `dist/linter.mjs` by running `npm run build`.
+- Files changed: `expanders/base-expander.ts`, `expanders/json-array-expander.ts`, `dist/linter.mjs`, `ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Inline imports like `import("../entries/base-entry.js").BaseEntry[]` are preferred for types in method signatures to keep the import section clean and avoid cycles.
+  - Even if a file is listed in a user story but passes the linter (like `expanders/file-expander.ts`), still verify its content against project patterns.
 ---
