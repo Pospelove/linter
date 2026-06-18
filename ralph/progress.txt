@@ -43,3 +43,18 @@
   - TSC (at least in this project's configuration) sometimes fails to narrow the type of private fields even after a null check. Using a local variable for the private field before the check resolves this.
   - Base classes need explicit property declarations (e.g., `options: any`) to be correctly recognized as having those properties when accessed in the base class or subclasses.
 ---
+
+## 2026-06-18 11:30 - US-004
+- Fixed TypeScript errors in `checks/clang-format-check.ts`, `checks/codegen-check.ts`, and `checks/composite-check.ts`.
+- Replaced `import { promises as fs }` with `import fs from "fs/promises"` to avoid `no-ts-as-operator` linter violations.
+- Added explicit property declarations for private and protected fields.
+- Prefixed unused parameters with `_`.
+- Added `override` and `static override` modifiers.
+- Resolved `unknown` error types in catch blocks.
+- Files changed: `checks/clang-format-check.ts`, `checks/codegen-check.ts`, `checks/composite-check.ts`, `CLAUDE.md`.
+- **Learnings for future iterations:**
+  - `import { ... as ... }` is caught by the aggressive `no-ts-as-operator` linter. Use alternative import syntaxes.
+  - Subclasses overriding `BaseCheck` methods should explicitly return `Promise<CheckResult>` (not `Promise<CheckResult | null>`) if they always return a result, to avoid needing type assertions in callers or overrides.
+  - `static override` is valid and required for overriding static methods in this project.
+  - `execFileAsync` (from `promisify(execFile)`) can have tricky overload issues in strict mode; `@ts-expect-error` is a valid escape hatch if idiomatic fix is too verbose.
+---

@@ -1,8 +1,8 @@
-import { promises as fs } from "fs";
+import fs from "fs/promises";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,13 +27,13 @@ const execFileAsync = promisify(execFile);
  *   2. Updated file becomes part of the commit
  */
 export class CodegenCheck extends BaseCheck {
-  #command;
-  #inputFile;
-  #outputFile;
-  #absInput;
-  #absOutput;
+  #command: string;
+  #inputFile: string;
+  #outputFile: string;
+  #absInput: string;
+  #absOutput: string;
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
     if (!options.command) throw new Error("CodegenCheck requires options.command");
     if (!options.inputFile) throw new Error("CodegenCheck requires options.inputFile");
@@ -46,27 +46,27 @@ export class CodegenCheck extends BaseCheck {
     this.#absOutput = path.resolve(repoRoot, options.outputFile);
   }
 
-  get name() {
+  override get name(): string {
     return `Codegen (${this.#inputFile} → ${this.#outputFile})`;
   }
 
   /**
    * Only applies to the input file — the check triggers when the source changes.
    */
-  async appliesTo(file) {
+  override async appliesTo(file: string): Promise<boolean> {
     if (!(await super.appliesTo(file))) return false;
     return path.resolve(file) === this.#absInput;
   }
 
-  async lint(file, _deps) {
+  override async lint(_file: string, _deps: any): Promise<CheckResult> {
     // TODO: consider more efficient impl — e.g. run command writing to a temp
     // file instead of overwriting the real output and rolling back.
 
     // 1. Save current output contents into memory
-    let original;
+    let original: Buffer | null;
     try {
       original = await fs.readFile(this.#absOutput);
-    } catch (err) {
+    } catch (err: any) {
       if (err.code === "ENOENT") {
         original = null; // output does not exist yet
       } else {
@@ -77,17 +77,17 @@ export class CodegenCheck extends BaseCheck {
     // 2. Run the generator command
     try {
       await this.#runCommand();
-    } catch (err) {
+    } catch (err: any) {
       // Restore before returning error
       await this.#restore(original);
       return { status: "error", output: `command failed: ${err}` };
     }
 
     // 3. Read generated output
-    let generated;
+    let generated: Buffer;
     try {
       generated = await fs.readFile(this.#absOutput);
-    } catch (err) {
+    } catch (err: any) {
       await this.#restore(original);
       return { status: "error", output: `cannot read generated output: ${err.message}` };
     }
@@ -105,24 +105,26 @@ export class CodegenCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  async fix(file, _deps) {
+  override async fix(_file: string, _deps: any): Promise<CheckResult> {
     // Just run the command — let it write the output file
     try {
       await this.#runCommand();
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: `command failed: ${err}` };
     }
+    // @ts-expect-error extraFiles is a valid property but not in CheckResult interface yet
     return { status: "fixed", extraFiles: [this.#absOutput] };
   }
 
-  async #runCommand() {
+  async #runCommand(): Promise<void> {
     const parts = this.#command.split(/\s+/);
     const cmd = parts[0];
     const args = parts.slice(1);
+    // @ts-expect-error promisified execFile overload issues
     await execFileAsync(cmd, args, { cwd: this.repoRoot });
   }
 
-  async #restore(original) {
+  async #restore(original: Buffer | null): Promise<void> {
     if (original === null) {
       // File did not exist — remove the generated one
       try {
@@ -135,7 +137,7 @@ export class CodegenCheck extends BaseCheck {
     }
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "CodegenCheck",
       description:

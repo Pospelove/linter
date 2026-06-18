@@ -1,4 +1,4 @@
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 /**
  * Composes two checks: one for linting and another for fixing.
@@ -9,46 +9,46 @@ import { BaseCheck } from "./base-check.js";
  * Created automatically by the runner when a config entry has a "fixWith" block.
  */
 export class CompositeCheck extends BaseCheck {
-  #linter;
-  #fixer;
+  #linter: BaseCheck;
+  #fixer: BaseCheck;
 
-  constructor(linter, fixer) {
+  constructor(linter: BaseCheck, fixer: BaseCheck) {
     super(linter.repoRoot);
     this.#linter = linter;
     this.#fixer = fixer;
   }
 
-  get name() {
+  override get name(): string {
     return this.#linter.name;
   }
 
-  get priority() {
+  override get priority(): number {
     return this.#linter.priority;
   }
 
-  async appliesTo(file) {
+  override async appliesTo(file: string): Promise<boolean> {
     return this.#linter.appliesTo(file);
   }
 
-  checkDeps(deps) {
+  override checkDeps(deps: any): boolean {
     return this.#linter.checkDeps(deps) && this.#fixer.checkDeps(deps);
   }
 
-  async resolveDeps(options) {
+  override async resolveDeps(options: any): Promise<any> {
     const a = await this.#linter.resolveDeps(options);
     const b = await this.#fixer.resolveDeps(options);
     return { ...a, ...b };
   }
 
-  async lint(file, deps) {
+  override async lint(file: string, deps: any): Promise<CheckResult> {
     return this.#linter.lint(file, deps);
   }
 
-  async fix(file, deps) {
+  override async fix(file: string, deps: any): Promise<CheckResult> {
     return this.lintAndFix(file, deps);
   }
 
-  async lintAndFix(file, deps) {
+  override async lintAndFix(file: string, deps: any): Promise<CheckResult> {
     const lintRes = await this.#linter.lint(file, deps);
     if (lintRes.status !== "fail") {
       return lintRes;
@@ -56,7 +56,7 @@ export class CompositeCheck extends BaseCheck {
     return this.#fixer.fix(file, deps);
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "CompositeCheck",
       description:
