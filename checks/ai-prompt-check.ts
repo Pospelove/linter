@@ -36,8 +36,8 @@ const AI_PROVIDERS: Record<string, any> = {
  *   lockValue      — set to 1 to write universal lock entries instead of hashes.
  */
 export class AiPromptCheck extends BaseCheck {
-  #lintPrompt: string;
-  #fixPrompt: string;
+  #lintPrompt: string | undefined;
+  #fixPrompt: string | undefined;
   #filesToRead: string[];
   #lock: boolean;
   #lockValue: any;
@@ -66,7 +66,7 @@ export class AiPromptCheck extends BaseCheck {
   }
 
   override get name(): string {
-    const label = this.#lintPrompt || this.#fixPrompt;
+    const label = this.#lintPrompt || this.#fixPrompt || "unnamed";
     return `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "…" : ""})`;
   }
 

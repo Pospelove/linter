@@ -13312,7 +13312,7 @@ var AiPromptCheck = class extends BaseCheck {
     this.#provider = new ProviderClass();
   }
   get name() {
-    const label = this.#lintPrompt || this.#fixPrompt;
+    const label = this.#lintPrompt || this.#fixPrompt || "unnamed";
     return `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "\u2026" : ""})`;
   }
   checkDeps() {
@@ -18977,7 +18977,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "9200e68" : "unknown";
+var LINTER_COMMIT = true ? "f6acb76" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19666,7 +19666,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     if (mode === "hook") {
       const allFiles = [...files, ...runResult.extraFiles || []];
       allFiles.forEach(
-        (file) => ensureCleanExit(spawnSync3("git", ["add", file], { stdio: "inherit" }))
+        (file) => ensureCleanExit(spawnSync3("git", ["add", file], { stdio: "inherit", encoding: "utf-8" }))
       );
     }
   } catch (err) {

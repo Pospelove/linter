@@ -203,7 +203,7 @@
         "node .linter/linter.mjs --lint --checks codegen --files linter.ts"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

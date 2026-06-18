@@ -987,7 +987,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig:
     if (mode === "hook") {
       const allFiles = [...files, ...(runResult.extraFiles || [])];
       allFiles.forEach((file) =>
-        ensureCleanExit(spawnSync("git", ["add", file], { stdio: "inherit" }))
+        ensureCleanExit(spawnSync("git", ["add", file], { stdio: "inherit", encoding: "utf-8" }))
       );
     }
   } catch (err: any) {

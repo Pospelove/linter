@@ -85,7 +85,6 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
 
   ensureDirExists(extractDir);
   console.log(`Extracting clang-format from ${archiveName} (single binary, not full LLVM)...`);
-  // @ts-expect-error - members is string[] but extracted from untyped tool-utils
   await extractArchive(archivePath, extractDir, [archivePathToClangFormat]);
 
   if (fs.existsSync(expectedExe)) {

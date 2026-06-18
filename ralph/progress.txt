@@ -9,6 +9,8 @@
 - Use inline type imports (e.g., `import("./path").Type`) for return types in base classes and interfaces to avoid circular dependencies.
 - Access `process.env` properties via bracket notation (e.g., `process.env['KEY']`) to satisfy `noPropertyAccessFromIndexSignature`.
 - Use `p.charAt(i)` instead of `p[i]` for string indexing when `noUncheckedIndexedAccess` is enabled to avoid `undefined` types.
+- Always run `npm run build` after changing `linter.ts` or its dependencies.
+- Ensure all files end with a newline to satisfy `linelint`.
 
 ## 2026-06-18 10:00 - US-001
 - Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
@@ -168,4 +170,19 @@
   - When a Promise doesn't return a value, explicitly type it as Promise<void> or use new Promise<void>() to avoid TS2794.
   - TSC in strict mode types catch block errors as unknown; use err instanceof Error to safely access .message.
   - Exported functions should always have explicit return types to satisfy project standards and improve maintainability.
+---
+
+## 2026-06-18 16:00 - US-013
+- Fixed codegen issue in `linter.ts` by updating `dist/linter.mjs` via `npm run build`.
+- Resolved TSC error in `linter.ts` by adding `encoding: "utf-8"` to `spawnSync` call for `git add`.
+- Resolved TSC errors in `checks/ai-prompt-check.ts` by allowing `undefined` for optional prompts and providing fallbacks.
+- Removed unused `@ts-expect-error` in `tool-resolve/clang-format.ts`.
+- Fixed `linelint` errors in `.gitignore`, `AGENTS.md`, `CLAUDE.md`, and `ralph/ralph.sh` by adding missing trailing newlines.
+- Verified that all 202 checks pass with `npm run lint`.
+- Files changed: `linter.ts`, `dist/linter.mjs`, `checks/ai-prompt-check.ts`, `tool-resolve/clang-format.ts`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `ralph/ralph.sh`.
+- **Learnings for future iterations:**
+  - `npm run build` MUST be run after any change to `linter.ts` or its dependencies to keep `dist/linter.mjs` in sync and pass the `codegen` check.
+  - `ensureCleanExit` expects `SpawnSyncReturns<string>`, so `spawnSync` calls must include `encoding: "utf-8"` if their result is passed to it.
+  - Aggressive linting like `linelint` requires attention to small details like EOF newlines.
+  - `tsc` might not catch everything if run only on specific files; periodic full project linting (`npm run lint`) is essential.
 ---

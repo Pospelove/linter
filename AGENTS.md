@@ -37,4 +37,3 @@
 - use `new Promise<void>((resolve, reject) => ...)` for promises that don't return a value to satisfy `TS2794`.
 - use `err instanceof Error ? err.message : String(err)` in catch blocks to safely access error messages from `unknown` types.
 - add explicit return types to all exported functions and methods.
-
