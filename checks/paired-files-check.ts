@@ -20,28 +20,36 @@ export class PairedFilesCheck extends BaseCheck {
   #absDirs: Array<{ abs: string; ext: string; template: string | null }>;
   #exclude: Set<string>;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
 
-    const dirs = options.dirs || [];
-    if (dirs.length !== 2) {
+    const dirs = options["dirs"];
+    if (!Array.isArray(dirs) || dirs.length !== 2) {
       throw new Error("PairedFilesCheck requires exactly 2 entries in options.dirs");
     }
-    this.#absDirs = dirs.map((d: any) => ({
-      abs: path.resolve(repoRoot, d.path),
-      ext: d.ext,
-      template: d.template || null,
-    }));
-    this.#exclude = new Set((options.exclude || []).map((f: string) => f.toLowerCase()));
+    this.#absDirs = dirs.map((d: unknown) => {
+      // @ts-expect-error - d is unknown but we expect an object with path and ext
+      const obj: Record<string, unknown> = (d && typeof d === "object") ? d : {};
+      return {
+        abs: path.resolve(repoRoot, String(obj["path"] ?? "")),
+        ext: String(obj["ext"] ?? ""),
+        template: obj["template"] ? String(obj["template"]) : null,
+      };
+    });
+    const exclude = options["exclude"];
+    this.#exclude = new Set((Array.isArray(exclude) ? exclude : []).map((f: unknown) => String(f).toLowerCase()));
   }
 
   override get name(): string {
     return "Paired Files Check";
   }
 
-  override getTemplates(): Record<string, (ctx: any) => string> {
+  override getTemplates(): Record<string, (ctx: Record<string, unknown>) => string> {
     return {
-      "{{name_without_ext}}": (ctx: any) => path.basename(ctx.file, path.extname(ctx.file)),
+      "{{name_without_ext}}": (ctx: Record<string, unknown>) => {
+        const file = String(ctx["file"]);
+        return path.basename(file, path.extname(file));
+      },
     };
   }
 
@@ -52,7 +60,7 @@ export class PairedFilesCheck extends BaseCheck {
     return this.#absDirs.some((d) => file.startsWith(d.abs + path.sep));
   }
 
-  override async lint(file: string, _deps: any): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     const ext = path.extname(file);
     const baseName = path.basename(file, ext);
 
@@ -62,8 +70,9 @@ export class PairedFilesCheck extends BaseCheck {
     let pairFiles: string[];
     try {
       pairFiles = await fs.readdir(pairDir.abs);
-    } catch (err: any) {
-      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${err.message}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${msg}` };
     }
 
     const expected = `${baseName}${pairDir.ext}`;
@@ -77,7 +86,7 @@ export class PairedFilesCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  override async fix(file: string, _deps: any): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     const ext = path.extname(file);
     const baseName = path.basename(file, ext);
 
@@ -90,8 +99,9 @@ export class PairedFilesCheck extends BaseCheck {
     let pairFiles: string[];
     try {
       pairFiles = await fs.readdir(pairDir.abs);
-    } catch (err: any) {
-      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${err.message}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${msg}` };
     }
 
     const found = pairFiles.find(
@@ -109,8 +119,9 @@ export class PairedFilesCheck extends BaseCheck {
     const content = this.resolveTemplate(pairDir.template, { file });
     try {
       await fs.writeFile(pairPath, content);
-    } catch (err: any) {
-      return { status: "error", output: `failed to create ${pairPath}: ${err.message}` };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `failed to create ${pairPath}: ${msg}` };
     }
     // @ts-expect-error extraFiles is a valid property but not in CheckResult interface yet
     return { status: "fixed", output: `created ${pairPath}`, extraFiles: [pairPath] };

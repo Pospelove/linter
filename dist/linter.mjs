@@ -5701,23 +5701,30 @@ var PairedFilesCheck = class extends BaseCheck {
   #exclude;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const dirs = options.dirs || [];
-    if (dirs.length !== 2) {
+    const dirs = options["dirs"];
+    if (!Array.isArray(dirs) || dirs.length !== 2) {
       throw new Error("PairedFilesCheck requires exactly 2 entries in options.dirs");
     }
-    this.#absDirs = dirs.map((d) => ({
-      abs: path5.resolve(repoRoot, d.path),
-      ext: d.ext,
-      template: d.template || null
-    }));
-    this.#exclude = new Set((options.exclude || []).map((f) => f.toLowerCase()));
+    this.#absDirs = dirs.map((d) => {
+      const obj = d && typeof d === "object" ? d : {};
+      return {
+        abs: path5.resolve(repoRoot, String(obj["path"] ?? "")),
+        ext: String(obj["ext"] ?? ""),
+        template: obj["template"] ? String(obj["template"]) : null
+      };
+    });
+    const exclude = options["exclude"];
+    this.#exclude = new Set((Array.isArray(exclude) ? exclude : []).map((f) => String(f).toLowerCase()));
   }
   get name() {
     return "Paired Files Check";
   }
   getTemplates() {
     return {
-      "{{name_without_ext}}": (ctx) => path5.basename(ctx.file, path5.extname(ctx.file))
+      "{{name_without_ext}}": (ctx) => {
+        const file = String(ctx["file"]);
+        return path5.basename(file, path5.extname(file));
+      }
     };
   }
   async appliesTo(file) {
@@ -5735,7 +5742,8 @@ var PairedFilesCheck = class extends BaseCheck {
     try {
       pairFiles = await fs10.readdir(pairDir.abs);
     } catch (err) {
-      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${err.message}` };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${msg}` };
     }
     const expected = `${baseName}${pairDir.ext}`;
     const found = pairFiles.find(
@@ -5757,7 +5765,8 @@ var PairedFilesCheck = class extends BaseCheck {
     try {
       pairFiles = await fs10.readdir(pairDir.abs);
     } catch (err) {
-      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${err.message}` };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${msg}` };
     }
     const found = pairFiles.find(
       (c) => c.toLowerCase() === expected.toLowerCase()
@@ -5772,7 +5781,8 @@ var PairedFilesCheck = class extends BaseCheck {
     try {
       await fs10.writeFile(pairPath, content);
     } catch (err) {
-      return { status: "error", output: `failed to create ${pairPath}: ${err.message}` };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `failed to create ${pairPath}: ${msg}` };
     }
     return { status: "fixed", output: `created ${pairPath}`, extraFiles: [pairPath] };
   }
@@ -13628,25 +13638,34 @@ var RegexCheck = class extends BaseCheck {
   #skipLineRes;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    if (!options.pattern) {
+    const pattern = options["pattern"];
+    if (!pattern) {
       throw new Error("RegexCheck requires a 'pattern' option");
     }
-    const flags = options.patternFlags || "g";
-    this.#pattern = new RegExp(options.pattern, flags.includes("g") ? flags : flags + "g");
-    this.#replacement = options.replacement ?? null;
-    this.#message = options.message ?? "regex violation";
-    this.#multiline = !!options.multiline;
-    this.#skipLineRes = (options.skipLinePatterns || []).map((p) => new RegExp(p));
+    const flags = String(options["patternFlags"] ?? "g");
+    this.#pattern = new RegExp(String(pattern), flags.includes("g") ? flags : flags + "g");
+    this.#replacement = typeof options["replacement"] === "string" ? options["replacement"] : null;
+    this.#message = typeof options["message"] === "string" ? options["message"] : "regex violation";
+    this.#multiline = !!options["multiline"];
+    const skipLinePatterns = options["skipLinePatterns"];
+    this.#skipLineRes = (Array.isArray(skipLinePatterns) ? skipLinePatterns : []).map((p) => new RegExp(String(p)));
   }
   get name() {
     return this.#message;
   }
   getTemplates() {
     return {
-      "{name_without_ext}": (ctx) => path10.basename(ctx.file, path10.extname(ctx.file)),
-      "{name_with_ext}": (ctx) => path10.basename(ctx.file),
-      "{ext}": (ctx) => path10.extname(ctx.file),
-      "{dir}": (ctx) => path10.dirname(path10.relative(ctx.repoRoot, ctx.file))
+      "{name_without_ext}": (ctx) => {
+        const file = String(ctx["file"]);
+        return path10.basename(file, path10.extname(file));
+      },
+      "{name_with_ext}": (ctx) => path10.basename(String(ctx["file"])),
+      "{ext}": (ctx) => path10.extname(String(ctx["file"])),
+      "{dir}": (ctx) => {
+        const file = String(ctx["file"]);
+        const repoRoot = String(ctx["repoRoot"]);
+        return path10.dirname(path10.relative(repoRoot, file));
+      }
     };
   }
   async lint(file, _deps) {
@@ -13688,7 +13707,7 @@ ${violations.join("\n")}`
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   async fix(file, _deps) {
@@ -13716,7 +13735,7 @@ ${violations.join("\n")}`
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   static getHelp() {
@@ -14053,17 +14072,18 @@ var LocalizationKeyCheck = class extends BaseCheck {
   #registryErrors = [];
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    if (!options.registrationFiles || options.registrationFiles.length === 0) {
+    const registrationFiles = options["registrationFiles"];
+    if (!Array.isArray(registrationFiles) || registrationFiles.length === 0) {
       throw new Error("LocalizationKeyCheck requires a non-empty 'registrationFiles' option");
     }
-    this.#registrationFiles = options.registrationFiles.map(
-      (f) => path13.resolve(repoRoot, f)
+    this.#registrationFiles = registrationFiles.map(
+      (f) => path13.resolve(repoRoot, String(f))
     );
-    this.#lFunctionName = options.lFunctionName ?? "_L";
-    this.#registerFunctionName = options.registerFunctionName ?? "_LRegisterTranslationImpl";
-    this.#registryPattern = options.registryPattern ?? null;
-    this.#language = options.language ?? null;
-    this.#excludeRegistrationFiles = options.excludeRegistrationFiles ?? true;
+    this.#lFunctionName = String(options["lFunctionName"] ?? "_L");
+    this.#registerFunctionName = String(options["registerFunctionName"] ?? "_LRegisterTranslationImpl");
+    this.#registryPattern = typeof options["registryPattern"] === "string" ? options["registryPattern"] : null;
+    this.#language = typeof options["language"] === "string" ? options["language"] : null;
+    this.#excludeRegistrationFiles = options["excludeRegistrationFiles"] !== false;
   }
   get name() {
     return "Localization Key Check";
@@ -14095,8 +14115,9 @@ var LocalizationKeyCheck = class extends BaseCheck {
       try {
         content = await fs15.readFile(filePath, "utf-8");
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         this.#registryErrors.push(
-          `cannot read registration file ${path13.relative(this.repoRoot, filePath)}: ${err.message}`
+          `cannot read registration file ${path13.relative(this.repoRoot, filePath)}: ${msg}`
         );
         continue;
       }
@@ -14132,7 +14153,7 @@ ${violations.join("\n")}`
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   async fix(file, deps) {
@@ -19101,7 +19122,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "f059920" : "unknown";
+var LINTER_COMMIT = true ? "63196cc" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

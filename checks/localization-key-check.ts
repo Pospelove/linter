@@ -39,21 +39,22 @@ export class LocalizationKeyCheck extends BaseCheck {
   #registeredKeys: Set<string> | null = null;
   #registryErrors: string[] = [];
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
 
-    if (!options.registrationFiles || options.registrationFiles.length === 0) {
+    const registrationFiles = options["registrationFiles"];
+    if (!Array.isArray(registrationFiles) || registrationFiles.length === 0) {
       throw new Error("LocalizationKeyCheck requires a non-empty 'registrationFiles' option");
     }
 
-    this.#registrationFiles = options.registrationFiles.map((f: string) =>
-      path.resolve(repoRoot, f)
+    this.#registrationFiles = registrationFiles.map((f: unknown) =>
+      path.resolve(repoRoot, String(f))
     );
-    this.#lFunctionName = options.lFunctionName ?? "_L";
-    this.#registerFunctionName = options.registerFunctionName ?? "_LRegisterTranslationImpl";
-    this.#registryPattern = options.registryPattern ?? null;
-    this.#language = options.language ?? null;
-    this.#excludeRegistrationFiles = options.excludeRegistrationFiles ?? true;
+    this.#lFunctionName = String(options["lFunctionName"] ?? "_L");
+    this.#registerFunctionName = String(options["registerFunctionName"] ?? "_LRegisterTranslationImpl");
+    this.#registryPattern = typeof options["registryPattern"] === "string" ? options["registryPattern"] : null;
+    this.#language = typeof options["language"] === "string" ? options["language"] : null;
+    this.#excludeRegistrationFiles = options["excludeRegistrationFiles"] !== false;
   }
 
   override get name(): string {
@@ -90,9 +91,10 @@ export class LocalizationKeyCheck extends BaseCheck {
       let content: string;
       try {
         content = await fs.readFile(filePath, "utf-8");
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         this.#registryErrors.push(
-          `cannot read registration file ${path.relative(this.repoRoot, filePath)}: ${err.message}`
+          `cannot read registration file ${path.relative(this.repoRoot, filePath)}: ${msg}`
         );
         continue;
       }
@@ -113,7 +115,7 @@ export class LocalizationKeyCheck extends BaseCheck {
     }
   }
 
-  override async lint(file: string, _deps: any): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       await this.#loadRegistry();
 
@@ -131,12 +133,12 @@ export class LocalizationKeyCheck extends BaseCheck {
         };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
 
-  override async fix(file: string, deps: any): Promise<CheckResult> {
+  override async fix(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
     return this.lint(file, deps);
   }
 

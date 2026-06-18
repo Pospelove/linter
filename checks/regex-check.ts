@@ -39,36 +39,45 @@ export class RegexCheck extends BaseCheck {
   #multiline: boolean;
   #skipLineRes: RegExp[];
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
 
-    if (!options.pattern) {
+    const pattern = options["pattern"];
+    if (!pattern) {
       throw new Error("RegexCheck requires a 'pattern' option");
     }
 
-    const flags = options.patternFlags || "g";
-    this.#pattern = new RegExp(options.pattern, flags.includes("g") ? flags : flags + "g");
+    const flags = String(options["patternFlags"] ?? "g");
+    this.#pattern = new RegExp(String(pattern), flags.includes("g") ? flags : flags + "g");
     
-    this.#replacement = options.replacement ?? null;
-    this.#message = options.message ?? "regex violation";
-    this.#multiline = !!options.multiline;
-    this.#skipLineRes = (options.skipLinePatterns || []).map((p: string) => new RegExp(p));
+    this.#replacement = typeof options["replacement"] === "string" ? options["replacement"] : null;
+    this.#message = typeof options["message"] === "string" ? options["message"] : "regex violation";
+    this.#multiline = !!options["multiline"];
+    const skipLinePatterns = options["skipLinePatterns"];
+    this.#skipLineRes = (Array.isArray(skipLinePatterns) ? skipLinePatterns : []).map((p: unknown) => new RegExp(String(p)));
   }
 
   override get name(): string {
     return this.#message;
   }
 
-  override getTemplates(): Record<string, (ctx: any) => string> {
+  override getTemplates(): Record<string, (ctx: Record<string, unknown>) => string> {
     return {
-      "{name_without_ext}": (ctx: any) => path.basename(ctx.file, path.extname(ctx.file)),
-      "{name_with_ext}":    (ctx: any) => path.basename(ctx.file),
-      "{ext}":              (ctx: any) => path.extname(ctx.file),
-      "{dir}":              (ctx: any) => path.dirname(path.relative(ctx.repoRoot, ctx.file)),
+      "{name_without_ext}": (ctx: Record<string, unknown>) => {
+        const file = String(ctx["file"]);
+        return path.basename(file, path.extname(file));
+      },
+      "{name_with_ext}": (ctx: Record<string, unknown>) => path.basename(String(ctx["file"])),
+      "{ext}": (ctx: Record<string, unknown>) => path.extname(String(ctx["file"])),
+      "{dir}": (ctx: Record<string, unknown>) => {
+        const file = String(ctx["file"]);
+        const repoRoot = String(ctx["repoRoot"]);
+        return path.dirname(path.relative(repoRoot, file));
+      },
     };
   }
 
-  override async lint(file: string, _deps: any): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const content = await fs.readFile(file, "utf-8");
       const violations: string[] = [];
@@ -109,12 +118,12 @@ export class RegexCheck extends BaseCheck {
         };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
 
-  override async fix(file: string, _deps: any): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     if (!this.#replacement) return this.lint(file, _deps);
 
     try {
@@ -142,8 +151,8 @@ export class RegexCheck extends BaseCheck {
         return { status: "fixed" };
       }
       return { status: "pass" };
-    } catch (err: any) {
-      return { status: "error", output: err.message };
+    } catch (err: unknown) {
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
 
