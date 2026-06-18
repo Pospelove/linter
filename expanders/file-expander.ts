@@ -6,11 +6,11 @@ import { FileEntry } from "../entries/file-entry.js";
  * Preserves the existing per-file check behaviour.
  */
 export class FileExpander extends BaseExpander {
-  async expand(file) {
+  override async expand(file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
     return [new FileEntry(file)];
   }
 
-  static getHelp() {
+  static override getHelp() {
     return {
       name: "FileExpander",
       description: "Default expander: yields one FileEntry per file (standard per-file behaviour).",

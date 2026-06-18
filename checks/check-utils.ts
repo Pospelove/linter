@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { createHash } from "crypto";
 
@@ -8,13 +8,13 @@ const LOCKFILE_NAME = ".ai-prompt-lock.json";
  * Coerce a value to a string (joining arrays with newlines).
  * Returns undefined for null/undefined.
  */
-export const coerce = (v) => (v == null ? undefined : Array.isArray(v) ? v.join("\n") : v);
+export const coerce = (v: any): string | undefined => (v == null ? undefined : Array.isArray(v) ? v.join("\n") : v);
 
 /**
  * Coerce a value to an array.
  * Returns [] for null/undefined, wraps scalars in [].
  */
-export const coerceArray = (v) => {
+export const coerceArray = (v: any): any[] => {
   if (v == null) return [];
   return Array.isArray(v) ? v : [v];
 };
@@ -22,11 +22,11 @@ export const coerceArray = (v) => {
 /**
  * Standard file-path template placeholders.
  */
-export const standardTemplates = () => ({
-  "{name_without_ext}": (ctx) => path.basename(ctx.file, path.extname(ctx.file)),
-  "{name_with_ext}":    (ctx) => path.basename(ctx.file),
-  "{ext}":              (ctx) => path.extname(ctx.file),
-  "{dir}":              (ctx) => path.dirname(path.relative(ctx.repoRoot, ctx.file)),
+export const standardTemplates = (): Record<string, (ctx: any) => string> => ({
+  "{name_without_ext}": (ctx: any) => path.basename(ctx.file, path.extname(ctx.file)),
+  "{name_with_ext}":    (ctx: any) => path.basename(ctx.file),
+  "{ext}":              (ctx: any) => path.extname(ctx.file),
+  "{dir}":              (ctx: any) => path.dirname(path.relative(ctx.repoRoot, ctx.file)),
 });
 
 /**
@@ -37,7 +37,7 @@ export const standardTemplates = () => ({
  * @param {string} repoRoot - Absolute repo root.
  * @returns {string[]} Absolute resolved paths.
  */
-export const resolvePaths = (paths, file, resolveTemplate, repoRoot) =>
+export const resolvePaths = (paths: string[], file: string | null, resolveTemplate: (tmpl: string, ctx: any) => string, repoRoot: string): string[] =>
   paths.map((p) => {
     const expanded = file
       ? resolveTemplate(p, { file: path.resolve(file), repoRoot })
@@ -49,24 +49,24 @@ export const resolvePaths = (paths, file, resolveTemplate, repoRoot) =>
 /**
  * Deduplicate an array of paths (resolved to absolute).
  */
-export const dedupePaths = (paths) =>
+export const dedupePaths = (paths: string[]): string[] =>
   Array.from(new Set(paths.map((p) => path.resolve(p))));
 
 /**
  * Read files and build a text context string (for AI prompt checks).
  * @returns {{ value?: string, error?: string }}
  */
-export const buildFileContext = async (absPaths, repoRoot) => {
-  const chunks = [];
+export const buildFileContext = async (absPaths: string[], repoRoot: string): Promise<{ value?: string; error?: string }> => {
+  const chunks: string[] = [];
   for (const absPath of absPaths) {
     const rel = path.relative(repoRoot, absPath);
     if (rel.startsWith("..") || path.isAbsolute(rel)) {
       return { error: `path outside repo root is not allowed: ${absPath}` };
     }
-    let content;
+    let content: string;
     try {
       content = await fs.readFile(absPath, "utf-8");
-    } catch (err) {
+    } catch (err: any) {
       return { error: `cannot read context file ${rel}: ${err.message}` };
     }
     chunks.push(`--- file: ${rel} ---\n${content}\n--- end file: ${rel} ---`);
@@ -78,17 +78,17 @@ export const buildFileContext = async (absPaths, repoRoot) => {
  * Read files and build a { relPath: content } map (for agent checks).
  * @returns {{ value?: Record<string,string>, error?: string }}
  */
-export const buildFilesMap = async (absPaths, repoRoot) => {
-  const filesMap = {};
+export const buildFilesMap = async (absPaths: string[], repoRoot: string): Promise<{ value?: Record<string, string>; error?: string }> => {
+  const filesMap: Record<string, string> = {};
   for (const absPath of absPaths) {
     const rel = path.relative(repoRoot, absPath);
     if (rel.startsWith("..") || path.isAbsolute(rel)) {
       return { error: `path outside repo root is not allowed: ${absPath}` };
     }
-    let content;
+    let content: string;
     try {
       content = await fs.readFile(absPath, "utf-8");
-    } catch (err) {
+    } catch (err: any) {
       return { error: `cannot read file ${rel}: ${err.message}` };
     }
     filesMap[rel] = content;
@@ -101,12 +101,12 @@ export const buildFilesMap = async (absPaths, repoRoot) => {
 /**
  * Get the absolute path to the lockfile.
  */
-export const lockfilePath = (repoRoot) => path.join(repoRoot, LOCKFILE_NAME);
+export const lockfilePath = (repoRoot: string): string => path.join(repoRoot, LOCKFILE_NAME);
 
 /**
  * Read and parse the lockfile. Returns {} on any error.
  */
-export const readLockfile = async (repoRoot) => {
+export const readLockfile = async (repoRoot: string): Promise<Record<string, any>> => {
   try {
     return JSON.parse(await fs.readFile(lockfilePath(repoRoot), "utf-8"));
   } catch {
@@ -117,7 +117,7 @@ export const readLockfile = async (repoRoot) => {
 /**
  * Compute a normalized SHA-256 hash for a file (CRLF → LF).
  */
-export const getFileHash = async (file) => {
+export const getFileHash = async (file: string): Promise<string> => {
   const raw = await fs.readFile(path.resolve(file), "utf-8");
   const normalized = raw.replace(/\r\n?/g, "\n");
   return createHash("sha256").update(normalized).digest("hex");
@@ -126,7 +126,7 @@ export const getFileHash = async (file) => {
 /**
  * Compute a SHA-256 hash of an arbitrary string.
  */
-export const getStringHash = (str) =>
+export const getStringHash = (str: string): string =>
   createHash("sha256").update(str).digest("hex");
 
 /**
@@ -137,7 +137,7 @@ export const getStringHash = (str) =>
  * @param {string} repoRoot - Repo root.
  * @returns {Promise<boolean>}
  */
-export const lockMatches = async (checkName, relFile, absFile, repoRoot) => {
+export const lockMatches = async (checkName: string, relFile: string, absFile: string, repoRoot: string): Promise<boolean> => {
   const lock = await readLockfile(repoRoot);
   const entry = lock[checkName]?.[relFile];
 
@@ -161,7 +161,7 @@ export const lockMatches = async (checkName, relFile, absFile, repoRoot) => {
  * @param {string} repoRoot - Repo root.
  * @param {{ lockValue?: number|string }} [opts] - If lockValue is 1/"1", write universal entry.
  */
-export const lockWrite = async (checkName, relFile, absFile, repoRoot, opts = {}) => {
+export const lockWrite = async (checkName: string, relFile: string, absFile: string, repoRoot: string, opts: { lockValue?: number | string } = {}): Promise<void> => {
   const lp = lockfilePath(repoRoot);
   const lock = await readLockfile(repoRoot);
   if (!lock[checkName]) lock[checkName] = {};
@@ -174,9 +174,9 @@ export const lockWrite = async (checkName, relFile, absFile, repoRoot, opts = {}
 
 /**
  * Check if a lock entry matches the given content string.
- * Same as lockMatches but takes content directly instead of reading a file.
+ * Same like lockMatches but takes content directly instead of reading a file.
  */
-export const lockMatchesContent = async (checkName, key, content, repoRoot) => {
+export const lockMatchesContent = async (checkName: string, key: string, content: string, repoRoot: string): Promise<boolean> => {
   const lock = await readLockfile(repoRoot);
   const entry = lock[checkName]?.[key];
   if (entry == null) return false;
@@ -188,7 +188,7 @@ export const lockMatchesContent = async (checkName, key, content, repoRoot) => {
 /**
  * Write a lock entry for a content string.
  */
-export const lockWriteContent = async (checkName, key, content, repoRoot, opts = {}) => {
+export const lockWriteContent = async (checkName: string, key: string, content: string, repoRoot: string, opts: { lockValue?: number | string } = {}): Promise<void> => {
   const lp = lockfilePath(repoRoot);
   const lock = await readLockfile(repoRoot);
   if (!lock[checkName]) lock[checkName] = {};

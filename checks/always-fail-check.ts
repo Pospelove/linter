@@ -1,4 +1,4 @@
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 /**
  * A check that always fails every file it applies to.
@@ -7,19 +7,19 @@ import { BaseCheck } from "./base-check.js";
  * criterion command of its own.
  */
 export class AlwaysFailCheck extends BaseCheck {
-  get name() {
+  override get name(): string {
     return "always-fail";
   }
 
-  async lint(_file, _deps) {
+  override async lint(_file: string, _deps: any): Promise<CheckResult> {
     return { status: "fail", output: "always-fail: this check always fails" };
   }
 
-  async fix(_file, _deps) {
+  override async fix(_file: string, _deps: any): Promise<CheckResult> {
     return { status: "fail", output: "always-fail: this check cannot be fixed automatically" };
   }
 
-  static getHelp() {
+  static override getHelp() {
     return {
       name: "AlwaysFailCheck",
       description: "Always fails every file. Use with prd.prdOnly to contribute to PRD user stories without generating acceptance criteria.",

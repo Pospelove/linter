@@ -16,3 +16,5 @@
 - use `interface` and `type` for better type safety.
 - `BaseCheck` and `BaseAiProvider` should be used as base classes.
 - return types for all methods are encouraged.
+- use local variables for private fields after null checks to help TSC with type narrowing.
+- explicitly declare all class properties, even if assigned in the constructor.

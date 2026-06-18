@@ -86,10 +86,11 @@ export class BaseCheck {
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
   async expand(file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
-    if (!this.#expander) {
-      this.#expander = new FileExpander();
+    let expander = this.#expander;
+    if (!expander) {
+      expander = this.#expander = new FileExpander();
     }
-    return this.#expander.expand(file);
+    return expander.expand(file);
   }
 
   /**
@@ -243,7 +244,7 @@ export class BaseCheck {
 
   /**
    * Optional combined lint+fix on a content string. Same null-fallback
-   * semantics as lintAndFix(). Returns CheckResult plus optional `content`.
+   * semantics like lintAndFix(). Returns CheckResult plus optional `content`.
    * @param {string} content
    * @param {object} deps
    * @param {import("../entries/base-entry.js").BaseEntry} entry

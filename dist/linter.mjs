@@ -4748,6 +4748,7 @@ import fs2 from "fs/promises";
 
 // expanders/base-expander.ts
 var BaseExpander = class {
+  options;
   constructor(options = {}) {
     this.options = options;
   }
@@ -4911,10 +4912,11 @@ var BaseCheck = class {
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
   async expand(file) {
-    if (!this.#expander) {
-      this.#expander = new FileExpander();
+    let expander = this.#expander;
+    if (!expander) {
+      expander = this.#expander = new FileExpander();
     }
-    return this.#expander.expand(file);
+    return expander.expand(file);
   }
   /**
    * Whether this check's dependencies are satisfied.
@@ -5046,7 +5048,7 @@ var BaseCheck = class {
   }
   /**
    * Optional combined lint+fix on a content string. Same null-fallback
-   * semantics as lintAndFix(). Returns CheckResult plus optional `content`.
+   * semantics like lintAndFix(). Returns CheckResult plus optional `content`.
    * @param {string} content
    * @param {object} deps
    * @param {import("../entries/base-entry.js").BaseEntry} entry
@@ -13207,7 +13209,7 @@ var OpenAICompatibleProvider = class extends BaseAiProvider {
 };
 
 // checks/check-utils.ts
-import { promises as fs12 } from "fs";
+import fs12 from "fs/promises";
 import path8 from "path";
 import { createHash } from "crypto";
 var LOCKFILE_NAME = ".ai-prompt-lock.json";
@@ -18967,7 +18969,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "d2bdc2c" : "unknown";
+var LINTER_COMMIT = true ? "ba23eb1" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

@@ -48,7 +48,7 @@
         "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

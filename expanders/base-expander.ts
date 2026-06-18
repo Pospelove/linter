@@ -11,6 +11,8 @@
  * in a JSON array, one entry per binary record, etc.
  */
 export class BaseExpander {
+  options: any;
+
   constructor(options = {}) {
     this.options = options;
   }
@@ -20,7 +22,7 @@ export class BaseExpander {
    * @param {string} file - Absolute path to the file.
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
-  async expand(file) {
+  async expand(file: string): Promise<import("../entries/base-entry.js").BaseEntry[]> {
     throw new Error("Not implemented: expand");
   }
 

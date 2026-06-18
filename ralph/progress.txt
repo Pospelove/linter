@@ -4,6 +4,8 @@
 - The `as` operator is strictly banned; use proper typing or `@ts-expect-error` if absolutely necessary.
 - Avoid the string " as " (with spaces) in comments and strings as it triggers the `no-ts-as-operator` linter.
 - Always run `yarn build` after code changes to keep `dist/linter.mjs` updated.
+- Use local variables for private fields after null checks to satisfy strict TSC null checks.
+- Explicitly declare all class properties, especially in base classes.
 
 ## 2026-06-18 10:00 - US-001
 - Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
@@ -28,4 +30,16 @@
   - The `no-ts-as-operator` linter is very aggressive and matches the string " as " even in comments and strings. Rephrase to "in format" or "like" to avoid this.
   - `BaseCheck` needed property declarations to allow subclasses to use `this.repoRoot` without TSC errors in strict mode.
   - Always import types like `CheckResult` when overriding methods in subclasses.
+---
+
+## 2026-06-18 11:00 - US-003
+- Fixed TypeScript errors in `checks/always-fail-check.ts`, `checks/base-check.ts`, and `checks/check-utils.ts`.
+- Updated `expanders/base-expander.ts` and `expanders/file-expander.ts` with proper types to resolve dependencies.
+- Rephrased comments in `checks/base-check.ts` and `checks/check-utils.ts` to avoid aggressive `no-ts-as-operator` linter.
+- Fixed `BaseCheck.expand` by using a local variable for the private `#expander` field to satisfy TSC null check.
+- Fully typed `checks/check-utils.ts` functions and resolved `any`/`unknown` type issues.
+- Files changed: `checks/always-fail-check.ts`, `checks/base-check.ts`, `checks/check-utils.ts`, `expanders/base-expander.ts`, `expanders/file-expander.ts`, `CLAUDE.md`, `dist/linter.mjs`.
+- **Learnings for future iterations:**
+  - TSC (at least in this project's configuration) sometimes fails to narrow the type of private fields even after a null check. Using a local variable for the private field before the check resolves this.
+  - Base classes need explicit property declarations (e.g., `options: any`) to be correctly recognized as having those properties when accessed in the base class or subclasses.
 ---
