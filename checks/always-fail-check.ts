@@ -11,11 +11,11 @@ export class AlwaysFailCheck extends BaseCheck {
     return "always-fail";
   }
 
-  override async lint(_file: string, _deps: any): Promise<CheckResult> {
+  override async lint(_file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     return { status: "fail", output: "always-fail: this check always fails" };
   }
 
-  override async fix(_file: string, _deps: any): Promise<CheckResult> {
+  override async fix(_file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     return { status: "fail", output: "always-fail: this check cannot be fixed automatically" };
   }
 

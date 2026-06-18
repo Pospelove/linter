@@ -4876,11 +4876,14 @@ var BaseCheck = class {
   #expander;
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
-    this.#extensions = (options.extensions || []).map((e) => e.toLowerCase());
-    this.#includePaths = options.includePaths || [];
-    this.#excludePaths = options.excludePaths || [];
-    this.#textOnly = options.textOnly ?? false;
-    this.#priority = options.priority ?? 0;
+    const extensions = options["extensions"];
+    this.#extensions = Array.isArray(extensions) ? extensions.map((e) => String(e).toLowerCase()) : [];
+    const includePaths = options["includePaths"];
+    this.#includePaths = Array.isArray(includePaths) ? includePaths.filter((p) => typeof p === "string") : [];
+    const excludePaths = options["excludePaths"];
+    this.#excludePaths = Array.isArray(excludePaths) ? excludePaths.filter((p) => typeof p === "string") : [];
+    this.#textOnly = !!options["textOnly"];
+    this.#priority = typeof options["priority"] === "number" ? options["priority"] : 0;
     this.#expander = null;
   }
   /**
@@ -4920,7 +4923,7 @@ var BaseCheck = class {
   }
   /**
    * Whether this check's dependencies are satisfied.
-   * @param {object} deps - Resolved dependencies (e.g. { clangFormatPath }).
+   * @param {Record<string, unknown>} _deps - Resolved dependencies (e.g. { clangFormatPath }).
    * @returns {boolean}
    */
   checkDeps(_deps) {
@@ -4967,17 +4970,17 @@ var BaseCheck = class {
    * Called once before running lint/fix. The returned object is merged
    * into the shared deps bag.
    * Subclasses should override to download/locate their tools.
-   * @param {{ shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }} options
-   * @returns {Promise<object>} Key-value pairs to merge into deps.
+   * @param {Record<string, unknown>} _options
+   * @returns {Promise<Record<string, unknown>>} Key-value pairs to merge into deps.
    */
   async resolveDeps(_options) {
     return {};
   }
   /**
    * Lint (read-only check) a single file.
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
   async lint(_file, _deps, _entry = null) {
@@ -4985,9 +4988,9 @@ var BaseCheck = class {
   }
   /**
    * Fix (in-place modify) a single file.
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
   async fix(_file, _deps, _entry = null) {
@@ -4998,9 +5001,9 @@ var BaseCheck = class {
    * Checks that can evaluate and fix in one step (e.g. a single AI call)
    * should override this. Return null to signal that the check does not
    * support combined mode — the runner will fall back to fix().
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult | null>}
    */
   async lintAndFix(_file, _deps, _entry = null) {
@@ -5026,9 +5029,9 @@ var BaseCheck = class {
   }
   /**
    * Lint a content string. Override when supportsInMemory is true.
-   * @param {string} content - The slice of file content to evaluate.
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry - The entry being processed (for id, sourceFile, metadata).
+   * @param {string} _content - The slice of file content to evaluate.
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry - The entry being processed (for id, sourceFile, metadata).
    * @returns {Promise<CheckResult>}
    */
   async lintInMemory(_content, _deps, _entry) {
@@ -5038,9 +5041,9 @@ var BaseCheck = class {
    * Fix a content string. Override when supportsInMemory is true.
    * Returns CheckResult plus an optional `content` field with the new string;
    * the runner pipes that back through entry.writeBack() when status === "fixed".
-   * @param {string} content
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry
+   * @param {string} _content
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry
    * @returns {Promise<CheckResult & { content?: string }>}
    */
   async fixInMemory(_content, _deps, _entry) {
@@ -5049,9 +5052,9 @@ var BaseCheck = class {
   /**
    * Optional combined lint+fix on a content string. Same null-fallback
    * semantics like lintAndFix(). Returns CheckResult plus optional `content`.
-   * @param {string} content
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry
+   * @param {string} _content
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry
    * @returns {Promise<(CheckResult & { content?: string }) | null>}
    */
   async lintAndFixInMemory(_content, _deps, _entry) {
@@ -5061,8 +5064,7 @@ var BaseCheck = class {
    * Return template placeholders this check supports.
    * Keys are placeholder strings, values are functions (context) => replacement.
    * Subclasses override to provide their own templates.
-   * @param {object} [context] - Contextual info (e.g. { file, repoRoot }).
-   * @returns {Record<string, (ctx: object) => string>}
+   * @returns {Record<string, (ctx: Record<string, unknown>) => string>}
    */
   getTemplates() {
     return {};
@@ -5070,7 +5072,7 @@ var BaseCheck = class {
   /**
    * Expand all placeholders from getTemplates() in the given string.
    * @param {string} template - String containing placeholders.
-   * @param {object} context  - Passed to each template function.
+   * @param {Record<string, unknown>} context  - Passed to each template function.
    * @returns {string}
    */
   resolveTemplate(template, context) {
@@ -13296,15 +13298,15 @@ var AiPromptCheck = class extends BaseCheck {
   #provider;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    this.#lintPrompt = coerce(options.lintPrompt);
-    this.#fixPrompt = coerce(options.fixPrompt);
+    this.#lintPrompt = coerce(options["lintPrompt"]);
+    this.#fixPrompt = coerce(options["fixPrompt"]);
     if (!this.#lintPrompt && !this.#fixPrompt) {
       throw new Error("AiPromptCheck requires at least one of: lintPrompt, fixPrompt");
     }
-    this.#filesToRead = coerceArray(options.filesToRead ?? options.contextFiles);
-    this.#lock = !!options.lock;
-    this.#lockValue = options.lockValue;
-    const providerName = (options.aiProvider || "claude").toLowerCase();
+    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"]);
+    this.#lock = !!options["lock"];
+    this.#lockValue = options["lockValue"];
+    const providerName = String(options["aiProvider"] || "claude").toLowerCase();
     const ProviderClass = AI_PROVIDERS[providerName];
     if (!ProviderClass) {
       throw new Error(`Unknown aiProvider "${providerName}". Available: ${Object.keys(AI_PROVIDERS).join(", ")}`);
@@ -13339,11 +13341,19 @@ var AiPromptCheck = class extends BaseCheck {
     const verdict = await this.#callAndParse(prompt);
     if (verdict.error) return { status: "error", output: verdict.error };
     const lockPath = lockfilePath(this.repoRoot);
-    if (verdict.value.pass) {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (verdict.value && verdict.value["pass"]) {
+      if (this.#lock) {
+        let lockValue;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts = {};
+        if (lockValue !== void 0) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...this.#lock && { extraFiles: [lockPath] } };
     }
-    return { status: "fail", output: verdict.value.reason || "AI check failed (no reason provided)" };
+    return { status: "fail", output: String(verdict.value?.["reason"] || "AI check failed (no reason provided)") };
   }
   async fixInMemory(content, _deps, entry) {
     const instruction = this.#fixPrompt;
@@ -13361,18 +13371,34 @@ var AiPromptCheck = class extends BaseCheck {
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
     const lockPath = lockfilePath(this.repoRoot);
-    if (!result.changed || typeof result.content !== "string") {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (!result || !result["changed"] || typeof result["content"] !== "string") {
+      if (this.#lock) {
+        let lockValue;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts = {};
+        if (lockValue !== void 0) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...this.#lock && { extraFiles: [lockPath] } };
     }
-    if (result.content === content) {
-      return { status: "pass", output: result.reason || "AI reported changes but content was identical" };
+    if (result["content"] === content) {
+      return { status: "pass", output: String(result["reason"] || "AI reported changes but content was identical") };
     }
-    if (this.#lock) await lockWriteContent(this.name, lockKey, result.content, this.repoRoot, { lockValue: this.#lockValue });
+    if (this.#lock) {
+      let lockValue;
+      if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+        lockValue = this.#lockValue;
+      }
+      const opts = {};
+      if (lockValue !== void 0) opts.lockValue = lockValue;
+      await lockWriteContent(this.name, lockKey, result["content"], this.repoRoot, opts);
+    }
     return {
       status: "fixed",
-      output: result.reason || "AI applied fixes",
-      content: result.content,
+      output: String(result["reason"] || "AI applied fixes"),
+      content: result["content"],
       ...this.#lock && { extraFiles: [lockPath] }
     };
   }
@@ -13389,21 +13415,37 @@ var AiPromptCheck = class extends BaseCheck {
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
     const lockPath = lockfilePath(this.repoRoot);
-    if (result.pass) {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (result && result["pass"]) {
+      if (this.#lock) {
+        let lockValue;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts = {};
+        if (lockValue !== void 0) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...this.#lock && { extraFiles: [lockPath] } };
     }
-    if (typeof result.content !== "string") {
-      return { status: "fail", output: result.reason || "AI check failed and could not produce a fix" };
+    if (!result || typeof result["content"] !== "string") {
+      return { status: "fail", output: String(result?.["reason"] || "AI check failed and could not produce a fix") };
     }
-    if (result.content === content) {
-      return { status: "pass", output: result.reason || "AI reported changes but content was identical" };
+    if (result["content"] === content) {
+      return { status: "pass", output: String(result["reason"] || "AI reported changes but content was identical") };
     }
-    if (this.#lock) await lockWriteContent(this.name, lockKey, result.content, this.repoRoot, { lockValue: this.#lockValue });
+    if (this.#lock) {
+      let lockValue;
+      if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+        lockValue = this.#lockValue;
+      }
+      const opts = {};
+      if (lockValue !== void 0) opts.lockValue = lockValue;
+      await lockWriteContent(this.name, lockKey, result["content"], this.repoRoot, opts);
+    }
     return {
       status: "fixed",
-      output: result.reason || "AI applied fixes",
-      content: result.content,
+      output: String(result["reason"] || "AI applied fixes"),
+      content: result["content"],
       ...this.#lock && { extraFiles: [lockPath] }
     };
   }
@@ -13482,11 +13524,12 @@ If it fails but cannot be fixed, set pass to false and omit content.`;
     try {
       reply = await this.#provider.call(prompt, { cwd: this.repoRoot });
     } catch (err) {
-      return { error: `${this.#provider.name} error: ${err.message}` };
+      return { error: `${this.#provider.name} error: ${err instanceof Error ? err.message : String(err)}` };
     }
     try {
       const jsonMatch = reply.match(/\{[\s\S]*\}/);
-      return { value: JSON.parse(jsonMatch ? jsonMatch[0] : reply) };
+      const value = JSON.parse(jsonMatch ? jsonMatch[0] : reply);
+      return { value };
     } catch {
       return { error: `${this.#provider.name} returned invalid JSON: ${reply}` };
     }
@@ -18977,7 +19020,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "a7f3ffc" : "unknown";
+var LINTER_COMMIT = true ? "b9de86d" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

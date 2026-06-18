@@ -186,3 +186,15 @@
   - Aggressive linting like `linelint` requires attention to small details like EOF newlines.
   - `tsc` might not catch everything if run only on specific files; periodic full project linting (`npm run lint`) is essential.
 ---
+
+## 2026-06-18 16:30 - US-001
+- Fixed TypeScript errors and banned 'any' type in checks/ai-prompt-check.ts, checks/always-fail-check.ts, and checks/base-check.ts.
+- Updated BaseCheck to use Record<string, unknown> for options and dependencies.
+- Added explicit type guards and narrowing to resolve 'as' operator violations.
+- Handled exactOptionalPropertyTypes: true in AiPromptCheck by conditionally building options objects.
+- Files changed: checks/ai-prompt-check.ts, checks/always-fail-check.ts, checks/base-check.ts, dist/linter.mjs, ralph/prd.json.
+- **Learnings for future iterations:**
+  - The 'as' operator is strictly banned, even for common casts like 'as string[]'. Use type guards with Array.isArray and filter(item: item is string) instead.
+  - With 'exactOptionalPropertyTypes: true', you cannot pass { key: undefined } to a function expecting { key?: Type }. Use an intermediate object and only set the property if it is defined.
+  - Base classes like BaseCheck should use Record<string, unknown> for flexible options instead of any.
+---

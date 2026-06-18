@@ -3,12 +3,13 @@ import { BaseCheck, type CheckResult } from "./base-check.js";
 import { ClaudeProvider } from "../ai-providers/claude.js";
 import { GeminiProvider } from "../ai-providers/gemini.js";
 import { OpenAICompatibleProvider } from "../ai-providers/openai-compatible.js";
+import { BaseAiProvider } from "../ai-providers/base-ai-provider.js";
 import {
   coerce, coerceArray, standardTemplates, resolvePaths, dedupePaths,
   buildFileContext, lockfilePath, lockMatchesContent, lockWriteContent,
 } from "./check-utils.js";
 
-const AI_PROVIDERS: Record<string, any> = {
+const AI_PROVIDERS: Record<string, new () => BaseAiProvider> = {
   claude: ClaudeProvider,
   gemini: GeminiProvider,
   openai: OpenAICompatibleProvider
@@ -40,24 +41,24 @@ export class AiPromptCheck extends BaseCheck {
   #fixPrompt: string | undefined;
   #filesToRead: string[];
   #lock: boolean;
-  #lockValue: any;
-  #provider: any;
+  #lockValue: unknown;
+  #provider: BaseAiProvider;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
 
-    this.#lintPrompt = coerce(options.lintPrompt);
-    this.#fixPrompt = coerce(options.fixPrompt);
+    this.#lintPrompt = coerce(options["lintPrompt"]);
+    this.#fixPrompt = coerce(options["fixPrompt"]);
 
     if (!this.#lintPrompt && !this.#fixPrompt) {
       throw new Error("AiPromptCheck requires at least one of: lintPrompt, fixPrompt");
     }
 
-    this.#filesToRead = coerceArray(options.filesToRead ?? options.contextFiles);
-    this.#lock = !!options.lock;
-    this.#lockValue = options.lockValue;
+    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"]);
+    this.#lock = !!options["lock"];
+    this.#lockValue = options["lockValue"];
 
-    const providerName = (options.aiProvider || "claude").toLowerCase();
+    const providerName = String(options["aiProvider"] || "claude").toLowerCase();
     const ProviderClass = AI_PROVIDERS[providerName];
     if (!ProviderClass) {
       throw new Error(`Unknown aiProvider "${providerName}". Available: ${Object.keys(AI_PROVIDERS).join(", ")}`);
@@ -74,7 +75,7 @@ export class AiPromptCheck extends BaseCheck {
     return true;
   }
 
-  override getTemplates(): Record<string, (ctx: any) => string> {
+  override getTemplates(): Record<string, (ctx: Record<string, unknown>) => string> {
     return standardTemplates();
   }
 
@@ -82,7 +83,7 @@ export class AiPromptCheck extends BaseCheck {
     return true;
   }
 
-  override async lintInMemory(content: string, _deps: any, entry: any): Promise<CheckResult> {
+  override async lintInMemory(content: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry): Promise<CheckResult> {
     const instruction = this.#lintPrompt;
     if (!instruction) {
       return { status: "error", output: "No prompt configured for lint (set lintPrompt)" };
@@ -101,14 +102,22 @@ export class AiPromptCheck extends BaseCheck {
     if (verdict.error) return { status: "error", output: verdict.error };
 
     const lockPath = lockfilePath(this.repoRoot);
-    if (verdict.value.pass) {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (verdict.value && verdict.value["pass"]) {
+      if (this.#lock) {
+        let lockValue: number | string | undefined;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts: { lockValue?: number | string } = {};
+        if (lockValue !== undefined) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...(this.#lock && { extraFiles: [lockPath] }) };
     }
-    return { status: "fail", output: verdict.value.reason || "AI check failed (no reason provided)" };
+    return { status: "fail", output: String(verdict.value?.["reason"] || "AI check failed (no reason provided)") };
   }
 
-  override async fixInMemory(content: string, _deps: any, entry: any): Promise<CheckResult & { content?: string }> {
+  override async fixInMemory(content: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry): Promise<CheckResult & { content?: string }> {
     const instruction = this.#fixPrompt;
     if (!instruction) {
       return { status: "error", output: "No prompt configured for fix (set fixPrompt)" };
@@ -129,26 +138,42 @@ export class AiPromptCheck extends BaseCheck {
 
     const lockPath = lockfilePath(this.repoRoot);
 
-    if (!result.changed || typeof result.content !== "string") {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (!result || !result["changed"] || typeof result["content"] !== "string") {
+      if (this.#lock) {
+        let lockValue: number | string | undefined;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts: { lockValue?: number | string } = {};
+        if (lockValue !== undefined) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...(this.#lock && { extraFiles: [lockPath] }) };
     }
 
-    if (result.content === content) {
-      return { status: "pass", output: result.reason || "AI reported changes but content was identical" };
+    if (result["content"] === content) {
+      return { status: "pass", output: String(result["reason"] || "AI reported changes but content was identical") };
     }
 
-    if (this.#lock) await lockWriteContent(this.name, lockKey, result.content, this.repoRoot, { lockValue: this.#lockValue });
+    if (this.#lock) {
+      let lockValue: number | string | undefined;
+      if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+        lockValue = this.#lockValue;
+      }
+      const opts: { lockValue?: number | string } = {};
+      if (lockValue !== undefined) opts.lockValue = lockValue;
+      await lockWriteContent(this.name, lockKey, result["content"], this.repoRoot, opts);
+    }
 
     return {
       status: "fixed",
-      output: result.reason || "AI applied fixes",
-      content: result.content,
+      output: String(result["reason"] || "AI applied fixes"),
+      content: result["content"],
       ...(this.#lock && { extraFiles: [lockPath] }),
     };
   }
 
-  override async lintAndFixInMemory(content: string, _deps: any, entry: any): Promise<(CheckResult & { content?: string }) | null> {
+  override async lintAndFixInMemory(content: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry): Promise<(CheckResult & { content?: string }) | null> {
     if (!this.#lintPrompt || !this.#fixPrompt) return null;
 
     const lockKey = this.#lockKey(entry);
@@ -166,32 +191,48 @@ export class AiPromptCheck extends BaseCheck {
 
     const lockPath = lockfilePath(this.repoRoot);
 
-    if (result.pass) {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (result && result["pass"]) {
+      if (this.#lock) {
+        let lockValue: number | string | undefined;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts: { lockValue?: number | string } = {};
+        if (lockValue !== undefined) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...(this.#lock && { extraFiles: [lockPath] }) };
     }
 
-    if (typeof result.content !== "string") {
-      return { status: "fail", output: result.reason || "AI check failed and could not produce a fix" };
+    if (!result || typeof result["content"] !== "string") {
+      return { status: "fail", output: String(result?.["reason"] || "AI check failed and could not produce a fix") };
     }
 
-    if (result.content === content) {
-      return { status: "pass", output: result.reason || "AI reported changes but content was identical" };
+    if (result["content"] === content) {
+      return { status: "pass", output: String(result["reason"] || "AI reported changes but content was identical") };
     }
 
-    if (this.#lock) await lockWriteContent(this.name, lockKey, result.content, this.repoRoot, { lockValue: this.#lockValue });
+    if (this.#lock) {
+      let lockValue: number | string | undefined;
+      if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+        lockValue = this.#lockValue;
+      }
+      const opts: { lockValue?: number | string } = {};
+      if (lockValue !== undefined) opts.lockValue = lockValue;
+      await lockWriteContent(this.name, lockKey, result["content"], this.repoRoot, opts);
+    }
 
     return {
       status: "fixed",
-      output: result.reason || "AI applied fixes",
-      content: result.content,
+      output: String(result["reason"] || "AI applied fixes"),
+      content: result["content"],
       ...(this.#lock && { extraFiles: [lockPath] }),
     };
   }
 
   // ── prompt builders ──────────────────────────────────────────────────
 
-  #buildLintPrompt(entry: any, instruction: string, content: string, extraContext: string) {
+  #buildLintPrompt(entry: import("../entries/base-entry.js").BaseEntry, instruction: string, content: string, extraContext: string) {
     return (
       `You are a code review assistant integrated into a linter.\n` +
       `Item: ${this.#entryLabel(entry)}\n` +
@@ -203,7 +244,7 @@ export class AiPromptCheck extends BaseCheck {
     );
   }
 
-  #buildFixPrompt(entry: any, instruction: string, content: string, extraContext: string) {
+  #buildFixPrompt(entry: import("../entries/base-entry.js").BaseEntry, instruction: string, content: string, extraContext: string) {
     return (
       `You are a code fixing assistant integrated into a linter.\n` +
       `Item to fix: ${this.#entryLabel(entry)}\n` +
@@ -218,7 +259,7 @@ export class AiPromptCheck extends BaseCheck {
     );
   }
 
-  #buildLintAndFixPrompt(entry: any, content: string, extraContext: string) {
+  #buildLintAndFixPrompt(entry: import("../entries/base-entry.js").BaseEntry, content: string, extraContext: string) {
     return (
       `You are a code review and fixing assistant integrated into a linter.\n` +
       `Item: ${this.#entryLabel(entry)}\n\n` +
@@ -239,7 +280,7 @@ export class AiPromptCheck extends BaseCheck {
 
   // ── helpers ──────────────────────────────────────────────────────────
 
-  #entryLabel(entry: any) {
+  #entryLabel(entry: import("../entries/base-entry.js").BaseEntry | null) {
     if (!entry) return "(unknown)";
     if (entry.sourceFile) {
       const rel = path.relative(this.repoRoot, entry.sourceFile);
@@ -249,7 +290,7 @@ export class AiPromptCheck extends BaseCheck {
     return entry.id || "(unknown)";
   }
 
-  #lockKey(entry: any) {
+  #lockKey(entry: import("../entries/base-entry.js").BaseEntry | null) {
     if (!entry?.sourceFile) return entry?.id ?? "(unknown)";
     const rel = path.relative(this.repoRoot, entry.sourceFile);
     if (!entry.isVirtual || !entry.id) return rel;
@@ -259,7 +300,7 @@ export class AiPromptCheck extends BaseCheck {
     return rel + suffix;
   }
 
-  async #buildExtraContext(entry: any) {
+  async #buildExtraContext(entry: import("../entries/base-entry.js").BaseEntry | null) {
     if (this.#filesToRead.length === 0) return { value: "" };
     const file = entry?.sourceFile ?? null;
     const extra = resolvePaths(this.#filesToRead, file, this.resolveTemplate.bind(this), this.repoRoot);
@@ -271,12 +312,13 @@ export class AiPromptCheck extends BaseCheck {
     let reply: string;
     try {
       reply = await this.#provider.call(prompt, { cwd: this.repoRoot });
-    } catch (err: any) {
-      return { error: `${this.#provider.name} error: ${err.message}` };
+    } catch (err: unknown) {
+      return { error: `${this.#provider.name} error: ${err instanceof Error ? err.message : String(err)}` };
     }
     try {
       const jsonMatch = reply.match(/\{[\s\S]*\}/);
-      return { value: JSON.parse(jsonMatch ? jsonMatch[0] : reply) };
+      const value: Record<string, unknown> = JSON.parse(jsonMatch ? jsonMatch[0] : reply);
+      return { value };
     } catch {
       return { error: `${this.#provider.name} returned invalid JSON: ${reply}` };
     }

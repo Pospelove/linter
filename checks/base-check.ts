@@ -44,13 +44,26 @@ export class BaseCheck {
   #priority: number;
   #expander: import("../expanders/base-expander.js").BaseExpander | null;
 
-  constructor(repoRoot: string, options: any = {}) {
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     this.repoRoot = repoRoot;
-    this.#extensions = (options.extensions || []).map((e: string) => e.toLowerCase());
-    this.#includePaths = options.includePaths || [];
-    this.#excludePaths = options.excludePaths || [];
-    this.#textOnly = options.textOnly ?? false;
-    this.#priority = options.priority ?? 0;
+    
+    const extensions = options["extensions"];
+    this.#extensions = Array.isArray(extensions) 
+      ? extensions.map((e) => String(e).toLowerCase()) 
+      : [];
+
+    const includePaths = options["includePaths"];
+    this.#includePaths = Array.isArray(includePaths)
+      ? includePaths.filter((p): p is string => typeof p === "string")
+      : [];
+
+    const excludePaths = options["excludePaths"];
+    this.#excludePaths = Array.isArray(excludePaths)
+      ? excludePaths.filter((p): p is string => typeof p === "string")
+      : [];
+
+    this.#textOnly = !!options["textOnly"];
+    this.#priority = typeof options["priority"] === "number" ? options["priority"] : 0;
     this.#expander = null;
   }
 
@@ -95,10 +108,10 @@ export class BaseCheck {
 
   /**
    * Whether this check's dependencies are satisfied.
-   * @param {object} deps - Resolved dependencies (e.g. { clangFormatPath }).
+   * @param {Record<string, unknown>} _deps - Resolved dependencies (e.g. { clangFormatPath }).
    * @returns {boolean}
    */
-  checkDeps(_deps: any): boolean {
+  checkDeps(_deps: Record<string, unknown>): boolean {
     return true;
   }
 
@@ -155,32 +168,32 @@ export class BaseCheck {
    * Called once before running lint/fix. The returned object is merged
    * into the shared deps bag.
    * Subclasses should override to download/locate their tools.
-   * @param {{ shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }} options
-   * @returns {Promise<object>} Key-value pairs to merge into deps.
+   * @param {Record<string, unknown>} _options
+   * @returns {Promise<Record<string, unknown>>} Key-value pairs to merge into deps.
    */
-  async resolveDeps(_options: any): Promise<any> {
+  async resolveDeps(_options: Record<string, unknown>): Promise<Record<string, unknown>> {
     return {};
   }
 
   /**
    * Lint (read-only check) a single file.
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async lint(_file: string, _deps: any, _entry: any = null): Promise<CheckResult> {
+  async lint(_file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     throw new Error("Not implemented: lint");
   }
 
   /**
    * Fix (in-place modify) a single file.
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async fix(_file: string, _deps: any, _entry: any = null): Promise<CheckResult> {
+  async fix(_file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     throw new Error("Not implemented: fix");
   }
 
@@ -189,12 +202,12 @@ export class BaseCheck {
    * Checks that can evaluate and fix in one step (e.g. a single AI call)
    * should override this. Return null to signal that the check does not
    * support combined mode — the runner will fall back to fix().
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult | null>}
    */
-  async lintAndFix(_file: string, _deps: any, _entry: any = null): Promise<CheckResult | null> {
+  async lintAndFix(_file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult | null> {
     return null;
   }
 
@@ -220,12 +233,12 @@ export class BaseCheck {
 
   /**
    * Lint a content string. Override when supportsInMemory is true.
-   * @param {string} content - The slice of file content to evaluate.
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry - The entry being processed (for id, sourceFile, metadata).
+   * @param {string} _content - The slice of file content to evaluate.
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry - The entry being processed (for id, sourceFile, metadata).
    * @returns {Promise<CheckResult>}
    */
-  async lintInMemory(_content: string, _deps: any, _entry: any): Promise<CheckResult> {
+  async lintInMemory(_content: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry): Promise<CheckResult> {
     throw new Error("Not implemented: lintInMemory");
   }
 
@@ -233,24 +246,24 @@ export class BaseCheck {
    * Fix a content string. Override when supportsInMemory is true.
    * Returns CheckResult plus an optional `content` field with the new string;
    * the runner pipes that back through entry.writeBack() when status === "fixed".
-   * @param {string} content
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry
+   * @param {string} _content
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry
    * @returns {Promise<CheckResult & { content?: string }>}
    */
-  async fixInMemory(_content: string, _deps: any, _entry: any): Promise<CheckResult & { content?: string }> {
+  async fixInMemory(_content: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry): Promise<CheckResult & { content?: string }> {
     throw new Error("Not implemented: fixInMemory");
   }
 
   /**
    * Optional combined lint+fix on a content string. Same null-fallback
    * semantics like lintAndFix(). Returns CheckResult plus optional `content`.
-   * @param {string} content
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry
+   * @param {string} _content
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry
    * @returns {Promise<(CheckResult & { content?: string }) | null>}
    */
-  async lintAndFixInMemory(_content: string, _deps: any, _entry: any): Promise<(CheckResult & { content?: string }) | null> {
+  async lintAndFixInMemory(_content: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry): Promise<(CheckResult & { content?: string }) | null> {
     return null;
   }
 
@@ -258,20 +271,19 @@ export class BaseCheck {
    * Return template placeholders this check supports.
    * Keys are placeholder strings, values are functions (context) => replacement.
    * Subclasses override to provide their own templates.
-   * @param {object} [context] - Contextual info (e.g. { file, repoRoot }).
-   * @returns {Record<string, (ctx: object) => string>}
+   * @returns {Record<string, (ctx: Record<string, unknown>) => string>}
    */
-  getTemplates(): Record<string, (ctx: any) => string> {
+  getTemplates(): Record<string, (ctx: Record<string, unknown>) => string> {
     return {};
   }
 
   /**
    * Expand all placeholders from getTemplates() in the given string.
    * @param {string} template - String containing placeholders.
-   * @param {object} context  - Passed to each template function.
+   * @param {Record<string, unknown>} context  - Passed to each template function.
    * @returns {string}
    */
-  resolveTemplate(template: string, context: any): string {
+  resolveTemplate(template: string, context: Record<string, unknown>): string {
     let result = template;
     for (const [placeholder, fn] of Object.entries(this.getTemplates())) {
       result = result.replaceAll(placeholder, fn(context));

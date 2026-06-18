@@ -1,19 +1,20 @@
 {
   "project": "Project",
-  "branchName": "typescript",
+  "branchName": "ralph/lint-fixes",
   "description": "Fix outstanding lint issues",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in ai-providers/base-ai-provider.ts, ai-providers/claude.ts, ai-providers/echo.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/ai-prompt-check.ts, checks/always-fail-check.ts, checks/base-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files ai-providers/base-ai-provider.ts,ai-providers/claude.ts,ai-providers/echo.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/ai-prompt-check.ts,checks/always-fail-check.ts,checks/base-check.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 1,
       "passes": true,
@@ -21,189 +22,115 @@
     },
     {
       "id": "US-002",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in ai-providers/gemini.ts, ai-providers/openai-compatible.ts, checks/ai-prompt-check.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/check-utils.ts, checks/clang-format-check.ts, checks/codegen-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files ai-providers/gemini.ts,ai-providers/openai-compatible.ts,checks/ai-prompt-check.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/check-utils.ts,checks/clang-format-check.ts,checks/codegen-check.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/always-fail-check.ts, checks/base-check.ts, checks/check-utils.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/composite-check.ts, checks/crlf-check.ts, checks/custom-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files checks/always-fail-check.ts,checks/base-check.ts,checks/check-utils.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/composite-check.ts,checks/crlf-check.ts,checks/custom-check.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/clang-format-check.ts, checks/codegen-check.ts, checks/composite-check.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/encoding-check.ts, checks/firecrawl-check.ts, checks/linelint-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files checks/clang-format-check.ts,checks/codegen-check.ts,checks/composite-check.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/encoding-check.ts,checks/firecrawl-check.ts,checks/linelint-check.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/crlf-check.ts, checks/custom-check.ts, checks/encoding-check.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/localization-key-check.ts, checks/paired-files-check.ts, checks/regex-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files checks/crlf-check.ts,checks/custom-check.ts,checks/encoding-check.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/localization-key-check.ts,checks/paired-files-check.ts,checks/regex-check.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/firecrawl-check.ts, checks/linelint-check.ts, checks/localization-key-check.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/tsc-check.ts, entries/json-array-entry.ts, expanders/base-expander.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files checks/firecrawl-check.ts,checks/linelint-check.ts,checks/localization-key-check.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/tsc-check.ts,entries/json-array-entry.ts,expanders/base-expander.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/paired-files-check.ts, checks/regex-check.ts, checks/tsc-check.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
+      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
+      "description": "As a developer, I need to resolve TypeScript compiler errors in file-sources/all-files-source.ts, file-sources/base-file-source.ts, linter.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files checks/paired-files-check.ts,checks/regex-check.ts,checks/tsc-check.ts",
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files file-sources/all-files-source.ts,file-sources/base-file-source.ts,linter.ts",
         "Code compiles without any strict TypeScript errors",
         "No functional changes are made to the code; the runtime behavior remains identical",
         "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
         "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
+        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
+        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in entries/base-entry.ts, entries/file-entry.ts, entries/json-array-entry.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files entries/base-entry.ts,entries/file-entry.ts,entries/json-array-entry.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-009",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in expanders/base-expander.ts, expanders/file-expander.ts, expanders/json-array-expander.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files expanders/base-expander.ts,expanders/file-expander.ts,expanders/json-array-expander.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-010",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in file-sources/all-files-source.ts, file-sources/base-file-source.ts, file-sources/diff-base-source.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files file-sources/all-files-source.ts,file-sources/base-file-source.ts,file-sources/diff-base-source.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-011",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in file-sources/staged-files-source.ts, linter.ts, tool-resolve/clang-format.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files file-sources/staged-files-source.ts,linter.ts,tool-resolve/clang-format.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-012",
-      "title": "Fix TypeScript errors in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in tool-resolve/linelint.ts, tool-resolve/tool-utils.ts, util.ts.\nThis is required to successfully complete the JavaScript to TypeScript migration while adhering to strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,tsc --files tool-resolve/linelint.ts,tool-resolve/tool-utils.ts,util.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'."
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-013",
       "title": "Fix codegen in linter.ts",
       "description": "As a developer, I need to fix codegen issue in linter.ts so the check passes.",
       "acceptanceCriteria": [
         "node .linter/linter.mjs --lint --checks codegen --files linter.ts"
       ],
-      "priority": 13,
-      "passes": true,
+      "priority": 8,
+      "passes": false,
       "notes": ""
     }
   ]
