@@ -156,3 +156,16 @@
   - When iterating over a registry where different classes have slightly different `static` return types (e.g., `getHelp()`), use `@ts-expect-error` selectively for the specific loop that accesses the optional property.
   - Large files like `linter.ts` require careful typing of loop variables and Map/Set collections to avoid cascading `any` types.
 ---
+
+## 2026-06-18 15:30 - US-012
+- Fixed TypeScript errors in tool-resolve/linelint.ts, tool-resolve/tool-utils.ts, and util.ts.
+- Added explicit types to all exported functions and methods.
+- Resolved Promise constructor errors by using new Promise<void>().
+- Handled unknown error types in catch blocks using instanceof Error or String(err).
+- Updated CLAUDE.md with consolidated TypeScript patterns.
+- Files changed: tool-resolve/linelint.ts, tool-resolve/tool-utils.ts, util.ts, CLAUDE.md, dist/linter.mjs.
+- **Learnings for future iterations:**
+  - When a Promise doesn't return a value, explicitly type it as Promise<void> or use new Promise<void>() to avoid TS2794.
+  - TSC in strict mode types catch block errors as unknown; use err instanceof Error to safely access .message.
+  - Exported functions should always have explicit return types to satisfy project standards and improve maintainability.
+---
