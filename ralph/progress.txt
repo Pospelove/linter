@@ -275,3 +275,11 @@
   - Adding optional properties like extraFiles to base interfaces (CheckResult) is cleaner than using @ts-expect-error in every subclass.
   - Large files like linter.ts benefit from local interfaces for complex configurations (PRD, CheckConfig).
 ---
+
+## 2026-06-18 23:15 - US-008
+- Fixed codegen issue in linter.ts by updating dist/linter.mjs via npm run build.
+- Files changed: dist/linter.mjs, ralph/prd.json, ralph/progress.txt.
+- **Learnings for future iterations:**
+  - npm run build (which runs esbuild.config.js) is required to synchronize the distribution file with source changes.
+  - The codegen check specifically validates that dist/linter.mjs matches the source.
+---
