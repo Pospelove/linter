@@ -5,18 +5,18 @@ import { BaseEntry } from "./base-entry.js";
  * id, path, and sourceFile all return the same value.
  */
 export class FileEntry extends BaseEntry {
-  #filePath;
+  #filePath: string;
 
-  constructor(filePath) {
+  constructor(filePath: string) {
     super();
     this.#filePath = filePath;
   }
 
-  get id() {
+  override get id(): string {
     return this.#filePath;
   }
 
-  get path() {
+  override get path(): string {
     return this.#filePath;
   }
 }

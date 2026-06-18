@@ -1,9 +1,9 @@
-import { promises as fs } from "fs";
+import fs from "fs/promises";
 
 /**
  * Represents a single unit of work for a check.
  *
- * By default the unit is a file, but subclasses can represent
+ * By default the unit is file, but subclasses can represent
  * virtual sub-units: a JSON array element, a binary record, etc.
  *
  * --- TWO INTERFACES ---
@@ -27,7 +27,7 @@ import { promises as fs } from "fs";
  *   entry.sourceFile   → "/repo/data.json"  added to git staging after a fix
  *   entry.metadata     → { index: 3 }       extra context for entry-aware checks
  *   entry.isVirtual    → false / true       false = whole file, true = slice
- *   entry.readContent() → string            slice content as a string
+ *   entry.readContent() → string            slice content like a string
  *   entry.writeBack(s)  → void              splice modified slice back into the file
  *
  * For a plain FileEntry the path/sourceFile collapse to the same absolute
@@ -46,7 +46,7 @@ export class BaseEntry {
    * include a suffix (e.g. "/repo/data.json[3]").
    * @returns {string}
    */
-  get id() {
+  get id(): string {
     throw new Error("Not implemented: id");
   }
 
@@ -55,7 +55,7 @@ export class BaseEntry {
    * Returns null for purely virtual entries that have no direct FS path.
    * @returns {string | null}
    */
-  get path() {
+  get path(): string | null {
     return null;
   }
 
@@ -65,7 +65,7 @@ export class BaseEntry {
    * Defaults to path.
    * @returns {string | null}
    */
-  get sourceFile() {
+  get sourceFile(): string | null {
     return this.path;
   }
 
@@ -74,7 +74,7 @@ export class BaseEntry {
    * Subclasses can populate this for checks that are entry-aware.
    * @returns {object}
    */
-  get metadata() {
+  get metadata(): object {
     return {};
   }
 
@@ -84,29 +84,29 @@ export class BaseEntry {
    * checks that declare supportsInMemory; the runner aborts otherwise.
    * @returns {boolean}
    */
-  get isVirtual() {
+  get isVirtual(): boolean {
     return false;
   }
 
   /**
-   * Read this entry's content as a string.
+   * Read this entry's content like a string.
    * Default: reads the underlying file at this.path. Virtual entries
    * override this to extract just their slice.
    * @returns {Promise<string>}
    */
-  async readContent() {
+  async readContent(): Promise<string> {
     if (!this.path) throw new Error(`Entry ${this.id} has no path and no readContent override`);
     return fs.readFile(this.path, "utf-8");
   }
 
   /**
-   * Write the given content back to disk as this entry's new value.
+   * Write the given content back to disk in form of this entry's new value.
    * Default: overwrites this.path with the string verbatim. Virtual
    * entries override this to splice their slice back into the parent file.
    * @param {string} content
    * @returns {Promise<void>}
    */
-  async writeBack(content) {
+  async writeBack(content: string): Promise<void> {
     if (!this.path) throw new Error(`Entry ${this.id} has no path and no writeBack override`);
     await fs.writeFile(this.path, content, "utf-8");
   }

@@ -99,3 +99,15 @@
   - RegExp exec matches in a loop should be typed as `RegExpExecArray | null`.
   - When a promise is cached in a private field (like `#resultPromise`), ensure it is correctly typed to match the expected return.
 ---
+
+## 2026-06-18 13:30 - US-008
+- Fixed TypeScript errors in `entries/base-entry.ts`, `entries/file-entry.ts`, and `entries/json-array-entry.ts`.
+- Replaced `import { promises as fs }` with `import fs from "fs/promises"`.
+- Rephrased multiple comments and strings to avoid `no-ts-as-operator` violations.
+- Added explicit type declarations for all private fields and method parameters.
+- Added `override` modifiers to all subclass methods and getters.
+- Files changed: `entries/base-entry.ts`, `entries/file-entry.ts`, `entries/json-array-entry.ts`, `CLAUDE.md`.
+- **Learnings for future iterations:**
+  - Common descriptive phrases like "as a string" or "as JSON" trigger the linter. Use "like a string" or "in JSON format".
+  - Getters in base classes (like `BaseEntry.id`) should be explicitly typed to enforce correct types in subclasses.
+---
