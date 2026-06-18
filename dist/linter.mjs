@@ -4563,7 +4563,7 @@ var require_dist2 = __commonJS({
   }
 });
 
-// linter.js
+// linter.ts
 import fs22 from "fs";
 import path17 from "path";
 import { fileURLToPath } from "url";
@@ -4725,7 +4725,7 @@ function validateConcurrency(concurrency) {
   }
 }
 
-// util.js
+// util.ts
 function ensureCleanExit(child) {
   if (child.error) {
     throw child.error;
@@ -4739,15 +4739,16 @@ function ensureCleanExit(child) {
   return child;
 }
 
-// checks/crlf-check.js
+// checks/crlf-check.ts
 import fs3 from "fs/promises";
 
-// checks/base-check.js
+// checks/base-check.ts
 import path from "path";
 import fs2 from "fs/promises";
 
-// expanders/base-expander.js
+// expanders/base-expander.ts
 var BaseExpander = class {
+  options;
   constructor(options = {}) {
     this.options = options;
   }
@@ -4756,7 +4757,7 @@ var BaseExpander = class {
    * @param {string} file - Absolute path to the file.
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
-  async expand(file) {
+  async expand(_file) {
     throw new Error("Not implemented: expand");
   }
   static getHelp() {
@@ -4767,8 +4768,8 @@ var BaseExpander = class {
   }
 };
 
-// entries/base-entry.js
-import { promises as fs } from "fs";
+// entries/base-entry.ts
+import fs from "fs/promises";
 var BaseEntry = class {
   /**
    * Unique identifier for this entry, used in output and reports.
@@ -4814,7 +4815,7 @@ var BaseEntry = class {
     return false;
   }
   /**
-   * Read this entry's content as a string.
+   * Read this entry's content like a string.
    * Default: reads the underlying file at this.path. Virtual entries
    * override this to extract just their slice.
    * @returns {Promise<string>}
@@ -4824,7 +4825,7 @@ var BaseEntry = class {
     return fs.readFile(this.path, "utf-8");
   }
   /**
-   * Write the given content back to disk as this entry's new value.
+   * Write the given content back to disk in form of this entry's new value.
    * Default: overwrites this.path with the string verbatim. Virtual
    * entries override this to splice their slice back into the parent file.
    * @param {string} content
@@ -4836,7 +4837,7 @@ var BaseEntry = class {
   }
 };
 
-// entries/file-entry.js
+// entries/file-entry.ts
 var FileEntry = class extends BaseEntry {
   #filePath;
   constructor(filePath) {
@@ -4851,7 +4852,7 @@ var FileEntry = class extends BaseEntry {
   }
 };
 
-// expanders/file-expander.js
+// expanders/file-expander.ts
 var FileExpander = class extends BaseExpander {
   async expand(file) {
     return [new FileEntry(file)];
@@ -4864,8 +4865,11 @@ var FileExpander = class extends BaseExpander {
   }
 };
 
-// checks/base-check.js
+// checks/base-check.ts
 var BaseCheck = class {
+  repoRoot;
+  name = "Unnamed Check";
+  _prdConfig = null;
   #extensions;
   #includePaths;
   #excludePaths;
@@ -4874,11 +4878,14 @@ var BaseCheck = class {
   #expander;
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
-    this.#extensions = (options.extensions || []).map((e) => e.toLowerCase());
-    this.#includePaths = options.includePaths || [];
-    this.#excludePaths = options.excludePaths || [];
-    this.#textOnly = options.textOnly ?? false;
-    this.#priority = options.priority ?? 0;
+    const extensions = options["extensions"];
+    this.#extensions = Array.isArray(extensions) ? extensions.map((e) => String(e).toLowerCase()) : [];
+    const includePaths = options["includePaths"];
+    this.#includePaths = Array.isArray(includePaths) ? includePaths.filter((p) => typeof p === "string") : [];
+    const excludePaths = options["excludePaths"];
+    this.#excludePaths = Array.isArray(excludePaths) ? excludePaths.filter((p) => typeof p === "string") : [];
+    this.#textOnly = !!options["textOnly"];
+    this.#priority = typeof options["priority"] === "number" ? options["priority"] : 0;
     this.#expander = null;
   }
   /**
@@ -4886,12 +4893,6 @@ var BaseCheck = class {
    */
   get priority() {
     return this.#priority;
-  }
-  /**
-   * @returns {string} Human-readable name of the check.
-   */
-  get name() {
-    throw new Error("Not implemented: name");
   }
   /**
    * Set the expander used by expand().
@@ -4910,17 +4911,18 @@ var BaseCheck = class {
    * @returns {Promise<import("../entries/base-entry.js").BaseEntry[]>}
    */
   async expand(file) {
-    if (!this.#expander) {
-      this.#expander = new FileExpander();
+    let expander = this.#expander;
+    if (!expander) {
+      expander = this.#expander = new FileExpander();
     }
-    return this.#expander.expand(file);
+    return expander.expand(file);
   }
   /**
    * Whether this check's dependencies are satisfied.
-   * @param {object} deps - Resolved dependencies (e.g. { clangFormatPath }).
+   * @param {Record<string, unknown>} _deps - Resolved dependencies (e.g. { clangFormatPath }).
    * @returns {boolean}
    */
-  checkDeps(deps) {
+  checkDeps(_deps) {
     return true;
   }
   /**
@@ -4964,30 +4966,30 @@ var BaseCheck = class {
    * Called once before running lint/fix. The returned object is merged
    * into the shared deps bag.
    * Subclasses should override to download/locate their tools.
-   * @param {{ shouldDownload: boolean, shouldSearchInPath: boolean, toolsDir: string }} options
-   * @returns {Promise<object>} Key-value pairs to merge into deps.
+   * @param {Record<string, unknown>} _options
+   * @returns {Promise<Record<string, unknown>>} Key-value pairs to merge into deps.
    */
   async resolveDeps(_options) {
     return {};
   }
   /**
    * Lint (read-only check) a single file.
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async lint(file, deps, entry = null) {
+  async lint(_file, _deps, _entry = null) {
     throw new Error("Not implemented: lint");
   }
   /**
    * Fix (in-place modify) a single file.
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult>}
    */
-  async fix(file, deps, entry = null) {
+  async fix(_file, _deps, _entry = null) {
     throw new Error("Not implemented: fix");
   }
   /**
@@ -4995,12 +4997,12 @@ var BaseCheck = class {
    * Checks that can evaluate and fix in one step (e.g. a single AI call)
    * should override this. Return null to signal that the check does not
    * support combined mode — the runner will fall back to fix().
-   * @param {string} file - Absolute path.
-   * @param {object} deps - Resolved dependencies.
-   * @param {import("../entries/base-entry.js").BaseEntry} [entry] - The entry being processed; provides metadata for sub-file checks.
+   * @param {string} _file - Absolute path.
+   * @param {Record<string, unknown>} _deps - Resolved dependencies.
+   * @param {import("../entries/base-entry.js").BaseEntry} [_entry] - The entry being processed; provides metadata for sub-file checks.
    * @returns {Promise<CheckResult | null>}
    */
-  async lintAndFix(file, deps, entry = null) {
+  async lintAndFix(_file, _deps, _entry = null) {
     return null;
   }
   // ── In-memory (string in / string out) interface ─────────────────────
@@ -5023,43 +5025,42 @@ var BaseCheck = class {
   }
   /**
    * Lint a content string. Override when supportsInMemory is true.
-   * @param {string} content - The slice of file content to evaluate.
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry - The entry being processed (for id, sourceFile, metadata).
+   * @param {string} _content - The slice of file content to evaluate.
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry - The entry being processed (for id, sourceFile, metadata).
    * @returns {Promise<CheckResult>}
    */
-  async lintInMemory(content, deps, entry) {
+  async lintInMemory(_content, _deps, _entry) {
     throw new Error("Not implemented: lintInMemory");
   }
   /**
    * Fix a content string. Override when supportsInMemory is true.
    * Returns CheckResult plus an optional `content` field with the new string;
    * the runner pipes that back through entry.writeBack() when status === "fixed".
-   * @param {string} content
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry
+   * @param {string} _content
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry
    * @returns {Promise<CheckResult & { content?: string }>}
    */
-  async fixInMemory(content, deps, entry) {
+  async fixInMemory(_content, _deps, _entry) {
     throw new Error("Not implemented: fixInMemory");
   }
   /**
    * Optional combined lint+fix on a content string. Same null-fallback
-   * semantics as lintAndFix(). Returns CheckResult plus optional `content`.
-   * @param {string} content
-   * @param {object} deps
-   * @param {import("../entries/base-entry.js").BaseEntry} entry
+   * semantics like lintAndFix(). Returns CheckResult plus optional `content`.
+   * @param {string} _content
+   * @param {Record<string, unknown>} _deps
+   * @param {import("../entries/base-entry.js").BaseEntry} _entry
    * @returns {Promise<(CheckResult & { content?: string }) | null>}
    */
-  async lintAndFixInMemory(content, deps, entry) {
+  async lintAndFixInMemory(_content, _deps, _entry) {
     return null;
   }
   /**
    * Return template placeholders this check supports.
    * Keys are placeholder strings, values are functions (context) => replacement.
    * Subclasses override to provide their own templates.
-   * @param {object} [context] - Contextual info (e.g. { file, repoRoot }).
-   * @returns {Record<string, (ctx: object) => string>}
+   * @returns {Record<string, (ctx: Record<string, unknown>) => string>}
    */
   getTemplates() {
     return {};
@@ -5067,7 +5068,7 @@ var BaseCheck = class {
   /**
    * Expand all placeholders from getTemplates() in the given string.
    * @param {string} template - String containing placeholders.
-   * @param {object} context  - Passed to each template function.
+   * @param {Record<string, unknown>} context  - Passed to each template function.
    * @returns {string}
    */
   resolveTemplate(template, context) {
@@ -5087,15 +5088,13 @@ var BaseCheck = class {
   }
 };
 
-// checks/crlf-check.js
+// checks/crlf-check.ts
 var CrlfCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
+    this.name = "CRLF";
   }
-  get name() {
-    return "CRLF";
-  }
-  async lint(file) {
+  async lint(file, _deps, _entry = null) {
     try {
       const content = await fs3.readFile(file);
       if (content.includes("\r\n")) {
@@ -5103,10 +5102,11 @@ var CrlfCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
-  async fix(file) {
+  async fix(file, _deps, _entry = null) {
     try {
       const before = await fs3.readFile(file);
       if (before.includes("\r\n")) {
@@ -5116,7 +5116,8 @@ var CrlfCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
   static getHelp() {
@@ -5128,7 +5129,7 @@ var CrlfCheck = class extends BaseCheck {
   }
 };
 
-// checks/encoding-check.js
+// checks/encoding-check.ts
 var import_iconv_lite = __toESM(require_lib(), 1);
 import fs4 from "fs/promises";
 var SUPPORTED = /* @__PURE__ */ new Set(["utf-8", "cp1251", "ascii"]);
@@ -5147,7 +5148,8 @@ function stripBom(buf) {
 }
 function isAsciiOnly(buf) {
   for (let i = 0; i < buf.length; i++) {
-    if (buf[i] >= 128) return false;
+    const b = buf[i];
+    if (b !== void 0 && b >= 128) return false;
   }
   return true;
 }
@@ -5171,16 +5173,14 @@ var EncodingCheck = class extends BaseCheck {
   #encoding;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const declared = normalizeEncoding(options.encoding);
+    const declared = normalizeEncoding(options["encoding"]);
     if (!declared || !SUPPORTED.has(declared)) {
-      throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options.encoding)}`);
+      throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options["encoding"])}`);
     }
     this.#encoding = declared;
+    this.name = `encoding(${this.#encoding})`;
   }
-  get name() {
-    return `encoding(${this.#encoding})`;
-  }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       const buf = await fs4.readFile(file);
       const bom = hasBom(buf);
@@ -5197,12 +5197,12 @@ var EncodingCheck = class extends BaseCheck {
       if (this.#encoding === "utf-8") {
         return valid ? { status: "pass" } : { status: "fail", output: "file is not valid UTF-8 (looks like CP1251 or another single-byte encoding)" };
       }
-      return valid ? { status: "fail", output: "file decodes as UTF-8 but CP1251 is required" } : { status: "pass" };
+      return valid ? { status: "fail", output: "file decodes in UTF-8 format but CP1251 is required" } : { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
-  async fix(file) {
+  async fix(file, _deps) {
     try {
       const original = await fs4.readFile(file);
       const stripped = stripBom(original);
@@ -5235,7 +5235,7 @@ var EncodingCheck = class extends BaseCheck {
       await fs4.writeFile(file, out);
       return { status: "fixed" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   static getHelp() {
@@ -5247,17 +5247,17 @@ var EncodingCheck = class extends BaseCheck {
   }
 };
 
-// checks/linelint-check.js
+// checks/linelint-check.ts
 import { execFile as execFile2 } from "child_process";
 import { promisify } from "util";
-import { promises as fs7 } from "fs";
+import fs7 from "fs/promises";
 
-// tool-resolve/linelint.js
+// tool-resolve/linelint.ts
 import fs6 from "fs";
 import path3 from "path";
 import os2 from "os";
 
-// tool-resolve/tool-utils.js
+// tool-resolve/tool-utils.ts
 import fs5 from "fs";
 import path2 from "path";
 import crypto2 from "crypto";
@@ -5315,7 +5315,8 @@ async function downloadFile(url, destPath, expectedSha256) {
       await verifySha256(destPath, expectedSha256);
       return;
     } catch (err) {
-      console.warn(`Cached file is corrupted: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`Cached file is corrupted: ${message}`);
       console.warn(`Deleting and re-downloading...`);
       fs5.unlinkSync(destPath);
     }
@@ -5326,7 +5327,7 @@ async function downloadFile(url, destPath, expectedSha256) {
       "curl",
       ["-fSL", "--retry", "3", "--retry-delay", "5", "-o", tmpPath, url],
       { maxBuffer: 10 * 1024 * 1024 },
-      (error, stdout, stderr) => {
+      (error, _stdout, stderr) => {
         if (error) {
           try {
             fs5.unlinkSync(tmpPath);
@@ -5373,9 +5374,13 @@ function extractArchive(archivePath, destDir, members = []) {
   });
 }
 
-// tool-resolve/linelint.js
+// tool-resolve/linelint.ts
 var VERSION = "0.0.6";
-async function getLinelintPath({ shouldDownload, shouldSearchInPath, toolsDir }) {
+async function getLinelintPath({
+  shouldDownload,
+  shouldSearchInPath,
+  toolsDir
+}) {
   const { cachePath: CACHE_PATH } = getToolPaths(toolsDir);
   const exeName = os2.platform() === "win32" ? "linelint.exe" : "linelint";
   if (shouldSearchInPath) {
@@ -5420,48 +5425,64 @@ async function getLinelintPath({ shouldDownload, shouldSearchInPath, toolsDir })
   return void 0;
 }
 
-// checks/linelint-check.js
+// checks/linelint-check.ts
 var execFileAsync = promisify(execFile2);
 var LinelintCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-  }
-  get name() {
-    return "Linelint";
+    this.name = "Linelint";
   }
   async resolveDeps(options) {
-    const linelintPath = await getLinelintPath(options);
+    const linelintPath = await getLinelintPath({
+      shouldDownload: !!options["shouldDownload"],
+      shouldSearchInPath: !!options["shouldSearchInPath"],
+      toolsDir: typeof options["toolsDir"] === "string" ? options["toolsDir"] : ".linter/tools"
+    });
     return { linelintPath };
   }
   checkDeps(deps) {
-    return deps.linelintPath !== void 0;
+    return typeof deps["linelintPath"] === "string";
   }
   async lint(file, deps) {
+    const linelintPath = deps["linelintPath"];
+    if (typeof linelintPath !== "string") {
+      return { status: "error", output: "linelint binary path not resolved" };
+    }
     try {
-      await execFileAsync(deps.linelintPath, [file], { cwd: this.repoRoot });
+      await execFileAsync(linelintPath, [file], { cwd: this.repoRoot });
       return { status: "pass" };
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return { status: "error", output: message };
       }
-      const out = (err.stderr || err.stdout || "").toString().trim();
+      const stderr = err && typeof err === "object" && "stderr" in err && typeof err.stderr === "string" ? err.stderr : "";
+      const stdout = err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string" ? err.stdout : "";
+      const out = (stderr || stdout || "").trim();
       return { status: "fail", output: out || "linelint failed" };
     }
   }
   async fix(file, deps) {
+    const linelintPath = deps["linelintPath"];
+    if (typeof linelintPath !== "string") {
+      return { status: "error", output: "linelint binary path not resolved" };
+    }
     let before;
     try {
       before = await fs7.readFile(file);
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
     try {
-      await execFileAsync(deps.linelintPath, ["-a", file], { cwd: this.repoRoot });
+      await execFileAsync(linelintPath, ["-a", file], { cwd: this.repoRoot });
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        return { status: "error", output: message };
       }
-      const out = (err.stderr || err.stdout || "").toString().trim();
+      const stderr = err && typeof err === "object" && "stderr" in err && typeof err.stderr === "string" ? err.stderr : "";
+      const stdout = err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string" ? err.stdout : "";
+      const out = (stderr || stdout || "").trim();
       return { status: "error", output: out || "linelint fix failed" };
     }
     try {
@@ -5471,7 +5492,7 @@ var LinelintCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   static getHelp() {
@@ -5483,12 +5504,12 @@ var LinelintCheck = class extends BaseCheck {
   }
 };
 
-// checks/clang-format-check.js
-import { promises as fs9 } from "fs";
+// checks/clang-format-check.ts
+import fs9 from "fs/promises";
 import { execFile as execFile3 } from "child_process";
 import { promisify as promisify2 } from "util";
 
-// tool-resolve/clang-format.js
+// tool-resolve/clang-format.ts
 import fs8 from "fs";
 import path4 from "path";
 import os3 from "os";
@@ -5499,7 +5520,7 @@ function checkVersion(exePath) {
     const child = spawnSync2(exePath, ["--version"], { encoding: "utf-8", stdio: "pipe" });
     if (child.error || child.status !== 0) return "unknown";
     const match = child.stdout.match(/\bclang-format\s+version\s+([0-9]+(?:\.[0-9]+)*)\b/i);
-    return match ? match[1] : "unknown";
+    return match && match[1] ? match[1] : "unknown";
   } catch {
     return "unknown";
   }
@@ -5511,8 +5532,8 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
     const systemPath = checkInPath(exeName);
     if (systemPath) {
       const systemVersion = checkVersion(systemPath);
-      const systemMajor = parseInt(systemVersion.split(".")[0], 10);
-      const requiredMajor = parseInt(VERSION2.split(".")[0], 10);
+      const systemMajor = parseInt((systemVersion ?? "0").split(".")[0] ?? "0", 10);
+      const requiredMajor = parseInt(VERSION2.split(".")[0] ?? "0", 10);
       if (systemMajor >= requiredMajor) {
         console.log(`Using ${systemPath} from system path (version ${systemVersion})`);
         return systemPath;
@@ -5563,48 +5584,81 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
   return void 0;
 }
 
-// checks/clang-format-check.js
+// checks/clang-format-check.ts
 var execFileAsync2 = promisify2(execFile3);
 var ClangFormatCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-  }
-  get name() {
-    return "Clang Format";
+    this.name = "Clang Format";
   }
   async resolveDeps(options) {
-    const clangFormatPath = await getClangFormatPath(options);
+    const clangFormatPath = await getClangFormatPath({
+      shouldDownload: options["shouldDownload"] !== false,
+      shouldSearchInPath: options["shouldSearchInPath"] !== false,
+      toolsDir: typeof options["toolsDir"] === "string" ? options["toolsDir"] : ".linter/tools"
+    });
     return { clangFormatPath };
   }
   checkDeps(deps) {
-    return deps.clangFormatPath !== void 0;
+    return typeof deps["clangFormatPath"] === "string";
   }
   async lint(file, deps) {
+    const clangFormatPath = deps["clangFormatPath"];
+    if (typeof clangFormatPath !== "string") {
+      return { status: "error", output: "clangFormatPath dependency is missing or not a string" };
+    }
     try {
-      await execFileAsync2(deps.clangFormatPath, ["--dry-run", "--Werror", file]);
+      await execFileAsync2(clangFormatPath, ["--dry-run", "--Werror", file]);
       return { status: "pass" };
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        const message = "message" in err ? String(err.message) : "File not found";
+        return { status: "error", output: message };
       }
-      const output = (err.stderr || err.stdout || "").toString().trim();
+      let stderr = "";
+      let stdout = "";
+      if (err && typeof err === "object") {
+        if ("stderr" in err && (typeof err.stderr === "string" || Buffer.isBuffer(err.stderr))) {
+          stderr = err.stderr.toString();
+        }
+        if ("stdout" in err && (typeof err.stdout === "string" || Buffer.isBuffer(err.stdout))) {
+          stdout = err.stdout.toString();
+        }
+      }
+      const output = (stderr || stdout || "").trim();
       return { status: "fail", output };
     }
   }
   async fix(file, deps) {
+    const clangFormatPath = deps["clangFormatPath"];
+    if (typeof clangFormatPath !== "string") {
+      return { status: "error", output: "clangFormatPath dependency is missing or not a string" };
+    }
     let before;
     try {
       before = await fs9.readFile(file);
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
     try {
-      await execFileAsync2(deps.clangFormatPath, ["-i", file]);
+      await execFileAsync2(clangFormatPath, ["-i", file]);
     } catch (err) {
-      if (err.code === "ENOENT") {
-        return { status: "error", output: err.message };
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        const message = "message" in err ? String(err.message) : "File not found";
+        return { status: "error", output: message };
       }
-      const output = (err.stderr || err.stdout || "").toString().trim();
+      let stderr = "";
+      let stdout = "";
+      if (err && typeof err === "object") {
+        if ("stderr" in err && (typeof err.stderr === "string" || Buffer.isBuffer(err.stderr))) {
+          stderr = err.stderr.toString();
+        }
+        if ("stdout" in err && (typeof err.stdout === "string" || Buffer.isBuffer(err.stdout))) {
+          stdout = err.stdout.toString();
+        }
+      }
+      const output = (stderr || stdout || "").trim();
       return { status: "error", output };
     }
     try {
@@ -5614,7 +5668,8 @@ var ClangFormatCheck = class extends BaseCheck {
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: message };
     }
   }
   static getHelp() {
@@ -5626,31 +5681,36 @@ var ClangFormatCheck = class extends BaseCheck {
   }
 };
 
-// checks/paired-files-check.js
-import { promises as fs10 } from "fs";
+// checks/paired-files-check.ts
+import fs10 from "fs/promises";
 import path5 from "path";
 var PairedFilesCheck = class extends BaseCheck {
   #absDirs;
   #exclude;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const dirs = options.dirs || [];
-    if (dirs.length !== 2) {
+    const dirs = options["dirs"];
+    if (!Array.isArray(dirs) || dirs.length !== 2) {
       throw new Error("PairedFilesCheck requires exactly 2 entries in options.dirs");
     }
-    this.#absDirs = dirs.map((d) => ({
-      abs: path5.resolve(repoRoot, d.path),
-      ext: d.ext,
-      template: d.template || null
-    }));
-    this.#exclude = new Set((options.exclude || []).map((f) => f.toLowerCase()));
-  }
-  get name() {
-    return "Paired Files Check";
+    this.#absDirs = dirs.map((d) => {
+      const obj = d && typeof d === "object" ? d : {};
+      return {
+        abs: path5.resolve(repoRoot, String(obj["path"] ?? "")),
+        ext: String(obj["ext"] ?? ""),
+        template: obj["template"] ? String(obj["template"]) : null
+      };
+    });
+    const exclude = options["exclude"];
+    this.#exclude = new Set((Array.isArray(exclude) ? exclude : []).map((f) => String(f).toLowerCase()));
+    this.name = "Paired Files Check";
   }
   getTemplates() {
     return {
-      "{{name_without_ext}}": (ctx) => path5.basename(ctx.file, path5.extname(ctx.file))
+      "{{name_without_ext}}": (ctx) => {
+        const file = String(ctx["file"]);
+        return path5.basename(file, path5.extname(file));
+      }
     };
   }
   async appliesTo(file) {
@@ -5659,7 +5719,7 @@ var PairedFilesCheck = class extends BaseCheck {
     if (this.#exclude.has(basename)) return false;
     return this.#absDirs.some((d) => file.startsWith(d.abs + path5.sep));
   }
-  async lint(file) {
+  async lint(file, _deps) {
     const ext = path5.extname(file);
     const baseName = path5.basename(file, ext);
     const ownDir = this.#absDirs.find((d) => file.startsWith(d.abs + path5.sep));
@@ -5668,7 +5728,8 @@ var PairedFilesCheck = class extends BaseCheck {
     try {
       pairFiles = await fs10.readdir(pairDir.abs);
     } catch (err) {
-      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${err.message}` };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${msg}` };
     }
     const expected = `${baseName}${pairDir.ext}`;
     const found = pairFiles.find(
@@ -5679,7 +5740,7 @@ var PairedFilesCheck = class extends BaseCheck {
     }
     return { status: "pass" };
   }
-  async fix(file) {
+  async fix(file, _deps) {
     const ext = path5.extname(file);
     const baseName = path5.basename(file, ext);
     const ownDir = this.#absDirs.find((d) => file.startsWith(d.abs + path5.sep));
@@ -5690,7 +5751,8 @@ var PairedFilesCheck = class extends BaseCheck {
     try {
       pairFiles = await fs10.readdir(pairDir.abs);
     } catch (err) {
-      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${err.message}` };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read pair directory ${pairDir.abs}: ${msg}` };
     }
     const found = pairFiles.find(
       (c) => c.toLowerCase() === expected.toLowerCase()
@@ -5705,7 +5767,8 @@ var PairedFilesCheck = class extends BaseCheck {
     try {
       await fs10.writeFile(pairPath, content);
     } catch (err) {
-      return { status: "error", output: `failed to create ${pairPath}: ${err.message}` };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `failed to create ${pairPath}: ${msg}` };
     }
     return { status: "fixed", output: `created ${pairPath}`, extraFiles: [pairPath] };
   }
@@ -5718,8 +5781,8 @@ var PairedFilesCheck = class extends BaseCheck {
   }
 };
 
-// checks/codegen-check.js
-import { promises as fs11 } from "fs";
+// checks/codegen-check.ts
+import fs11 from "fs/promises";
 import { execFile as execFile4 } from "child_process";
 import { promisify as promisify3 } from "util";
 import path6 from "path";
@@ -5732,17 +5795,18 @@ var CodegenCheck = class extends BaseCheck {
   #absOutput;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    if (!options.command) throw new Error("CodegenCheck requires options.command");
-    if (!options.inputFile) throw new Error("CodegenCheck requires options.inputFile");
-    if (!options.outputFile) throw new Error("CodegenCheck requires options.outputFile");
-    this.#command = options.command;
-    this.#inputFile = options.inputFile;
-    this.#outputFile = options.outputFile;
-    this.#absInput = path6.resolve(repoRoot, options.inputFile);
-    this.#absOutput = path6.resolve(repoRoot, options.outputFile);
-  }
-  get name() {
-    return `Codegen (${this.#inputFile} \u2192 ${this.#outputFile})`;
+    const command = options["command"];
+    const inputFile = options["inputFile"];
+    const outputFile = options["outputFile"];
+    if (typeof command !== "string") throw new Error("CodegenCheck requires options.command to be a string");
+    if (typeof inputFile !== "string") throw new Error("CodegenCheck requires options.inputFile to be a string");
+    if (typeof outputFile !== "string") throw new Error("CodegenCheck requires options.outputFile to be a string");
+    this.#command = command;
+    this.#inputFile = inputFile;
+    this.#outputFile = outputFile;
+    this.#absInput = path6.resolve(repoRoot, inputFile);
+    this.#absOutput = path6.resolve(repoRoot, outputFile);
+    this.name = `Codegen (${this.#inputFile} \u2192 ${this.#outputFile})`;
   }
   /**
    * Only applies to the input file — the check triggers when the source changes.
@@ -5751,29 +5815,31 @@ var CodegenCheck = class extends BaseCheck {
     if (!await super.appliesTo(file)) return false;
     return path6.resolve(file) === this.#absInput;
   }
-  async lint(file, _deps) {
+  async lint(_file, _deps) {
     let original;
     try {
       original = await fs11.readFile(this.#absOutput);
     } catch (err) {
-      if (err.code === "ENOENT") {
+      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
         original = null;
       } else {
-        return { status: "error", output: `cannot read output file: ${err.message}` };
+        const message = err instanceof Error ? err.message : String(err);
+        return { status: "error", output: `cannot read output file: ${message}` };
       }
     }
     try {
       await this.#runCommand();
     } catch (err) {
       await this.#restore(original);
-      return { status: "error", output: `command failed: ${err}` };
+      return { status: "error", output: `command failed: ${String(err)}` };
     }
     let generated;
     try {
       generated = await fs11.readFile(this.#absOutput);
     } catch (err) {
       await this.#restore(original);
-      return { status: "error", output: `cannot read generated output: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read generated output: ${message}` };
     }
     await this.#restore(original);
     if (original === null) {
@@ -5784,17 +5850,18 @@ var CodegenCheck = class extends BaseCheck {
     }
     return { status: "pass" };
   }
-  async fix(file, _deps) {
+  async fix(_file, _deps) {
     try {
       await this.#runCommand();
     } catch (err) {
-      return { status: "error", output: `command failed: ${err}` };
+      return { status: "error", output: `command failed: ${String(err)}` };
     }
     return { status: "fixed", extraFiles: [this.#absOutput] };
   }
   async #runCommand() {
     const parts = this.#command.split(/\s+/);
     const cmd = parts[0];
+    if (!cmd) throw new Error("Command is empty");
     const args = parts.slice(1);
     await execFileAsync3(cmd, args, { cwd: this.repoRoot });
   }
@@ -5817,13 +5884,13 @@ var CodegenCheck = class extends BaseCheck {
   }
 };
 
-// checks/ai-prompt-check.js
+// checks/ai-prompt-check.ts
 import path9 from "path";
 
-// ai-providers/claude.js
+// ai-providers/claude.ts
 import { spawn } from "child_process";
 
-// ai-providers/base-ai-provider.js
+// ai-providers/base-ai-provider.ts
 var BaseAiProvider = class {
   /**
    * @returns {string} Human-readable name of the provider.
@@ -5840,11 +5907,11 @@ var BaseAiProvider = class {
   }
   /**
    * Send a prompt and return the AI's text response.
-   * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {string} _prompt
+   * @param {AiProviderOptions} _options
    * @returns {Promise<string>}
    */
-  async call(prompt, options = {}) {
+  async call(_prompt, _options = {}) {
     throw new Error("Not implemented: call");
   }
   /**
@@ -5856,7 +5923,7 @@ var BaseAiProvider = class {
   }
 };
 
-// ai-providers/claude.js
+// ai-providers/claude.ts
 var ClaudeProvider = class extends BaseAiProvider {
   get name() {
     return "Claude CLI";
@@ -5867,7 +5934,7 @@ var ClaudeProvider = class extends BaseAiProvider {
   /**
    * Send a prompt to `claude --print` and return the response.
    * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
   async call(prompt, options = {}) {
@@ -5891,10 +5958,10 @@ var ClaudeProvider = class extends BaseAiProvider {
         settle(() => reject(new Error(`claude CLI timed out after ${options.timeout}ms`)));
       }, options.timeout) : null;
       proc.stdout.on("data", (data) => {
-        stdout += data;
+        stdout += data.toString();
       });
       proc.stderr.on("data", (data) => {
-        stderr += data;
+        stderr += data.toString();
       });
       proc.on("error", (err) => {
         settle(() => {
@@ -5929,7 +5996,7 @@ var ClaudeProvider = class extends BaseAiProvider {
   }
 };
 
-// ai-providers/gemini.js
+// ai-providers/gemini.ts
 import { spawn as spawn2 } from "child_process";
 var GeminiProvider = class extends BaseAiProvider {
   #model;
@@ -5947,12 +6014,12 @@ var GeminiProvider = class extends BaseAiProvider {
    * Send a prompt to `gemini` in headless mode (-p) and return the response.
    * Uses -m to select model when configured.
    * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
   async call(prompt, options = {}) {
     return new Promise((resolve, reject) => {
-      const args = [];
+      const args = ["-p"];
       if (this.#model) args.push("-m", this.#model);
       const proc = spawn2("gemini", args, {
         cwd: options.cwd,
@@ -5972,10 +6039,10 @@ var GeminiProvider = class extends BaseAiProvider {
         settle(() => reject(new Error(`gemini CLI timed out after ${options.timeout}ms`)));
       }, options.timeout) : null;
       proc.stdout.on("data", (data) => {
-        stdout += data;
+        stdout += data.toString();
       });
       proc.stderr.on("data", (data) => {
-        stderr += data;
+        stderr += data.toString();
       });
       proc.on("error", (err) => {
         settle(() => {
@@ -13161,12 +13228,12 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// ai-providers/openai-compatible.js
+// ai-providers/openai-compatible.ts
 var OpenAICompatibleProvider = class extends BaseAiProvider {
   #client;
   #model;
   /**
-   * @param {{ apiKey: string, baseURL?: string, model?: string }} options
+   * @param {{ apiKey?: string, baseURL?: string, model?: string }} options
    */
   constructor({ apiKey, baseURL, model } = {}) {
     super();
@@ -13184,7 +13251,7 @@ var OpenAICompatibleProvider = class extends BaseAiProvider {
   }
   /**
    * @param {string} prompt
-   * @param {{ timeout?: number }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
   async call(prompt, options = {}) {
@@ -13205,21 +13272,25 @@ var OpenAICompatibleProvider = class extends BaseAiProvider {
   }
 };
 
-// checks/check-utils.js
-import { promises as fs12 } from "fs";
+// checks/check-utils.ts
+import fs12 from "fs/promises";
 import path8 from "path";
 import { createHash } from "crypto";
 var LOCKFILE_NAME = ".ai-prompt-lock.json";
-var coerce = (v) => v == null ? void 0 : Array.isArray(v) ? v.join("\n") : v;
+var coerce = (v) => {
+  if (v == null) return void 0;
+  if (Array.isArray(v)) return v.join("\n");
+  return String(v);
+};
 var coerceArray = (v) => {
   if (v == null) return [];
   return Array.isArray(v) ? v : [v];
 };
 var standardTemplates = () => ({
-  "{name_without_ext}": (ctx) => path8.basename(ctx.file, path8.extname(ctx.file)),
-  "{name_with_ext}": (ctx) => path8.basename(ctx.file),
-  "{ext}": (ctx) => path8.extname(ctx.file),
-  "{dir}": (ctx) => path8.dirname(path8.relative(ctx.repoRoot, ctx.file))
+  "{name_without_ext}": (ctx) => path8.basename(String(ctx["file"] || ""), path8.extname(String(ctx["file"] || ""))),
+  "{name_with_ext}": (ctx) => path8.basename(String(ctx["file"] || "")),
+  "{ext}": (ctx) => path8.extname(String(ctx["file"] || "")),
+  "{dir}": (ctx) => path8.dirname(path8.relative(String(ctx["repoRoot"] || ""), String(ctx["file"] || "")))
 });
 var resolvePaths = (paths, file, resolveTemplate, repoRoot) => paths.map((p) => {
   const expanded = file ? resolveTemplate(p, { file: path8.resolve(file), repoRoot }) : p;
@@ -13238,7 +13309,8 @@ var buildFileContext = async (absPaths, repoRoot) => {
     try {
       content = await fs12.readFile(absPath, "utf-8");
     } catch (err) {
-      return { error: `cannot read context file ${rel}: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `cannot read context file ${rel}: ${message}` };
     }
     chunks.push(`--- file: ${rel} ---
 ${content}
@@ -13249,7 +13321,8 @@ ${content}
 var lockfilePath = (repoRoot) => path8.join(repoRoot, LOCKFILE_NAME);
 var readLockfile = async (repoRoot) => {
   try {
-    return JSON.parse(await fs12.readFile(lockfilePath(repoRoot), "utf-8"));
+    const content = await fs12.readFile(lockfilePath(repoRoot), "utf-8");
+    return JSON.parse(content);
   } catch {
     return {};
   }
@@ -13257,7 +13330,9 @@ var readLockfile = async (repoRoot) => {
 var getStringHash = (str2) => createHash("sha256").update(str2).digest("hex");
 var lockMatchesContent = async (checkName, key, content, repoRoot) => {
   const lock = await readLockfile(repoRoot);
-  const entry = lock[checkName]?.[key];
+  const section = lock[checkName];
+  if (section == null || typeof section !== "object") return false;
+  const entry = section[key];
   if (entry == null) return false;
   if (entry === 1) return true;
   if (typeof entry !== "string") return false;
@@ -13266,13 +13341,17 @@ var lockMatchesContent = async (checkName, key, content, repoRoot) => {
 var lockWriteContent = async (checkName, key, content, repoRoot, opts = {}) => {
   const lp = lockfilePath(repoRoot);
   const lock = await readLockfile(repoRoot);
-  if (!lock[checkName]) lock[checkName] = {};
+  let section = lock[checkName];
+  if (section == null || typeof section !== "object") {
+    section = {};
+    lock[checkName] = section;
+  }
   const writeUniversal = opts.lockValue === 1 || opts.lockValue === "1";
-  lock[checkName][key] = writeUniversal ? 1 : getStringHash(content);
+  section[key] = writeUniversal ? 1 : getStringHash(content);
   await fs12.writeFile(lp, JSON.stringify(lock, null, 2) + "\n", "utf-8");
 };
 
-// checks/ai-prompt-check.js
+// checks/ai-prompt-check.ts
 var AI_PROVIDERS = {
   claude: ClaudeProvider,
   gemini: GeminiProvider,
@@ -13287,24 +13366,22 @@ var AiPromptCheck = class extends BaseCheck {
   #provider;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    this.#lintPrompt = coerce(options.lintPrompt);
-    this.#fixPrompt = coerce(options.fixPrompt);
+    this.#lintPrompt = coerce(options["lintPrompt"]);
+    this.#fixPrompt = coerce(options["fixPrompt"]);
     if (!this.#lintPrompt && !this.#fixPrompt) {
       throw new Error("AiPromptCheck requires at least one of: lintPrompt, fixPrompt");
     }
-    this.#filesToRead = coerceArray(options.filesToRead ?? options.contextFiles);
-    this.#lock = !!options.lock;
-    this.#lockValue = options.lockValue;
-    const providerName = (options.aiProvider || "claude").toLowerCase();
+    this.#filesToRead = coerceArray(options["filesToRead"] ?? options["contextFiles"]).filter((f) => typeof f === "string");
+    this.#lock = !!options["lock"];
+    this.#lockValue = options["lockValue"];
+    const providerName = String(options["aiProvider"] || "claude").toLowerCase();
     const ProviderClass = AI_PROVIDERS[providerName];
     if (!ProviderClass) {
       throw new Error(`Unknown aiProvider "${providerName}". Available: ${Object.keys(AI_PROVIDERS).join(", ")}`);
     }
     this.#provider = new ProviderClass();
-  }
-  get name() {
-    const label = this.#lintPrompt || this.#fixPrompt;
-    return `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "\u2026" : ""})`;
+    const label = this.#lintPrompt || this.#fixPrompt || "unnamed";
+    this.name = `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "\u2026" : ""})`;
   }
   checkDeps() {
     return true;
@@ -13326,15 +13403,23 @@ var AiPromptCheck = class extends BaseCheck {
     }
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
-    const prompt = this.#buildLintPrompt(entry, instruction, content, ctx.value);
+    const prompt = this.#buildLintPrompt(entry, instruction, content, ctx.value || "");
     const verdict = await this.#callAndParse(prompt);
     if (verdict.error) return { status: "error", output: verdict.error };
     const lockPath = lockfilePath(this.repoRoot);
-    if (verdict.value.pass) {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (verdict.value && verdict.value["pass"]) {
+      if (this.#lock) {
+        let lockValue;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts = {};
+        if (lockValue !== void 0) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...this.#lock && { extraFiles: [lockPath] } };
     }
-    return { status: "fail", output: verdict.value.reason || "AI check failed (no reason provided)" };
+    return { status: "fail", output: String(verdict.value?.["reason"] || "AI check failed (no reason provided)") };
   }
   async fixInMemory(content, _deps, entry) {
     const instruction = this.#fixPrompt;
@@ -13347,23 +13432,39 @@ var AiPromptCheck = class extends BaseCheck {
     }
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
-    const prompt = this.#buildFixPrompt(entry, instruction, content, ctx.value);
+    const prompt = this.#buildFixPrompt(entry, instruction, content, ctx.value || "");
     const parsed = await this.#callAndParse(prompt);
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
     const lockPath = lockfilePath(this.repoRoot);
-    if (!result.changed || typeof result.content !== "string") {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (!result || !result["changed"] || typeof result["content"] !== "string") {
+      if (this.#lock) {
+        let lockValue;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts = {};
+        if (lockValue !== void 0) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...this.#lock && { extraFiles: [lockPath] } };
     }
-    if (result.content === content) {
-      return { status: "pass", output: result.reason || "AI reported changes but content was identical" };
+    if (result["content"] === content) {
+      return { status: "pass", output: String(result["reason"] || "AI reported changes but content was identical") };
     }
-    if (this.#lock) await lockWriteContent(this.name, lockKey, result.content, this.repoRoot, { lockValue: this.#lockValue });
+    if (this.#lock) {
+      let lockValue;
+      if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+        lockValue = this.#lockValue;
+      }
+      const opts = {};
+      if (lockValue !== void 0) opts.lockValue = lockValue;
+      await lockWriteContent(this.name, lockKey, result["content"], this.repoRoot, opts);
+    }
     return {
       status: "fixed",
-      output: result.reason || "AI applied fixes",
-      content: result.content,
+      output: String(result["reason"] || "AI applied fixes"),
+      content: result["content"],
       ...this.#lock && { extraFiles: [lockPath] }
     };
   }
@@ -13375,26 +13476,42 @@ var AiPromptCheck = class extends BaseCheck {
     }
     const ctx = await this.#buildExtraContext(entry);
     if (ctx.error) return { status: "error", output: ctx.error };
-    const prompt = this.#buildLintAndFixPrompt(entry, content, ctx.value);
+    const prompt = this.#buildLintAndFixPrompt(entry, content, ctx.value || "");
     const parsed = await this.#callAndParse(prompt);
     if (parsed.error) return { status: "error", output: parsed.error };
     const result = parsed.value;
     const lockPath = lockfilePath(this.repoRoot);
-    if (result.pass) {
-      if (this.#lock) await lockWriteContent(this.name, lockKey, content, this.repoRoot, { lockValue: this.#lockValue });
+    if (result && result["pass"]) {
+      if (this.#lock) {
+        let lockValue;
+        if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+          lockValue = this.#lockValue;
+        }
+        const opts = {};
+        if (lockValue !== void 0) opts.lockValue = lockValue;
+        await lockWriteContent(this.name, lockKey, content, this.repoRoot, opts);
+      }
       return { status: "pass", ...this.#lock && { extraFiles: [lockPath] } };
     }
-    if (typeof result.content !== "string") {
-      return { status: "fail", output: result.reason || "AI check failed and could not produce a fix" };
+    if (!result || typeof result["content"] !== "string") {
+      return { status: "fail", output: String(result?.["reason"] || "AI check failed and could not produce a fix") };
     }
-    if (result.content === content) {
-      return { status: "pass", output: result.reason || "AI reported changes but content was identical" };
+    if (result["content"] === content) {
+      return { status: "pass", output: String(result["reason"] || "AI reported changes but content was identical") };
     }
-    if (this.#lock) await lockWriteContent(this.name, lockKey, result.content, this.repoRoot, { lockValue: this.#lockValue });
+    if (this.#lock) {
+      let lockValue;
+      if (typeof this.#lockValue === "number" || typeof this.#lockValue === "string") {
+        lockValue = this.#lockValue;
+      }
+      const opts = {};
+      if (lockValue !== void 0) opts.lockValue = lockValue;
+      await lockWriteContent(this.name, lockKey, result["content"], this.repoRoot, opts);
+    }
     return {
       status: "fixed",
-      output: result.reason || "AI applied fixes",
-      content: result.content,
+      output: String(result["reason"] || "AI applied fixes"),
+      content: result["content"],
       ...this.#lock && { extraFiles: [lockPath] }
     };
   }
@@ -13421,7 +13538,7 @@ ${content}` + (extraContext ? `
 
 ${extraContext}` : "") + `
 
-Respond with ONLY a JSON object (no markdown fences): { "changed": true/false, "reason": "short explanation", "content": "full new content as a string" }. The "content" field, when present, must be the entire replacement content as a single string (use the same format as the input \u2014 if it is JSON text, return JSON text). If no changes are needed, set changed to false and omit content.`;
+Respond with ONLY a JSON object (no markdown fences): { "changed": true/false, "reason": "short explanation", "content": "full new content in string format" }. The "content" field, when present, must be the entire replacement content in string format (use the same format like the input \u2014 if it is JSON text, return JSON text). If no changes are needed, set changed to false and omit content.`;
   }
   #buildLintAndFixPrompt(entry, content, extraContext) {
     return `You are a code review and fixing assistant integrated into a linter.
@@ -13440,8 +13557,8 @@ If it PASSES, respond with ONLY a JSON object (no markdown fences):
 { "pass": true, "reason": "short explanation" }
 
 If it FAILS, apply the fix instruction and respond with ONLY a JSON object (no markdown fences):
-{ "pass": false, "reason": "short explanation of what was wrong", "content": "full corrected content as a string" }
-The "content" field must be the entire replacement content as a single string (use the same format as the input \u2014 if it is JSON text, return JSON text).
+{ "pass": false, "reason": "short explanation of what was wrong", "content": "full corrected content in string format" }
+The "content" field must be the entire replacement content in string format (use the same format like the input \u2014 if it is JSON text, return JSON text).
 If it fails but cannot be fixed, set pass to false and omit content.`;
   }
   // ── helpers ──────────────────────────────────────────────────────────
@@ -13473,11 +13590,12 @@ If it fails but cannot be fixed, set pass to false and omit content.`;
     try {
       reply = await this.#provider.call(prompt, { cwd: this.repoRoot });
     } catch (err) {
-      return { error: `${this.#provider.name} error: ${err.message}` };
+      return { error: `${this.#provider.name} error: ${err instanceof Error ? err.message : String(err)}` };
     }
     try {
       const jsonMatch = reply.match(/\{[\s\S]*\}/);
-      return { value: JSON.parse(jsonMatch ? jsonMatch[0] : reply) };
+      const value = JSON.parse(jsonMatch ? jsonMatch[0] : reply);
+      return { value };
     } catch {
       return { error: `${this.#provider.name} returned invalid JSON: ${reply}` };
     }
@@ -13491,7 +13609,7 @@ If it fails but cannot be fixed, set pass to false and omit content.`;
   }
 };
 
-// checks/regex-check.js
+// checks/regex-check.ts
 import fs13 from "fs/promises";
 import path10 from "path";
 var RegexCheck = class extends BaseCheck {
@@ -13502,28 +13620,35 @@ var RegexCheck = class extends BaseCheck {
   #skipLineRes;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    if (!options.pattern) {
+    const pattern = options["pattern"];
+    if (!pattern) {
       throw new Error("RegexCheck requires a 'pattern' option");
     }
-    const flags = options.patternFlags || "g";
-    this.#pattern = new RegExp(options.pattern, flags.includes("g") ? flags : flags + "g");
-    this.#replacement = options.replacement ?? null;
-    this.#message = options.message ?? "regex violation";
-    this.#multiline = !!options.multiline;
-    this.#skipLineRes = (options.skipLinePatterns || []).map((p) => new RegExp(p));
-  }
-  get name() {
-    return this.#message;
+    const flags = String(options["patternFlags"] ?? "g");
+    this.#pattern = new RegExp(String(pattern), flags.includes("g") ? flags : flags + "g");
+    this.#replacement = typeof options["replacement"] === "string" ? options["replacement"] : null;
+    this.#message = typeof options["message"] === "string" ? options["message"] : "regex violation";
+    this.#multiline = !!options["multiline"];
+    const skipLinePatterns = options["skipLinePatterns"];
+    this.#skipLineRes = (Array.isArray(skipLinePatterns) ? skipLinePatterns : []).map((p) => new RegExp(String(p)));
+    this.name = this.#message;
   }
   getTemplates() {
     return {
-      "{name_without_ext}": (ctx) => path10.basename(ctx.file, path10.extname(ctx.file)),
-      "{name_with_ext}": (ctx) => path10.basename(ctx.file),
-      "{ext}": (ctx) => path10.extname(ctx.file),
-      "{dir}": (ctx) => path10.dirname(path10.relative(ctx.repoRoot, ctx.file))
+      "{name_without_ext}": (ctx) => {
+        const file = String(ctx["file"]);
+        return path10.basename(file, path10.extname(file));
+      },
+      "{name_with_ext}": (ctx) => path10.basename(String(ctx["file"])),
+      "{ext}": (ctx) => path10.extname(String(ctx["file"])),
+      "{dir}": (ctx) => {
+        const file = String(ctx["file"]);
+        const repoRoot = String(ctx["repoRoot"]);
+        return path10.dirname(path10.relative(repoRoot, file));
+      }
     };
   }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       const content = await fs13.readFile(file, "utf-8");
       const violations = [];
@@ -13543,6 +13668,7 @@ var RegexCheck = class extends BaseCheck {
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
+          if (!line) continue;
           if (this.#skipLineRes.some((skip) => skip.test(line))) continue;
           re.lastIndex = 0;
           let m;
@@ -13561,11 +13687,11 @@ ${violations.join("\n")}`
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
-  async fix(file) {
-    if (!this.#replacement) return this.lint(file);
+  async fix(file, _deps) {
+    if (!this.#replacement) return this.lint(file, _deps);
     try {
       const original = await fs13.readFile(file, "utf-8");
       const replacement = this.resolveTemplate(this.#replacement, {
@@ -13589,7 +13715,7 @@ ${violations.join("\n")}`
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
   static getHelp() {
@@ -13601,8 +13727,8 @@ ${violations.join("\n")}`
   }
 };
 
-// checks/firecrawl-check.js
-import { promises as fs14 } from "fs";
+// checks/firecrawl-check.ts
+import fs14 from "fs/promises";
 import path11 from "path";
 var FirecrawlCheck = class extends BaseCheck {
   #outputFormat;
@@ -13611,13 +13737,11 @@ var FirecrawlCheck = class extends BaseCheck {
   #timeout;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    this.#outputFormat = options.outputFormat || "markdown";
-    this.#apiKey = options.apiKey || null;
-    this.#apiUrl = (options.apiUrl || "https://api.firecrawl.dev").replace(/\/+$/, "");
-    this.#timeout = options.timeout ?? 6e4;
-  }
-  get name() {
-    return "Firecrawl";
+    this.#outputFormat = typeof options["outputFormat"] === "string" ? options["outputFormat"] : "markdown";
+    this.#apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : null;
+    this.#apiUrl = (typeof options["apiUrl"] === "string" ? options["apiUrl"] : "https://api.firecrawl.dev").replace(/\/+$/, "");
+    this.#timeout = typeof options["timeout"] === "number" ? options["timeout"] : 6e4;
+    this.name = "Firecrawl";
   }
   checkDeps() {
     return true;
@@ -13651,7 +13775,7 @@ var FirecrawlCheck = class extends BaseCheck {
     try {
       scraped = await this.#scrape(url.value, apiKey);
     } catch (err) {
-      return { status: "error", output: `Firecrawl API error: ${err.message}` };
+      return { status: "error", output: `Firecrawl API error: ${err instanceof Error ? err.message : String(err)}` };
     }
     if (!scraped) {
       return { status: "error", output: "Firecrawl returned empty content" };
@@ -13664,13 +13788,14 @@ var FirecrawlCheck = class extends BaseCheck {
     try {
       content = await fs14.readFile(path11.resolve(file), "utf-8");
     } catch (err) {
-      return { error: `cannot read file: ${err.message}` };
+      return { error: `cannot read file: ${err instanceof Error ? err.message : String(err)}` };
     }
     const trimmed2 = content.trim();
     if (!trimmed2) {
       return { error: "file is empty" };
     }
-    const firstLine = trimmed2.split(/\r?\n/)[0].trim();
+    const lines = trimmed2.split(/\r?\n/);
+    const firstLine = (lines[0] || "").trim();
     try {
       const parsed = new URL(firstLine);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
@@ -13683,7 +13808,7 @@ var FirecrawlCheck = class extends BaseCheck {
     return { isUrlOnly, value: firstLine };
   }
   #resolveApiKey() {
-    return this.#apiKey || process.env.FIRECRAWL_API_KEY || null;
+    return this.#apiKey || process.env["FIRECRAWL_API_KEY"] || null;
   }
   async #scrape(url, apiKey) {
     const endpoint = `${this.#apiUrl}/v1/scrape`;
@@ -13722,7 +13847,7 @@ var FirecrawlCheck = class extends BaseCheck {
   }
 };
 
-// checks/composite-check.js
+// checks/composite-check.ts
 var CompositeCheck = class extends BaseCheck {
   #linter;
   #fixer;
@@ -13730,9 +13855,7 @@ var CompositeCheck = class extends BaseCheck {
     super(linter.repoRoot);
     this.#linter = linter;
     this.#fixer = fixer;
-  }
-  get name() {
-    return this.#linter.name;
+    this.name = linter.name;
   }
   get priority() {
     return this.#linter.priority;
@@ -13748,18 +13871,22 @@ var CompositeCheck = class extends BaseCheck {
     const b = await this.#fixer.resolveDeps(options);
     return { ...a, ...b };
   }
-  async lint(file, deps) {
-    return this.#linter.lint(file, deps);
+  async lint(file, deps, entry = null) {
+    return this.#linter.lint(file, deps, entry);
   }
-  async fix(file, deps) {
-    return this.lintAndFix(file, deps);
+  async fix(file, deps, entry = null) {
+    const res = await this.lintAndFix(file, deps, entry);
+    if (!res) {
+      return { status: "error", output: "CompositeCheck: lintAndFix returned null" };
+    }
+    return res;
   }
-  async lintAndFix(file, deps) {
-    const lintRes = await this.#linter.lint(file, deps);
+  async lintAndFix(file, deps, entry = null) {
+    const lintRes = await this.#linter.lint(file, deps, entry);
     if (lintRes.status !== "fail") {
       return lintRes;
     }
-    return this.#fixer.fix(file, deps);
+    return this.#fixer.fix(file, deps, entry);
   }
   static getHelp() {
     return {
@@ -13770,29 +13897,31 @@ var CompositeCheck = class extends BaseCheck {
   }
 };
 
-// checks/tsc-check.js
+// checks/tsc-check.ts
 import path12 from "path";
 import { execFile as execFile5 } from "child_process";
 import { promisify as promisify4 } from "util";
 var execFileAsync4 = promisify4(execFile5);
 var TscCheck = class extends BaseCheck {
   #tsconfigPath;
-  /** @type {{ re: RegExp, message: string }[]} */
   #errorMessages;
-  /** @type {Promise<Map<string, string[]>> | null} */
   #resultPromise = null;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    this.#tsconfigPath = options.tsconfigPath ?? "tsconfig.json";
-    this.#errorMessages = (options.errorMessages || []).map((e) => ({
-      re: new RegExp(e.pattern),
-      message: e.message
-    }));
+    this.#tsconfigPath = options["tsconfigPath"] ?? "tsconfig.json";
+    const messages = options["errorMessages"] || [];
+    this.#errorMessages = (Array.isArray(messages) ? messages : []).map((e) => {
+      const pattern = e && typeof e === "object" && "pattern" in e ? String(e.pattern) : "";
+      const message = e && typeof e === "object" && "message" in e ? String(e.message) : "";
+      return {
+        re: new RegExp(pattern),
+        message
+      };
+    });
+    this.name = "TypeScript";
   }
-  get name() {
-    return "TypeScript";
-  }
-  async resolveDeps({ shouldSearchInPath }) {
+  async resolveDeps(options) {
+    const { shouldSearchInPath } = options;
     let tscPath;
     if (shouldSearchInPath) {
       tscPath = checkInPath("tsc");
@@ -13808,10 +13937,10 @@ var TscCheck = class extends BaseCheck {
       } catch {
       }
     }
-    return { tscPath };
+    return { tscPath: tscPath ?? void 0 };
   }
   checkDeps(deps) {
-    return deps.tscPath !== void 0;
+    return deps["tscPath"] !== void 0;
   }
   /**
    * Run tsc once and return a Map<absolutePath, diagnosticLines[]>.
@@ -13823,17 +13952,24 @@ var TscCheck = class extends BaseCheck {
         const errors = /* @__PURE__ */ new Map();
         const args = ["--noEmit", "--pretty", "false", "-p", path12.resolve(this.repoRoot, this.#tsconfigPath)];
         try {
-          await execFileAsync4(deps.tscPath, args, {
+          const tscPath = deps["tscPath"];
+          if (typeof tscPath !== "string") {
+            throw new Error("tscPath is not a string");
+          }
+          await execFileAsync4(tscPath, args, {
             cwd: this.repoRoot,
             maxBuffer: 10 * 1024 * 1024,
             shell: process.platform === "win32"
           });
         } catch (err) {
-          if (err.code === "ENOENT") {
-            errors.set("__global__", [`tsc not found: ${err.message}`]);
+          if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+            const msg = "message" in err ? String(err.message) : "unknown error";
+            errors.set("__global__", [`tsc not found: ${msg}`]);
             return errors;
           }
-          const output = (err.stdout || err.stderr || "").toString();
+          const stdout = err && typeof err === "object" && "stdout" in err ? String(err.stdout) : "";
+          const stderr = err && typeof err === "object" && "stderr" in err ? String(err.stderr) : "";
+          const output = (stdout || stderr || "").toString();
           for (const line of output.split("\n")) {
             const match = line.match(/^(.+?)\(\d+,\d+\):\s*error\s+TS\d+:/);
             if (match) {
@@ -13888,10 +14024,11 @@ var TscCheck = class extends BaseCheck {
   }
 };
 
-// checks/always-fail-check.js
+// checks/always-fail-check.ts
 var AlwaysFailCheck = class extends BaseCheck {
-  get name() {
-    return "always-fail";
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "always-fail";
   }
   async lint(_file, _deps) {
     return { status: "fail", output: "always-fail: this check always fails" };
@@ -13908,7 +14045,7 @@ var AlwaysFailCheck = class extends BaseCheck {
   }
 };
 
-// checks/localization-key-check.js
+// checks/localization-key-check.ts
 import fs15 from "fs/promises";
 import path13 from "path";
 var LocalizationKeyCheck = class extends BaseCheck {
@@ -13918,26 +14055,23 @@ var LocalizationKeyCheck = class extends BaseCheck {
   #registryPattern;
   #language;
   #excludeRegistrationFiles;
-  /** @type {Set<string> | null} */
   #registeredKeys = null;
-  /** @type {string[]} */
   #registryErrors = [];
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    if (!options.registrationFiles || options.registrationFiles.length === 0) {
+    const registrationFiles = options["registrationFiles"];
+    if (!Array.isArray(registrationFiles) || registrationFiles.length === 0) {
       throw new Error("LocalizationKeyCheck requires a non-empty 'registrationFiles' option");
     }
-    this.#registrationFiles = options.registrationFiles.map(
-      (f) => path13.resolve(repoRoot, f)
+    this.#registrationFiles = registrationFiles.map(
+      (f) => path13.resolve(repoRoot, String(f))
     );
-    this.#lFunctionName = options.lFunctionName ?? "_L";
-    this.#registerFunctionName = options.registerFunctionName ?? "_LRegisterTranslationImpl";
-    this.#registryPattern = options.registryPattern ?? null;
-    this.#language = options.language ?? null;
-    this.#excludeRegistrationFiles = options.excludeRegistrationFiles ?? true;
-  }
-  get name() {
-    return "Localization Key Check";
+    this.#lFunctionName = String(options["lFunctionName"] ?? "_L");
+    this.#registerFunctionName = String(options["registerFunctionName"] ?? "_LRegisterTranslationImpl");
+    this.#registryPattern = typeof options["registryPattern"] === "string" ? options["registryPattern"] : null;
+    this.#language = typeof options["language"] === "string" ? options["language"] : null;
+    this.#excludeRegistrationFiles = options["excludeRegistrationFiles"] !== false;
+    this.name = "Localization Key Check";
   }
   async appliesTo(file) {
     if (!await super.appliesTo(file)) return false;
@@ -13966,8 +14100,9 @@ var LocalizationKeyCheck = class extends BaseCheck {
       try {
         content = await fs15.readFile(filePath, "utf-8");
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         this.#registryErrors.push(
-          `cannot read registration file ${path13.relative(this.repoRoot, filePath)}: ${err.message}`
+          `cannot read registration file ${path13.relative(this.repoRoot, filePath)}: ${msg}`
         );
         continue;
       }
@@ -13980,13 +14115,13 @@ var LocalizationKeyCheck = class extends BaseCheck {
           const lang = m[1] ?? m[3];
           const key = m[2] ?? m[4];
           if (this.#language === null || lang === this.#language) {
-            this.#registeredKeys.add(key);
+            if (key) this.#registeredKeys.add(key);
           }
         }
       }
     }
   }
-  async lint(file) {
+  async lint(file, _deps) {
     try {
       await this.#loadRegistry();
       if (this.#registryErrors.length > 0) {
@@ -14003,11 +14138,11 @@ ${violations.join("\n")}`
       }
       return { status: "pass" };
     } catch (err) {
-      return { status: "error", output: err.message };
+      return { status: "error", output: err instanceof Error ? err.message : String(err) };
     }
   }
-  async fix(file) {
-    return this.lint(file);
+  async fix(file, deps) {
+    return this.lint(file, deps);
   }
   static getHelp() {
     return {
@@ -14026,11 +14161,13 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
   const violations = [];
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
     re.lastIndex = 0;
     let m;
-    while ((m = re.exec(lines[i])) !== null) {
+    while ((m = re.exec(line)) !== null) {
       const key = m[1] ?? m[2];
-      if (!registeredKeys.has(key)) {
+      if (key && !registeredKeys.has(key)) {
         violations.push(`  line ${i + 1}: ${fnName}("${key}")`);
       }
     }
@@ -14038,25 +14175,22 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
   return violations;
 }
 
-// checks/custom-check.js
-import { promises as fs16 } from "fs";
+// checks/custom-check.ts
+import fs16 from "fs/promises";
 import { spawn as spawn3 } from "child_process";
 var CustomCheck = class extends BaseCheck {
-  #name;
   #lintCommand;
   #fixCommand;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const base = options.command ?? null;
-    this.#lintCommand = options.lintCommand ?? base;
-    this.#fixCommand = options.fixCommand ?? base;
+    const base = typeof options["command"] === "string" ? options["command"] : null;
+    this.#lintCommand = typeof options["lintCommand"] === "string" ? options["lintCommand"] : base;
+    this.#fixCommand = typeof options["fixCommand"] === "string" ? options["fixCommand"] : base;
     if (!this.#lintCommand) {
       throw new Error("CustomCheck requires options.command or options.lintCommand");
     }
-    this.#name = options.name ?? `Custom (${this.#lintCommand})`;
-  }
-  get name() {
-    return this.#name;
+    const name = typeof options["name"] === "string" ? options["name"] : null;
+    this.name = name || `Custom (${this.#lintCommand})`;
   }
   async lint(file, _deps, entry = null) {
     const env = this.#buildEnv(file, "lint", entry);
@@ -14073,7 +14207,8 @@ var CustomCheck = class extends BaseCheck {
     try {
       before = await fs16.readFile(file);
     } catch (err) {
-      return { status: "error", output: `cannot read file before fix: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read file before fix: ${message}` };
     }
     const env = this.#buildEnv(file, "fix", entry);
     const { code, output } = await this.#run(this.#fixCommand, env);
@@ -14082,7 +14217,8 @@ var CustomCheck = class extends BaseCheck {
     try {
       after = await fs16.readFile(file);
     } catch (err) {
-      return { status: "error", output: `cannot read file after fix: ${err.message}` };
+      const message = err instanceof Error ? err.message : String(err);
+      return { status: "error", output: `cannot read file after fix: ${message}` };
     }
     return before.equals(after) ? { status: "pass" } : { status: "fixed" };
   }
@@ -14126,7 +14262,7 @@ var CustomCheck = class extends BaseCheck {
   }
 };
 
-// file-sources/all-files-source.js
+// file-sources/all-files-source.ts
 import fs17 from "fs";
 import path14 from "path";
 
@@ -18681,24 +18817,21 @@ function gitInstanceFactory(baseDir, options) {
 init_git_response_error();
 var esm_default = gitInstanceFactory;
 
-// file-sources/base-file-source.js
+// file-sources/base-file-source.ts
 var BaseFileSource = class {
+  name = "Unnamed Source";
+  repoRoot;
+  options;
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
     this.options = options;
-  }
-  /**
-   * @returns {string} Human-readable name of the source.
-   */
-  get name() {
-    throw new Error("Not implemented: name");
   }
   /**
    * Resolve the list of absolute file paths to process.
    * @param {object} context - { args: string[] } CLI args for parametric sources.
    * @returns {Promise<string[]>} Absolute paths.
    */
-  async resolve(context) {
+  async resolve(_context) {
     throw new Error("Not implemented: resolve");
   }
   /**
@@ -18711,18 +18844,17 @@ var BaseFileSource = class {
   }
 };
 
-// file-sources/all-files-source.js
+// file-sources/all-files-source.ts
 var AllFilesSource = class extends BaseFileSource {
   #includePatterns;
   #excludePatterns;
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-    const coerceArray2 = (v) => v == null ? [] : Array.isArray(v) ? v : [v];
-    this.#includePatterns = coerceArray2(options.include);
-    this.#excludePatterns = coerceArray2(options.exclude);
-  }
-  get name() {
-    return "All tracked files";
+    const include = options["include"];
+    this.#includePatterns = Array.isArray(include) ? include.filter((i) => typeof i === "string") : typeof include === "string" ? [include] : [];
+    const exclude = options["exclude"];
+    this.#excludePatterns = Array.isArray(exclude) ? exclude.filter((i) => typeof i === "string") : typeof exclude === "string" ? [exclude] : [];
+    this.name = "All tracked files";
   }
   async resolve() {
     const git = esm_default(this.repoRoot);
@@ -18758,31 +18890,32 @@ function matchGlob(pattern, filePath) {
   let regex = "";
   let i = 0;
   while (i < p.length) {
-    if (p[i] === "*" && p[i + 1] === "*") {
-      if (p[i + 2] === "/") {
+    if (p.charAt(i) === "*" && p.charAt(i + 1) === "*") {
+      if (p.charAt(i + 2) === "/") {
         regex += "(?:.+/)?";
         i += 3;
       } else {
         regex += ".*";
         i += 2;
       }
-    } else if (p[i] === "*") {
+    } else if (p.charAt(i) === "*") {
       regex += "[^/]*";
       i++;
     } else {
-      regex += p[i].replace(/[.+^${}()|[\]\\]/g, "\\$&");
+      regex += p.charAt(i).replace(/[.+^${}()|[\]\\]/g, "\\$&");
       i++;
     }
   }
   return new RegExp(`^${regex}$`).test(f);
 }
 
-// file-sources/staged-files-source.js
+// file-sources/staged-files-source.ts
 import fs18 from "fs";
 import path15 from "path";
 var StagedFilesSource = class extends BaseFileSource {
-  get name() {
-    return "Staged files";
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "Staged files";
   }
   async resolve() {
     const git = esm_default(this.repoRoot);
@@ -18809,12 +18942,13 @@ var StagedFilesSource = class extends BaseFileSource {
   }
 };
 
-// file-sources/diff-base-source.js
+// file-sources/diff-base-source.ts
 import fs19 from "fs";
 import path16 from "path";
 var DiffBaseSource = class extends BaseFileSource {
-  get name() {
-    return "Diff vs base";
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "Diff vs base";
   }
   async resolve() {
     const baseRef = this.#detectBaseRef();
@@ -18835,17 +18969,18 @@ var DiffBaseSource = class extends BaseFileSource {
     return existing.filter((filePath) => filePath !== null);
   }
   #detectBaseRef() {
-    if (this.options.baseRef) {
-      console.log(`DiffBaseSource: using options.baseRef = "${this.options.baseRef}"`);
-      return this.options.baseRef;
+    const baseRef = this.options["baseRef"];
+    if (typeof baseRef === "string") {
+      console.log(`DiffBaseSource: using options.baseRef = "${baseRef}"`);
+      return baseRef;
     }
-    const ghBaseRef = process.env.GITHUB_BASE_REF;
+    const ghBaseRef = process.env["GITHUB_BASE_REF"];
     if (ghBaseRef) {
       console.log(`DiffBaseSource: using GITHUB_BASE_REF = "${ghBaseRef}" \u2192 origin/${ghBaseRef}`);
       return `origin/${ghBaseRef}`;
     }
-    if (process.env.GITHUB_EVENT_NAME === "push") {
-      const defaultBranch = process.env.GITHUB_DEFAULT_BRANCH || "main";
+    if (process.env["GITHUB_EVENT_NAME"] === "push") {
+      const defaultBranch = process.env["GITHUB_DEFAULT_BRANCH"] || "main";
       console.log(`DiffBaseSource: GITHUB_EVENT_NAME = "push", using default branch "${defaultBranch}" \u2192 origin/${defaultBranch}`);
       return `origin/${defaultBranch}`;
     }
@@ -18862,11 +18997,11 @@ var DiffBaseSource = class extends BaseFileSource {
   }
 };
 
-// expanders/json-array-expander.js
+// expanders/json-array-expander.ts
 import fs21 from "fs/promises";
 
-// entries/json-array-entry.js
-import { promises as fs20 } from "fs";
+// entries/json-array-entry.ts
+import fs20 from "fs/promises";
 var JsonArrayEntry = class extends BaseEntry {
   #filePath;
   #index;
@@ -18907,14 +19042,15 @@ var JsonArrayEntry = class extends BaseEntry {
     try {
       newElement = JSON.parse(content);
     } catch (err) {
-      throw new Error(`writeBack content is not valid JSON for ${this.id}: ${err.message}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`writeBack content is not valid JSON for ${this.id}: ${msg}`);
     }
     parsed[this.#index] = newElement;
     await fs20.writeFile(this.#filePath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
   }
 };
 
-// expanders/json-array-expander.js
+// expanders/json-array-expander.ts
 var JsonArrayExpander = class extends BaseExpander {
   async expand(file) {
     const text = await fs21.readFile(file, "utf8");
@@ -18930,7 +19066,7 @@ var JsonArrayExpander = class extends BaseExpander {
   }
 };
 
-// registry.js
+// registry.ts
 var builtinChecks = {
   CrlfCheck,
   EncodingCheck,
@@ -18962,11 +19098,10 @@ var builtinRegistry = {
   ...builtinExpanders
 };
 
-// linter.js
+// linter.ts
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "826b164" : "unknown";
+var LINTER_COMMIT = true ? "eb0ef61" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -18974,7 +19109,7 @@ var getRepoRoot = () => {
     encoding: "utf-8"
   });
   if (result.error || result.status !== 0) {
-    console.warn("Warning: not a git repository, using cwd as repo root");
+    console.warn("Warning: not a git repository, using cwd for repo root");
     return process.cwd();
   }
   return result.stdout.trim();
@@ -19014,7 +19149,7 @@ var loadConfig = async (mode) => {
       const fixer = new FixClass(REPO_ROOT, { ...entry.options, ...entry.fixWith.options });
       check = new CompositeCheck(check, fixer);
     }
-    Object.defineProperty(check, "name", { value: entry.name, configurable: true, writable: true });
+    check.name = entry.name;
     check._prdConfig = entry.prd || null;
     if (entry.expander) {
       const ExpanderClass = await resolveClass(entry.expander);
@@ -19107,14 +19242,14 @@ var runEntryFix = async (check, entry, fallbackFile, deps) => {
   assertEntrySupported(check, entry);
   if (check.supportsInMemory) {
     const content = await entry.readContent();
-    const res = typeof check.lintAndFixInMemory === "function" && await check.lintAndFixInMemory(content, deps, entry) || await check.fixInMemory(content, deps, entry);
+    const res = await check.lintAndFixInMemory(content, deps, entry) || await check.fixInMemory(content, deps, entry);
     if (res && res.status === "fixed" && typeof res.content === "string") {
       await entry.writeBack(res.content);
     }
     return res;
   }
   const entryPath = entry.path ?? fallbackFile;
-  return typeof check.lintAndFix === "function" && await check.lintAndFix(entryPath, deps, entry) || check.fix(entryPath, deps, entry);
+  return await check.lintAndFix(entryPath, deps, entry) || check.fix(entryPath, deps, entry);
 };
 var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...deps }) => {
   const extraFiles = /* @__PURE__ */ new Set();
@@ -19160,7 +19295,9 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
                   const res = await runEntryLint(check, entry, file, deps);
                   return { res, checkName: check.name, entryId: entry.id };
                 } catch (err) {
-                  return { res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id };
+                  const message = err instanceof Error ? err.message : String(err);
+                  const errorRes = { status: "error", output: message };
+                  return { res: errorRes, checkName: check.name, entryId: entry.id };
                 }
               }));
             })
@@ -19207,7 +19344,9 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
             if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
             fileResults.push({ res, checkName: check.name, entryId: entry.id });
           } catch (err) {
-            fileResults.push({ res: { status: "error", output: err.message }, checkName: check.name, entryId: entry.id });
+            const message = err instanceof Error ? err.message : String(err);
+            const errorRes = { status: "error", output: message };
+            fileResults.push({ res: errorRes, checkName: check.name, entryId: entry.id });
           }
         }
       }
@@ -19366,7 +19505,7 @@ var printHelp = () => {
   lines.push("COMMANDS:");
   lines.push("  --lint                Run checks in read-only mode (exit 1 on failure)");
   lines.push("  --fix                 Run checks in fix mode (modify files in-place)");
-  lines.push("  --install-hook        Install as a git pre-commit hook and exit");
+  lines.push("  --install-hook        Install into a git pre-commit hook and exit");
   lines.push("  --init                Generate a minimal linter-config.json in the repo root");
   lines.push("");
   lines.push("  --help                Show this help message");
@@ -19580,11 +19719,14 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     process.exit(1);
   }
   const modeIndex = args.indexOf("--mode");
-  const mode = modeIndex !== -1 && args[modeIndex + 1] ? args[modeIndex + 1] : "manual";
+  const modeParam = modeIndex !== -1 ? args[modeIndex + 1] : null;
+  const mode = modeParam ?? "manual";
   const checksIndex = args.indexOf("--checks");
-  const checksFilter = checksIndex !== -1 && args[checksIndex + 1] ? args[checksIndex + 1].split(",").map((s) => s.trim()).filter(Boolean) : null;
+  const checksArg = checksIndex !== -1 ? args[checksIndex + 1] : null;
+  const checksFilter = checksArg ? checksArg.split(",").map((s) => s.trim()).filter(Boolean) : null;
   const filesIndex = args.indexOf("--files");
-  const filesArg = filesIndex !== -1 && args[filesIndex + 1] ? args[filesIndex + 1].split(",").map((s) => s.trim()).filter(Boolean) : null;
+  const filesParam = filesIndex !== -1 ? args[filesIndex + 1] : null;
+  const filesArg = filesParam ? filesParam.split(",").map((s) => s.trim()).filter(Boolean) : null;
   if (!shouldLint && !shouldFix) {
     console.error("Either --lint or --fix must be specified. Run --help for usage.");
     process.exit(127);
@@ -19631,8 +19773,9 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     const timeStr = minutes > 0 ? `${minutes} minutes, ${seconds} seconds` : `${seconds} seconds`;
     console.log(`Completed in ${timeStr}`);
     if (outputPrdPath !== null) {
-      const relScript = path17.relative(REPO_ROOT, process.argv[1]);
-      const baseCommand = relScript.startsWith("..") ? `node ${process.argv[1]}` : `node ${relScript}`;
+      const scriptPath = process.argv[1] ?? "";
+      const relScript = path17.relative(REPO_ROOT, scriptPath);
+      const baseCommand = relScript.startsWith("..") ? `node ${scriptPath}` : `node ${relScript}`;
       const prd = buildPrd(runResult.failedPairs || [], prdConfig, checkEntries, baseCommand);
       const absOutputPrdPath = path17.isAbsolute(outputPrdPath) ? outputPrdPath : path17.resolve(process.cwd(), outputPrdPath);
       fs22.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
@@ -19651,11 +19794,12 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     if (mode === "hook") {
       const allFiles = [...files, ...runResult.extraFiles || []];
       allFiles.forEach(
-        (file) => ensureCleanExit(spawnSync3("git", ["add", file], { stdio: "inherit" }))
+        (file) => ensureCleanExit(spawnSync3("git", ["add", file], { stdio: "inherit", encoding: "utf-8" }))
       );
     }
   } catch (err) {
-    console.error("Error during processing:", err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error during processing:", message);
     process.exit(1);
   }
 })();
