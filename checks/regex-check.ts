@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 /**
  * Generic regex-based check, fully driven by options in linter-config.json.
@@ -33,13 +33,13 @@ import { BaseCheck } from "./base-check.js";
  *   }
  */
 export class RegexCheck extends BaseCheck {
-  #pattern;
-  #replacement;
-  #message;
-  #multiline;
-  #skipLineRes;
+  #pattern: RegExp;
+  #replacement: string | null;
+  #message: string;
+  #multiline: boolean;
+  #skipLineRes: RegExp[];
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
 
     if (!options.pattern) {
@@ -52,26 +52,26 @@ export class RegexCheck extends BaseCheck {
     this.#replacement = options.replacement ?? null;
     this.#message = options.message ?? "regex violation";
     this.#multiline = !!options.multiline;
-    this.#skipLineRes = (options.skipLinePatterns || []).map(p => new RegExp(p));
+    this.#skipLineRes = (options.skipLinePatterns || []).map((p: string) => new RegExp(p));
   }
 
-  get name() {
+  override get name(): string {
     return this.#message;
   }
 
-  getTemplates() {
+  override getTemplates(): Record<string, (ctx: any) => string> {
     return {
-      "{name_without_ext}": (ctx) => path.basename(ctx.file, path.extname(ctx.file)),
-      "{name_with_ext}":    (ctx) => path.basename(ctx.file),
-      "{ext}":              (ctx) => path.extname(ctx.file),
-      "{dir}":              (ctx) => path.dirname(path.relative(ctx.repoRoot, ctx.file)),
+      "{name_without_ext}": (ctx: any) => path.basename(ctx.file, path.extname(ctx.file)),
+      "{name_with_ext}":    (ctx: any) => path.basename(ctx.file),
+      "{ext}":              (ctx: any) => path.extname(ctx.file),
+      "{dir}":              (ctx: any) => path.dirname(path.relative(ctx.repoRoot, ctx.file)),
     };
   }
 
-  async lint(file) {
+  override async lint(file: string, _deps: any): Promise<CheckResult> {
     try {
       const content = await fs.readFile(file, "utf-8");
-      const violations = [];
+      const violations: string[] = [];
       const re = new RegExp(this.#pattern.source, this.#pattern.flags);
 
       if (this.#multiline) {
@@ -80,9 +80,9 @@ export class RegexCheck extends BaseCheck {
           if (content[i] === '\n') lineOffsets.push(i + 1);
         }
 
-        let m;
+        let m: RegExpExecArray | null;
         while ((m = re.exec(content)) !== null) {
-          const lineNo = lineOffsets.filter(offset => offset <= m.index).length;
+          const lineNo = lineOffsets.filter(offset => offset <= m!.index).length;
           const matchText = m[0].length > 80 ? m[0].slice(0, 80) + "…" : m[0];
           violations.push(`  line ${lineNo}: ${matchText.replace(/\n/g, '\\n')}`);
         }
@@ -90,10 +90,11 @@ export class RegexCheck extends BaseCheck {
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          if (this.#skipLineRes.some((skip) => skip.test(line))) continue;
+          if (!line) continue;
+          if (this.#skipLineRes.some((skip: RegExp) => skip.test(line))) continue;
 
           re.lastIndex = 0;
-          let m;
+          let m: RegExpExecArray | null;
           while ((m = re.exec(line)) !== null) {
             violations.push(`  line ${i + 1}: ${m[0]}`);
             if (!re.flags.includes("g")) break;
@@ -108,13 +109,13 @@ export class RegexCheck extends BaseCheck {
         };
       }
       return { status: "pass" };
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  async fix(file) {
-    if (!this.#replacement) return this.lint(file);
+  override async fix(file: string, _deps: any): Promise<CheckResult> {
+    if (!this.#replacement) return this.lint(file, _deps);
 
     try {
       const original = await fs.readFile(file, "utf-8");
@@ -123,7 +124,7 @@ export class RegexCheck extends BaseCheck {
         repoRoot: this.repoRoot,
       });
 
-      let fixed;
+      let fixed: string;
       const re = new RegExp(this.#pattern.source, this.#pattern.flags);
 
       if (this.#multiline || this.#skipLineRes.length === 0) {
@@ -131,7 +132,7 @@ export class RegexCheck extends BaseCheck {
       } else {
         const lines = original.split("\n");
         fixed = lines.map((line) => {
-          if (this.#skipLineRes.some((skip) => skip.test(line))) return line;
+          if (this.#skipLineRes.some((skip: RegExp) => skip.test(line))) return line;
           return line.replace(re, replacement);
         }).join("\n");
       }
@@ -141,12 +142,12 @@ export class RegexCheck extends BaseCheck {
         return { status: "fixed" };
       }
       return { status: "pass" };
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "RegexCheck",
       description: "Generic regex-based check and fix.",

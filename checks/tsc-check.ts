@@ -1,7 +1,7 @@
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 import { checkInPath } from "../tool-resolve/tool-utils.js";
 
 const execFileAsync = promisify(execFile);
@@ -24,27 +24,26 @@ const execFileAsync = promisify(execFile);
  *                   type errors.
  */
 export class TscCheck extends BaseCheck {
-  #tsconfigPath;
-  /** @type {{ re: RegExp, message: string }[]} */
-  #errorMessages;
-  /** @type {Promise<Map<string, string[]>> | null} */
-  #resultPromise = null;
+  #tsconfigPath: string;
+  #errorMessages: { re: RegExp; message: string }[];
+  #resultPromise: Promise<Map<string, string[]>> | null = null;
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
     this.#tsconfigPath = options.tsconfigPath ?? "tsconfig.json";
-    this.#errorMessages = (options.errorMessages || []).map((e) => ({
+    this.#errorMessages = (options.errorMessages || []).map((e: any) => ({
       re: new RegExp(e.pattern),
       message: e.message,
     }));
   }
 
-  get name() {
+  override get name(): string {
     return "TypeScript";
   }
 
-  async resolveDeps({ shouldSearchInPath }) {
-    let tscPath;
+  override async resolveDeps(options: { shouldSearchInPath: boolean }): Promise<any> {
+    const { shouldSearchInPath } = options;
+    let tscPath: string | null | undefined;
     if (shouldSearchInPath) {
       tscPath = checkInPath("tsc");
       // On Windows, `where tsc` may return the POSIX shebang script (no extension)
@@ -63,10 +62,10 @@ export class TscCheck extends BaseCheck {
         // not available locally
       }
     }
-    return { tscPath };
+    return { tscPath: tscPath ?? undefined };
   }
 
-  checkDeps(deps) {
+  override checkDeps(deps: any): boolean {
     return deps.tscPath !== undefined;
   }
 
@@ -74,11 +73,10 @@ export class TscCheck extends BaseCheck {
    * Run tsc once and return a Map<absolutePath, diagnosticLines[]>.
    * The promise is shared so concurrent lint() calls wait on the same run.
    */
-  #runTsc(deps) {
+  #runTsc(deps: any): Promise<Map<string, string[]>> {
     if (!this.#resultPromise) {
       this.#resultPromise = (async () => {
-        /** @type {Map<string, string[]>} */
-        const errors = new Map();
+        const errors = new Map<string, string[]>();
 
         const args = ["--noEmit", "--pretty", "false", "-p", path.resolve(this.repoRoot, this.#tsconfigPath)];
 
@@ -88,19 +86,19 @@ export class TscCheck extends BaseCheck {
             maxBuffer: 10 * 1024 * 1024,
             shell: process.platform === "win32",
           });
-        } catch (err) {
+        } catch (err: any) {
           if (err.code === "ENOENT") {
             errors.set("__global__", [`tsc not found: ${err.message}`]);
             return errors;
           }
-          const output = (err.stdout || err.stderr || "").toString();
+          const output: string = (err.stdout || err.stderr || "").toString();
           // Parse tsc output lines like:  src/foo.ts(10,5): error TS2322: ...
           for (const line of output.split("\n")) {
             const match = line.match(/^(.+?)\(\d+,\d+\):\s*error\s+TS\d+:/);
             if (match) {
-              const absFile = path.resolve(this.repoRoot, match[1]);
+              const absFile = path.resolve(this.repoRoot, match[1]!);
               if (!errors.has(absFile)) errors.set(absFile, []);
-              errors.get(absFile).push(this.#annotate(line));
+              errors.get(absFile)!.push(this.#annotate(line));
             }
           }
           // If we couldn't parse any per-file errors, report globally
@@ -117,7 +115,7 @@ export class TscCheck extends BaseCheck {
   /**
    * If the line matches any errorMessages pattern, append the custom message.
    */
-  #annotate(line) {
+  #annotate(line: string): string {
     for (const { re, message } of this.#errorMessages) {
       if (re.test(line)) {
         return `${line}\n  >>> ${message}`;
@@ -126,7 +124,7 @@ export class TscCheck extends BaseCheck {
     return line;
   }
 
-  async lint(file, deps) {
+  override async lint(file: string, deps: any): Promise<CheckResult> {
     const errors = await this.#runTsc(deps);
 
     // Global (non-file) error
@@ -143,12 +141,12 @@ export class TscCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  async fix(file, deps) {
+  override async fix(file: string, deps: any): Promise<CheckResult> {
     // No autofix for TypeScript type errors
     return this.lint(file, deps);
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "TscCheck",
       description:

@@ -85,3 +85,17 @@
   - `RegExpExecArray` is the correct type for `RegExp.exec()` results.
   - Accessing `process.env` properties via index signature (e.g., `process.env['KEY']`) is sometimes required by strict linter rules.
 ---
+
+## 2026-06-18 13:00 - US-007
+- Fixed TypeScript errors in `checks/paired-files-check.ts`, `checks/regex-check.ts`, and `checks/tsc-check.ts`.
+- Replaced `import { promises as fs }` with `import fs from "fs/promises"`.
+- Added explicit property declarations and `override` modifiers.
+- Resolved type mismatch between `null` and `undefined` in `TscCheck.resolveDeps`.
+- Fixed unused parameter errors in `PairedFilesCheck`.
+- Properly typed regex execution results and line offset calculations in `RegexCheck`.
+- Files changed: `checks/paired-files-check.ts`, `checks/regex-check.ts`, `checks/tsc-check.ts`, `CLAUDE.md`.
+- **Learnings for future iterations:**
+  - Tools that return `null` (like `checkInPath`) may conflict with fields/returns typed as `undefined`. Use `?? undefined` to normalize.
+  - RegExp exec matches in a loop should be typed as `RegExpExecArray | null`.
+  - When a promise is cached in a private field (like `#resultPromise`), ensure it is correctly typed to match the expected return.
+---
