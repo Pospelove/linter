@@ -58,3 +58,16 @@
   - `static override` is valid and required for overriding static methods in this project.
   - `execFileAsync` (from `promisify(execFile)`) can have tricky overload issues in strict mode; `@ts-expect-error` is a valid escape hatch if idiomatic fix is too verbose.
 ---
+
+## 2026-06-18 12:00 - US-005
+- Fixed TypeScript errors in `checks/crlf-check.ts`, `checks/custom-check.ts`, and `checks/encoding-check.ts`.
+- Rephrased comments and strings in `checks/custom-check.ts` and `checks/encoding-check.ts` to avoid `no-ts-as-operator` violations.
+- Added explicit type declarations and `override` modifiers.
+- Fixed `isAsciiOnly` in `checks/encoding-check.ts` to handle `undefined` when indexing into a Buffer.
+- Properly typed `spawn` and `process.env` usage in `checks/custom-check.ts`.
+- Files changed: `checks/crlf-check.ts`, `checks/custom-check.ts`, `checks/encoding-check.ts`, `CLAUDE.md`.
+- **Learnings for future iterations:**
+  - Even common phrases like "surfaced as the diagnostic output" trigger `no-ts-as-operator`. Rephrase to "surfaced for" or "surfaced like".
+  - Buffer indexing can return `undefined` in this project's TSC config, so check before comparing.
+  - `spawn`'s "close" event callback takes `number | null`.
+---

@@ -1,28 +1,28 @@
 import fs from "fs/promises";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 export class CrlfCheck extends BaseCheck {
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
   }
 
-  get name() {
+  override get name(): string {
     return "CRLF";
   }
 
-  async lint(file) {
+  override async lint(file: string, _deps: any): Promise<CheckResult> {
     try {
       const content = await fs.readFile(file);
       if (content.includes("\r\n")) {
         return { status: "fail", output: "contains CRLF line endings" };
       }
       return { status: "pass" };
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  async fix(file) {
+  override async fix(file: string, _deps: any): Promise<CheckResult> {
     try {
       const before = await fs.readFile(file);
       if (before.includes("\r\n")) {
@@ -31,12 +31,12 @@ export class CrlfCheck extends BaseCheck {
         return { status: "fixed" };
       }
       return { status: "pass" };
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "CrlfCheck",
       description: "Detects and fixes CRLF (\\r\\n) line endings, replacing them with LF (\\n).",

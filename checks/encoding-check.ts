@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import iconv from "iconv-lite";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 const SUPPORTED = new Set(["utf-8", "cp1251", "ascii"]);
 
@@ -8,26 +8,27 @@ const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 const UTF16_LE_BOM = Buffer.from([0xff, 0xfe]);
 const UTF16_BE_BOM = Buffer.from([0xfe, 0xff]);
 
-function hasBom(buf) {
+function hasBom(buf: Buffer): string | null {
   if (buf.length >= 3 && buf.subarray(0, 3).equals(UTF8_BOM)) return "UTF-8";
   if (buf.length >= 2 && buf.subarray(0, 2).equals(UTF16_LE_BOM)) return "UTF-16 LE";
   if (buf.length >= 2 && buf.subarray(0, 2).equals(UTF16_BE_BOM)) return "UTF-16 BE";
   return null;
 }
 
-function stripBom(buf) {
+function stripBom(buf: Buffer): Buffer {
   if (buf.length >= 3 && buf.subarray(0, 3).equals(UTF8_BOM)) return buf.subarray(3);
   return buf;
 }
 
-function isAsciiOnly(buf) {
+function isAsciiOnly(buf: Buffer): boolean {
   for (let i = 0; i < buf.length; i++) {
-    if (buf[i] >= 0x80) return false;
+    const b = buf[i];
+    if (b !== undefined && b >= 0x80) return false;
   }
   return true;
 }
 
-function isValidUtf8(buf) {
+function isValidUtf8(buf: Buffer): boolean {
   try {
     new TextDecoder("utf-8", { fatal: true }).decode(buf);
     return true;
@@ -36,7 +37,7 @@ function isValidUtf8(buf) {
   }
 }
 
-function normalizeEncoding(name) {
+function normalizeEncoding(name: any): string | null {
   if (typeof name !== "string") return null;
   const k = name.toLowerCase().replace(/_/g, "-");
   if (k === "utf8" || k === "utf-8") return "utf-8";
@@ -46,9 +47,9 @@ function normalizeEncoding(name) {
 }
 
 export class EncodingCheck extends BaseCheck {
-  #encoding;
+  #encoding: string;
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
     const declared = normalizeEncoding(options.encoding);
     if (!declared || !SUPPORTED.has(declared)) {
@@ -57,11 +58,11 @@ export class EncodingCheck extends BaseCheck {
     this.#encoding = declared;
   }
 
-  get name() {
+  override get name(): string {
     return `encoding(${this.#encoding})`;
   }
 
-  async lint(file) {
+  override async lint(file: string, _deps: any): Promise<CheckResult> {
     try {
       const buf = await fs.readFile(file);
       const bom = hasBom(buf);
@@ -78,13 +79,13 @@ export class EncodingCheck extends BaseCheck {
       if (this.#encoding === "utf-8") {
         return valid ? { status: "pass" } : { status: "fail", output: "file is not valid UTF-8 (looks like CP1251 or another single-byte encoding)" };
       }
-      return valid ? { status: "fail", output: "file decodes as UTF-8 but CP1251 is required" } : { status: "pass" };
-    } catch (err) {
+      return valid ? { status: "fail", output: "file decodes in UTF-8 format but CP1251 is required" } : { status: "pass" };
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  async fix(file) {
+  override async fix(file: string, _deps: any): Promise<CheckResult> {
     try {
       const original = await fs.readFile(file);
       const stripped = stripBom(original);
@@ -121,12 +122,12 @@ export class EncodingCheck extends BaseCheck {
       const out = iconv.encode(text, this.#encoding);
       await fs.writeFile(file, out);
       return { status: "fixed" };
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "EncodingCheck",
       description: "Asserts that files use a specific text encoding (utf-8, cp1251, or ascii). Bans BOMs. ASCII-only files always pass. Autofix transcodes between utf-8 and cp1251 via iconv-lite; for ascii mode, fix only strips BOM.",
