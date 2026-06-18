@@ -71,3 +71,17 @@
   - Buffer indexing can return `undefined` in this project's TSC config, so check before comparing.
   - `spawn`'s "close" event callback takes `number | null`.
 ---
+
+## 2026-06-18 12:30 - US-006
+- Fixed TypeScript errors in `checks/firecrawl-check.ts`, `checks/linelint-check.ts`, and `checks/localization-key-check.ts`.
+- Replaced `import { promises as fs }` with `import fs from "fs/promises"`.
+- Added explicit type declarations for all private fields.
+- Fixed registry initialization in `LocalizationKeyCheck` by explicitly typing `#registeredKeys` as `Set<string> | null`.
+- Resolved "possibly undefined" errors when accessing array elements after `split()`.
+- Properly typed `RegExp.exec()` results and collection iterations.
+- Files changed: `checks/firecrawl-check.ts`, `checks/linelint-check.ts`, `checks/localization-key-check.ts`, `CLAUDE.md`.
+- **Learnings for future iterations:**
+  - When initializing a field to `null` that will later hold a `Set` or `Map`, explicit typing (e.g., `Set<string> | null`) is required to avoid `never` or `unknown` type inference.
+  - `RegExpExecArray` is the correct type for `RegExp.exec()` results.
+  - Accessing `process.env` properties via index signature (e.g., `process.env['KEY']`) is sometimes required by strict linter rules.
+---

@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 /**
  * Verifies that every _L("key") call in usage files has a corresponding
@@ -29,26 +29,24 @@ import { BaseCheck } from "./base-check.js";
  *   }
  */
 export class LocalizationKeyCheck extends BaseCheck {
-  #registrationFiles;
-  #lFunctionName;
-  #registerFunctionName;
-  #registryPattern;
-  #language;
-  #excludeRegistrationFiles;
+  #registrationFiles: string[];
+  #lFunctionName: string;
+  #registerFunctionName: string;
+  #registryPattern: string | null;
+  #language: string | null;
+  #excludeRegistrationFiles: boolean;
 
-  /** @type {Set<string> | null} */
-  #registeredKeys = null;
-  /** @type {string[]} */
-  #registryErrors = [];
+  #registeredKeys: Set<string> | null = null;
+  #registryErrors: string[] = [];
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
 
     if (!options.registrationFiles || options.registrationFiles.length === 0) {
       throw new Error("LocalizationKeyCheck requires a non-empty 'registrationFiles' option");
     }
 
-    this.#registrationFiles = options.registrationFiles.map((f) =>
+    this.#registrationFiles = options.registrationFiles.map((f: string) =>
       path.resolve(repoRoot, f)
     );
     this.#lFunctionName = options.lFunctionName ?? "_L";
@@ -58,11 +56,11 @@ export class LocalizationKeyCheck extends BaseCheck {
     this.#excludeRegistrationFiles = options.excludeRegistrationFiles ?? true;
   }
 
-  get name() {
+  override get name(): string {
     return "Localization Key Check";
   }
 
-  async appliesTo(file) {
+  override async appliesTo(file: string): Promise<boolean> {
     if (!(await super.appliesTo(file))) return false;
     if (this.#excludeRegistrationFiles) {
       const abs = path.resolve(file);
@@ -71,13 +69,13 @@ export class LocalizationKeyCheck extends BaseCheck {
     return true;
   }
 
-  async #loadRegistry() {
+  async #loadRegistry(): Promise<void> {
     if (this.#registeredKeys !== null) return;
 
-    this.#registeredKeys = new Set();
+    this.#registeredKeys = new Set<string>();
     this.#registryErrors = [];
 
-    let re;
+    let re: RegExp;
     if (this.#registryPattern !== null) {
       re = new RegExp(this.#registryPattern, "g");
     } else {
@@ -89,17 +87,17 @@ export class LocalizationKeyCheck extends BaseCheck {
     }
 
     for (const filePath of this.#registrationFiles) {
-      let content;
+      let content: string;
       try {
         content = await fs.readFile(filePath, "utf-8");
-      } catch (err) {
+      } catch (err: any) {
         this.#registryErrors.push(
           `cannot read registration file ${path.relative(this.repoRoot, filePath)}: ${err.message}`
         );
         continue;
       }
 
-      let m;
+      let m: RegExpExecArray | null;
       while ((m = re.exec(content)) !== null) {
         if (this.#registryPattern !== null) {
           const key = m[1];
@@ -108,14 +106,14 @@ export class LocalizationKeyCheck extends BaseCheck {
           const lang = m[1] ?? m[3];
           const key = m[2] ?? m[4];
           if (this.#language === null || lang === this.#language) {
-            this.#registeredKeys.add(key);
+            if (key) this.#registeredKeys.add(key);
           }
         }
       }
     }
   }
 
-  async lint(file) {
+  override async lint(file: string, _deps: any): Promise<CheckResult> {
     try {
       await this.#loadRegistry();
 
@@ -124,7 +122,7 @@ export class LocalizationKeyCheck extends BaseCheck {
       }
 
       const content = await fs.readFile(file, "utf-8");
-      const violations = findUnregisteredKeys(content, this.#lFunctionName, this.#registeredKeys);
+      const violations = findUnregisteredKeys(content, this.#lFunctionName, this.#registeredKeys!);
 
       if (violations.length > 0) {
         return {
@@ -133,16 +131,16 @@ export class LocalizationKeyCheck extends BaseCheck {
         };
       }
       return { status: "pass" };
-    } catch (err) {
+    } catch (err: any) {
       return { status: "error", output: err.message };
     }
   }
 
-  async fix(file) {
-    return this.lint(file);
+  override async fix(file: string, deps: any): Promise<CheckResult> {
+    return this.lint(file, deps);
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "LocalizationKeyCheck",
       description:
@@ -153,7 +151,7 @@ export class LocalizationKeyCheck extends BaseCheck {
   }
 }
 
-function escapeRegex(str) {
+function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
@@ -163,19 +161,21 @@ function escapeRegex(str) {
  * @param {Set<string>} registeredKeys
  * @returns {string[]}
  */
-function findUnregisteredKeys(content, fnName, registeredKeys) {
+function findUnregisteredKeys(content: string, fnName: string, registeredKeys: Set<string>): string[] {
   const fn = escapeRegex(fnName);
   const re = new RegExp(`\\b${fn}\\s*\\(\\s*(?:"([^"]*)"|'([^']*)')`, "g");
 
-  const violations = [];
+  const violations: string[] = [];
   const lines = content.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
     re.lastIndex = 0;
-    let m;
-    while ((m = re.exec(lines[i])) !== null) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
       const key = m[1] ?? m[2];
-      if (!registeredKeys.has(key)) {
+      if (key && !registeredKeys.has(key)) {
         violations.push(`  line ${i + 1}: ${fnName}("${key}")`);
       }
     }

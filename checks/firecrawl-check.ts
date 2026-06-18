@@ -1,6 +1,12 @@
-import { promises as fs } from "fs";
+import fs from "fs/promises";
 import path from "path";
-import { BaseCheck } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
+
+interface ExtractUrlResult {
+  error?: string;
+  isUrlOnly?: boolean;
+  value?: string;
+}
 
 /**
  * Firecrawl check — scrapes a URL found in a file using the Firecrawl API
@@ -26,12 +32,12 @@ import { BaseCheck } from "./base-check.js";
  *   3. Write the scraped content back to the file.
  */
 export class FirecrawlCheck extends BaseCheck {
-  #outputFormat;
-  #apiKey;
-  #apiUrl;
-  #timeout;
+  #outputFormat: string;
+  #apiKey: string | null;
+  #apiUrl: string;
+  #timeout: number;
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
     this.#outputFormat = options.outputFormat || "markdown";
     this.#apiKey = options.apiKey || null;
@@ -39,15 +45,15 @@ export class FirecrawlCheck extends BaseCheck {
     this.#timeout = options.timeout ?? 60_000;
   }
 
-  get name() {
+  override get name(): string {
     return "Firecrawl";
   }
 
-  checkDeps() {
+  override checkDeps(): boolean {
     return true;
   }
 
-  async lint(file, _deps) {
+  override async lint(file: string, _deps: any): Promise<CheckResult> {
     const url = await this.#extractUrl(file);
     if (url.error) {
       return { status: "error", output: url.error };
@@ -58,7 +64,7 @@ export class FirecrawlCheck extends BaseCheck {
     return { status: "pass" };
   }
 
-  async fix(file, _deps) {
+  override async fix(file: string, _deps: any): Promise<CheckResult> {
     const url = await this.#extractUrl(file);
     if (url.error) {
       return { status: "error", output: url.error };
@@ -75,10 +81,10 @@ export class FirecrawlCheck extends BaseCheck {
       };
     }
 
-    let scraped;
+    let scraped: string | undefined;
     try {
-      scraped = await this.#scrape(url.value, apiKey);
-    } catch (err) {
+      scraped = await this.#scrape(url.value!, apiKey);
+    } catch (err: any) {
       return { status: "error", output: `Firecrawl API error: ${err.message}` };
     }
 
@@ -90,11 +96,11 @@ export class FirecrawlCheck extends BaseCheck {
     return { status: "fixed", output: `scraped ${url.value}` };
   }
 
-  async #extractUrl(file) {
-    let content;
+  async #extractUrl(file: string): Promise<ExtractUrlResult> {
+    let content: string;
     try {
       content = await fs.readFile(path.resolve(file), "utf-8");
-    } catch (err) {
+    } catch (err: any) {
       return { error: `cannot read file: ${err.message}` };
     }
 
@@ -103,7 +109,8 @@ export class FirecrawlCheck extends BaseCheck {
       return { error: "file is empty" };
     }
 
-    const firstLine = trimmed.split(/\r?\n/)[0].trim();
+    const lines = trimmed.split(/\r?\n/);
+    const firstLine = (lines[0] || "").trim();
 
     try {
       const parsed = new URL(firstLine);
@@ -119,11 +126,11 @@ export class FirecrawlCheck extends BaseCheck {
     return { isUrlOnly, value: firstLine };
   }
 
-  #resolveApiKey() {
-    return this.#apiKey || process.env.FIRECRAWL_API_KEY || null;
+  #resolveApiKey(): string | null {
+    return this.#apiKey || process.env['FIRECRAWL_API_KEY'] || null;
   }
 
-  async #scrape(url, apiKey) {
+  async #scrape(url: string, apiKey: string): Promise<string | undefined> {
     const endpoint = `${this.#apiUrl}/v1/scrape`;
 
     const formats = this.#outputFormat === "html" ? ["html"] : ["markdown"];
@@ -147,7 +154,7 @@ export class FirecrawlCheck extends BaseCheck {
         throw new Error(`HTTP ${res.status}: ${body.slice(0, 500)}`);
       }
 
-      const data = await res.json();
+      const data: any = await res.json();
 
       if (!data.success) {
         throw new Error(data.error || "scrape unsuccessful");
@@ -161,7 +168,7 @@ export class FirecrawlCheck extends BaseCheck {
     }
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string; options: string } {
     return {
       name: "FirecrawlCheck",
       description:
