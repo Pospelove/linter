@@ -16,10 +16,7 @@ export class CompositeCheck extends BaseCheck {
     super(linter.repoRoot);
     this.#linter = linter;
     this.#fixer = fixer;
-  }
-
-  override get name(): string {
-    return this.#linter.name;
+    this.name = linter.name;
   }
 
   override get priority(): number {

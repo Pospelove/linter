@@ -44,7 +44,6 @@ import { BaseCheck, CheckResult } from "./base-check.js";
  *   }
  */
 export class CustomCheck extends BaseCheck {
-  #name: string;
   #lintCommand: string | null;
   #fixCommand: string | null;
 
@@ -60,11 +59,7 @@ export class CustomCheck extends BaseCheck {
     }
 
     const name = typeof options["name"] === "string" ? options["name"] : null;
-    this.#name = name ?? `Custom (${this.#lintCommand})`;
-  }
-
-  override get name(): string {
-    return this.#name;
+    this.name = name || `Custom (${this.#lintCommand})`;
   }
 
   override async lint(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {

@@ -7,8 +7,9 @@ import { BaseCheck, CheckResult } from "./base-check.js";
  * criterion command of its own.
  */
 export class AlwaysFailCheck extends BaseCheck {
-  override get name(): string {
-    return "always-fail";
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
+    super(repoRoot, options);
+    this.name = "always-fail";
   }
 
   override async lint(_file: string, _deps: Record<string, unknown>): Promise<CheckResult> {

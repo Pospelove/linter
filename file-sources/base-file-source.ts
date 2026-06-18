@@ -3,19 +3,13 @@
  * A file source determines which files to process.
  */
 export class BaseFileSource {
+  public name: string = "Unnamed Source";
   protected repoRoot: string;
   protected options: Record<string, unknown>;
 
   constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     this.repoRoot = repoRoot;
     this.options = options;
-  }
-
-  /**
-   * @returns {string} Human-readable name of the source.
-   */
-  get name(): string {
-    throw new Error("Not implemented: name");
   }
 
   /**

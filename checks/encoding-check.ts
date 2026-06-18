@@ -56,10 +56,7 @@ export class EncodingCheck extends BaseCheck {
       throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options["encoding"])}`);
     }
     this.#encoding = declared;
-  }
-
-  override get name(): string {
-    return `encoding(${this.#encoding})`;
+    this.name = `encoding(${this.#encoding})`;
   }
 
   override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {

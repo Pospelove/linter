@@ -65,11 +65,9 @@ export class AiPromptCheck extends BaseCheck {
       throw new Error(`Unknown aiProvider "${providerName}". Available: ${Object.keys(AI_PROVIDERS).join(", ")}`);
     }
     this.#provider = new ProviderClass();
-  }
 
-  override get name(): string {
     const label = this.#lintPrompt || this.#fixPrompt || "unnamed";
-    return `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "…" : ""})`;
+    this.name = `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "…" : ""})`;
   }
 
   override checkDeps(): boolean {

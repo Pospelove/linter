@@ -4,10 +4,7 @@ import { BaseCheck, CheckResult } from "./base-check.js";
 export class CrlfCheck extends BaseCheck {
   constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-  }
-
-  override get name(): string {
-    return "CRLF";
+    this.name = "CRLF";
   }
 
   override async lint(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {

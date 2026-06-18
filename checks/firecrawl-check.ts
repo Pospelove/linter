@@ -52,10 +52,7 @@ export class FirecrawlCheck extends BaseCheck {
     this.#apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : null;
     this.#apiUrl = (typeof options["apiUrl"] === "string" ? options["apiUrl"] : "https://api.firecrawl.dev").replace(/\/+$/, "");
     this.#timeout = typeof options["timeout"] === "number" ? options["timeout"] : 60_000;
-  }
-
-  override get name(): string {
-    return "Firecrawl";
+    this.name = "Firecrawl";
   }
 
   override checkDeps(): boolean {

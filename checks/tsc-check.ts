@@ -41,10 +41,7 @@ export class TscCheck extends BaseCheck {
         message: message,
       };
     });
-  }
-
-  override get name(): string {
-    return "TypeScript";
+    this.name = "TypeScript";
   }
 
   override async resolveDeps(options: { shouldSearchInPath: boolean }): Promise<Record<string, unknown>> {

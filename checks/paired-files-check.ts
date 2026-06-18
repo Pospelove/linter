@@ -38,10 +38,7 @@ export class PairedFilesCheck extends BaseCheck {
     });
     const exclude = options["exclude"];
     this.#exclude = new Set((Array.isArray(exclude) ? exclude : []).map((f: unknown) => String(f).toLowerCase()));
-  }
-
-  override get name(): string {
-    return "Paired Files Check";
+    this.name = "Paired Files Check";
   }
 
   override getTemplates(): Record<string, (ctx: Record<string, unknown>) => string> {

@@ -9,10 +9,7 @@ const execFileAsync = promisify(execFile);
 export class ClangFormatCheck extends BaseCheck {
   constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-  }
-
-  override get name(): string {
-    return "Clang Format";
+    this.name = "Clang Format";
   }
 
   override async resolveDeps(options: Record<string, unknown>): Promise<Record<string, unknown>> {

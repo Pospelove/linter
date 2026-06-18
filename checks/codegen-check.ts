@@ -48,10 +48,7 @@ export class CodegenCheck extends BaseCheck {
     this.#outputFile = outputFile;
     this.#absInput = path.resolve(repoRoot, inputFile);
     this.#absOutput = path.resolve(repoRoot, outputFile);
-  }
-
-  override get name(): string {
-    return `Codegen (${this.#inputFile} → ${this.#outputFile})`;
+    this.name = `Codegen (${this.#inputFile} → ${this.#outputFile})`;
   }
 
   /**

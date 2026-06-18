@@ -29,10 +29,7 @@ export class AllFilesSource extends BaseFileSource {
       : typeof exclude === "string"
         ? [exclude]
         : [];
-  }
-
-  override get name(): string {
-    return "All tracked files";
+    this.name = "All tracked files";
   }
 
   override async resolve(): Promise<string[]> {

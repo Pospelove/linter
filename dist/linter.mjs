@@ -4868,6 +4868,8 @@ var FileExpander = class extends BaseExpander {
 // checks/base-check.ts
 var BaseCheck = class {
   repoRoot;
+  name = "Unnamed Check";
+  _prdConfig = null;
   #extensions;
   #includePaths;
   #excludePaths;
@@ -4891,12 +4893,6 @@ var BaseCheck = class {
    */
   get priority() {
     return this.#priority;
-  }
-  /**
-   * @returns {string} Human-readable name of the check.
-   */
-  get name() {
-    throw new Error("Not implemented: name");
   }
   /**
    * Set the expander used by expand().
@@ -5096,9 +5092,7 @@ var BaseCheck = class {
 var CrlfCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-  }
-  get name() {
-    return "CRLF";
+    this.name = "CRLF";
   }
   async lint(file, _deps, _entry = null) {
     try {
@@ -5184,9 +5178,7 @@ var EncodingCheck = class extends BaseCheck {
       throw new Error(`EncodingCheck: option "encoding" must be "utf-8", "cp1251", or "ascii", got ${JSON.stringify(options["encoding"])}`);
     }
     this.#encoding = declared;
-  }
-  get name() {
-    return `encoding(${this.#encoding})`;
+    this.name = `encoding(${this.#encoding})`;
   }
   async lint(file, _deps) {
     try {
@@ -5438,9 +5430,7 @@ var execFileAsync = promisify(execFile2);
 var LinelintCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-  }
-  get name() {
-    return "Linelint";
+    this.name = "Linelint";
   }
   async resolveDeps(options) {
     const linelintPath = await getLinelintPath({
@@ -5599,9 +5589,7 @@ var execFileAsync2 = promisify2(execFile3);
 var ClangFormatCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
-  }
-  get name() {
-    return "Clang Format";
+    this.name = "Clang Format";
   }
   async resolveDeps(options) {
     const clangFormatPath = await getClangFormatPath({
@@ -5715,9 +5703,7 @@ var PairedFilesCheck = class extends BaseCheck {
     });
     const exclude = options["exclude"];
     this.#exclude = new Set((Array.isArray(exclude) ? exclude : []).map((f) => String(f).toLowerCase()));
-  }
-  get name() {
-    return "Paired Files Check";
+    this.name = "Paired Files Check";
   }
   getTemplates() {
     return {
@@ -5820,9 +5806,7 @@ var CodegenCheck = class extends BaseCheck {
     this.#outputFile = outputFile;
     this.#absInput = path6.resolve(repoRoot, inputFile);
     this.#absOutput = path6.resolve(repoRoot, outputFile);
-  }
-  get name() {
-    return `Codegen (${this.#inputFile} \u2192 ${this.#outputFile})`;
+    this.name = `Codegen (${this.#inputFile} \u2192 ${this.#outputFile})`;
   }
   /**
    * Only applies to the input file — the check triggers when the source changes.
@@ -13396,10 +13380,8 @@ var AiPromptCheck = class extends BaseCheck {
       throw new Error(`Unknown aiProvider "${providerName}". Available: ${Object.keys(AI_PROVIDERS).join(", ")}`);
     }
     this.#provider = new ProviderClass();
-  }
-  get name() {
     const label = this.#lintPrompt || this.#fixPrompt || "unnamed";
-    return `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "\u2026" : ""})`;
+    this.name = `AI Prompt (${label.slice(0, 50)}${label.length > 50 ? "\u2026" : ""})`;
   }
   checkDeps() {
     return true;
@@ -13649,9 +13631,7 @@ var RegexCheck = class extends BaseCheck {
     this.#multiline = !!options["multiline"];
     const skipLinePatterns = options["skipLinePatterns"];
     this.#skipLineRes = (Array.isArray(skipLinePatterns) ? skipLinePatterns : []).map((p) => new RegExp(String(p)));
-  }
-  get name() {
-    return this.#message;
+    this.name = this.#message;
   }
   getTemplates() {
     return {
@@ -13761,9 +13741,7 @@ var FirecrawlCheck = class extends BaseCheck {
     this.#apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : null;
     this.#apiUrl = (typeof options["apiUrl"] === "string" ? options["apiUrl"] : "https://api.firecrawl.dev").replace(/\/+$/, "");
     this.#timeout = typeof options["timeout"] === "number" ? options["timeout"] : 6e4;
-  }
-  get name() {
-    return "Firecrawl";
+    this.name = "Firecrawl";
   }
   checkDeps() {
     return true;
@@ -13877,9 +13855,7 @@ var CompositeCheck = class extends BaseCheck {
     super(linter.repoRoot);
     this.#linter = linter;
     this.#fixer = fixer;
-  }
-  get name() {
-    return this.#linter.name;
+    this.name = linter.name;
   }
   get priority() {
     return this.#linter.priority;
@@ -13942,9 +13918,7 @@ var TscCheck = class extends BaseCheck {
         message
       };
     });
-  }
-  get name() {
-    return "TypeScript";
+    this.name = "TypeScript";
   }
   async resolveDeps(options) {
     const { shouldSearchInPath } = options;
@@ -14052,8 +14026,9 @@ var TscCheck = class extends BaseCheck {
 
 // checks/always-fail-check.ts
 var AlwaysFailCheck = class extends BaseCheck {
-  get name() {
-    return "always-fail";
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "always-fail";
   }
   async lint(_file, _deps) {
     return { status: "fail", output: "always-fail: this check always fails" };
@@ -14096,9 +14071,7 @@ var LocalizationKeyCheck = class extends BaseCheck {
     this.#registryPattern = typeof options["registryPattern"] === "string" ? options["registryPattern"] : null;
     this.#language = typeof options["language"] === "string" ? options["language"] : null;
     this.#excludeRegistrationFiles = options["excludeRegistrationFiles"] !== false;
-  }
-  get name() {
-    return "Localization Key Check";
+    this.name = "Localization Key Check";
   }
   async appliesTo(file) {
     if (!await super.appliesTo(file)) return false;
@@ -14206,7 +14179,6 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
 import fs16 from "fs/promises";
 import { spawn as spawn3 } from "child_process";
 var CustomCheck = class extends BaseCheck {
-  #name;
   #lintCommand;
   #fixCommand;
   constructor(repoRoot, options = {}) {
@@ -14218,10 +14190,7 @@ var CustomCheck = class extends BaseCheck {
       throw new Error("CustomCheck requires options.command or options.lintCommand");
     }
     const name = typeof options["name"] === "string" ? options["name"] : null;
-    this.#name = name ?? `Custom (${this.#lintCommand})`;
-  }
-  get name() {
-    return this.#name;
+    this.name = name || `Custom (${this.#lintCommand})`;
   }
   async lint(file, _deps, entry = null) {
     const env = this.#buildEnv(file, "lint", entry);
@@ -18850,17 +18819,12 @@ var esm_default = gitInstanceFactory;
 
 // file-sources/base-file-source.ts
 var BaseFileSource = class {
+  name = "Unnamed Source";
   repoRoot;
   options;
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
     this.options = options;
-  }
-  /**
-   * @returns {string} Human-readable name of the source.
-   */
-  get name() {
-    throw new Error("Not implemented: name");
   }
   /**
    * Resolve the list of absolute file paths to process.
@@ -18890,9 +18854,7 @@ var AllFilesSource = class extends BaseFileSource {
     this.#includePatterns = Array.isArray(include) ? include.filter((i) => typeof i === "string") : typeof include === "string" ? [include] : [];
     const exclude = options["exclude"];
     this.#excludePatterns = Array.isArray(exclude) ? exclude.filter((i) => typeof i === "string") : typeof exclude === "string" ? [exclude] : [];
-  }
-  get name() {
-    return "All tracked files";
+    this.name = "All tracked files";
   }
   async resolve() {
     const git = esm_default(this.repoRoot);
@@ -18951,8 +18913,9 @@ function matchGlob(pattern, filePath) {
 import fs18 from "fs";
 import path15 from "path";
 var StagedFilesSource = class extends BaseFileSource {
-  get name() {
-    return "Staged files";
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "Staged files";
   }
   async resolve() {
     const git = esm_default(this.repoRoot);
@@ -18983,8 +18946,9 @@ var StagedFilesSource = class extends BaseFileSource {
 import fs19 from "fs";
 import path16 from "path";
 var DiffBaseSource = class extends BaseFileSource {
-  get name() {
-    return "Diff vs base";
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "Diff vs base";
   }
   async resolve() {
     const baseRef = this.#detectBaseRef();
@@ -19137,7 +19101,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "98108cb" : "unknown";
+var LINTER_COMMIT = true ? "c2134e5" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

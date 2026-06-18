@@ -11,3 +11,4 @@
 - When parsing `Record<string, unknown>` options in constructors, use `String()`, `Number()`, or `!!` for safe conversion, and type guards for arrays/objects.
 - Access `Record<string, unknown>` properties using bracket notation (e.g., `options["key"]`).
 - In catch blocks, errors are `unknown`. Use `if (err instanceof Error)` or property checks like `if (err && typeof err === "object" && "message" in err)` to safely access diagnostic info.
+- When `as` is banned, use explicit type declarations for literals (e.g., `const res: Type = { ... }`) to ensure they match specific union types or interfaces.

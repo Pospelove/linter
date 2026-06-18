@@ -8,8 +8,9 @@ import { BaseFileSource } from "./base-file-source.js";
  * Typical use: pre-commit hook.
  */
 export class StagedFilesSource extends BaseFileSource {
-  override get name() {
-    return "Staged files";
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
+    super(repoRoot, options);
+    this.name = "Staged files";
   }
 
   override async resolve() {

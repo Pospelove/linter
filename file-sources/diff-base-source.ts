@@ -15,8 +15,9 @@ import { BaseFileSource } from "./base-file-source.js";
  * Typical use: CI / GitHub Actions.
  */
 export class DiffBaseSource extends BaseFileSource {
-  override get name(): string {
-    return "Diff vs base";
+  constructor(repoRoot: string, options: Record<string, unknown> = {}) {
+    super(repoRoot, options);
+    this.name = "Diff vs base";
   }
 
   override async resolve(): Promise<string[]> {

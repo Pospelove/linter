@@ -55,10 +55,7 @@ export class LocalizationKeyCheck extends BaseCheck {
     this.#registryPattern = typeof options["registryPattern"] === "string" ? options["registryPattern"] : null;
     this.#language = typeof options["language"] === "string" ? options["language"] : null;
     this.#excludeRegistrationFiles = options["excludeRegistrationFiles"] !== false;
-  }
-
-  override get name(): string {
-    return "Localization Key Check";
+    this.name = "Localization Key Check";
   }
 
   override async appliesTo(file: string): Promise<boolean> {

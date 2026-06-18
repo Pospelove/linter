@@ -38,6 +38,8 @@ export interface CheckResult {
  */
 export class BaseCheck {
   repoRoot: string;
+  name: string = "Unnamed Check";
+  _prdConfig: Record<string, unknown> | null = null;
   #extensions: string[];
   #includePaths: string[];
   #excludePaths: string[];
@@ -73,13 +75,6 @@ export class BaseCheck {
    */
   get priority(): number {
     return this.#priority;
-  }
-
-  /**
-   * @returns {string} Human-readable name of the check.
-   */
-  get name(): string {
-    throw new Error("Not implemented: name");
   }
 
   /**

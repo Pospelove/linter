@@ -9,10 +9,7 @@ const execFileAsync = promisify(execFile);
 export class LinelintCheck extends BaseCheck {
   constructor(repoRoot: string, options: Record<string, unknown> = {}) {
     super(repoRoot, options);
-  }
-
-  override get name(): string {
-    return "Linelint";
+    this.name = "Linelint";
   }
 
   override async resolveDeps(options: Record<string, unknown>): Promise<Record<string, unknown>> {

@@ -55,10 +55,7 @@ export class RegexCheck extends BaseCheck {
     this.#multiline = !!options["multiline"];
     const skipLinePatterns = options["skipLinePatterns"];
     this.#skipLineRes = (Array.isArray(skipLinePatterns) ? skipLinePatterns : []).map((p: unknown) => new RegExp(String(p)));
-  }
-
-  override get name(): string {
-    return this.#message;
+    this.name = this.#message;
   }
 
   override getTemplates(): Record<string, (ctx: Record<string, unknown>) => string> {
