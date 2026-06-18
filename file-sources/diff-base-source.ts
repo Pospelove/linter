@@ -15,11 +15,11 @@ import { BaseFileSource } from "./base-file-source.js";
  * Typical use: CI / GitHub Actions.
  */
 export class DiffBaseSource extends BaseFileSource {
-  get name() {
+  override get name(): string {
     return "Diff vs base";
   }
 
-  async resolve() {
+  override async resolve(): Promise<string[]> {
     const baseRef = this.#detectBaseRef();
     console.log(`DiffBaseSource: diffing against ${baseRef}`);
 
@@ -41,10 +41,10 @@ export class DiffBaseSource extends BaseFileSource {
       }),
     );
 
-    return existing.filter((filePath) => filePath !== null);
+    return existing.filter((filePath): filePath is string => filePath !== null);
   }
 
-  #detectBaseRef() {
+  #detectBaseRef(): string {
     // 1. Explicit config
     if (this.options.baseRef) {
       console.log(`DiffBaseSource: using options.baseRef = "${this.options.baseRef}"`);
@@ -52,15 +52,15 @@ export class DiffBaseSource extends BaseFileSource {
     }
 
     // 2. GitHub Actions pull_request event
-    const ghBaseRef = process.env.GITHUB_BASE_REF;
+    const ghBaseRef = process.env["GITHUB_BASE_REF"];
     if (ghBaseRef) {
       console.log(`DiffBaseSource: using GITHUB_BASE_REF = "${ghBaseRef}" → origin/${ghBaseRef}`);
       return `origin/${ghBaseRef}`;
     }
 
     // 3. GitHub Actions push event — diff against default branch
-    if (process.env.GITHUB_EVENT_NAME === "push") {
-      const defaultBranch = process.env.GITHUB_DEFAULT_BRANCH || "main";
+    if (process.env["GITHUB_EVENT_NAME"] === "push") {
+      const defaultBranch = process.env["GITHUB_DEFAULT_BRANCH"] || "main";
       console.log(`DiffBaseSource: GITHUB_EVENT_NAME = "push", using default branch "${defaultBranch}" → origin/${defaultBranch}`);
       return `origin/${defaultBranch}`;
     }
@@ -71,7 +71,7 @@ export class DiffBaseSource extends BaseFileSource {
     );
   }
 
-  static getHelp() {
+  static override getHelp() {
     return {
       name: "DiffBaseSource",
       description: "Files changed relative to a base branch/ref. Auto-detects GITHUB_BASE_REF in GitHub Actions. Typical use: CI.",

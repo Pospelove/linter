@@ -7,6 +7,8 @@
 - Use local variables for private fields after null checks to satisfy strict TSC null checks.
 - Explicitly declare all class properties, especially in base classes.
 - Use inline type imports (e.g., `import("./path").Type`) for return types in base classes and interfaces to avoid circular dependencies.
+- Access `process.env` properties via bracket notation (e.g., `process.env['KEY']`) to satisfy `noPropertyAccessFromIndexSignature`.
+- Use `p.charAt(i)` instead of `p[i]` for string indexing when `noUncheckedIndexedAccess` is enabled to avoid `undefined` types.
 
 ## 2026-06-18 10:00 - US-001
 - Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
@@ -123,4 +125,19 @@
 - **Learnings for future iterations:**
   - Inline imports like `import("../entries/base-entry.js").BaseEntry[]` are preferred for types in method signatures to keep the import section clean and avoid cycles.
   - Even if a file is listed in a user story but passes the linter (like `expanders/file-expander.ts`), still verify its content against project patterns.
+---
+
+## 2026-06-18 14:30 - US-010
+- Fixed TypeScript errors in `file-sources/all-files-source.ts`, `file-sources/base-file-source.ts`, and `file-sources/diff-base-source.ts`.
+- Added explicit property declarations to `BaseFileSource`.
+- Added `override` and `static override` modifiers to subclasses.
+- Fixed `process.env` access by using bracket notation.
+- Resolved "possibly undefined" error in `matchGlob` by using `p.charAt(i)`.
+- Properly typed filter narrowing with `filePath is string`.
+- Files changed: `file-sources/all-files-source.ts`, `file-sources/base-file-source.ts`, `file-sources/diff-base-source.ts`, `file-sources/CLAUDE.md`.
+- **Learnings for future iterations:**
+  - `BaseFileSource` (and other base classes) must declare properties like `repoRoot` and `options` to be accessible in subclasses without TSC errors.
+  - TSC's `noPropertyAccessFromIndexSignature` requires `process.env['KEY']` instead of `process.env.KEY`.
+  - Type narrowing in `Array.filter` works best with an explicit type predicate: `(item): item is Type => item !== null`.
+  - `p.charAt(i)` is a safe alternative to `p[i]` for string indexing when `noUncheckedIndexedAccess` is enabled.
 ---

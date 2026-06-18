@@ -12,21 +12,21 @@ import { BaseFileSource } from "./base-file-source.js";
  *   exclude — glob pattern(s) to exclude.
  */
 export class AllFilesSource extends BaseFileSource {
-  #includePatterns;
-  #excludePatterns;
+  #includePatterns: string[];
+  #excludePatterns: string[];
 
-  constructor(repoRoot, options = {}) {
+  constructor(repoRoot: string, options: any = {}) {
     super(repoRoot, options);
-    const coerceArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
+    const coerceArray = (v: any) => (v == null ? [] : Array.isArray(v) ? v : [v]);
     this.#includePatterns = coerceArray(options.include);
     this.#excludePatterns = coerceArray(options.exclude);
   }
 
-  get name() {
+  override get name(): string {
     return "All tracked files";
   }
 
-  async resolve() {
+  override async resolve(): Promise<string[]> {
     const git = simpleGit(this.repoRoot);
     const output = await git.raw(["ls-files"]);
     const files = output
@@ -50,10 +50,10 @@ export class AllFilesSource extends BaseFileSource {
       }),
     );
 
-    return existing.filter((filePath) => filePath !== null);
+    return existing.filter((filePath): filePath is string => filePath !== null);
   }
 
-  static getHelp() {
+  static override getHelp() {
     return {
       name: "AllFilesSource",
       description: "All git-tracked files in the repo. Typical use: manual full-repo check.",
@@ -62,25 +62,25 @@ export class AllFilesSource extends BaseFileSource {
   }
 }
 
-function matchGlob(pattern, filePath) {
+function matchGlob(pattern: string, filePath: string): boolean {
   const p = pattern.replace(/\\/g, "/");
   const f = filePath.replace(/\\/g, "/");
   let regex = "";
   let i = 0;
   while (i < p.length) {
-    if (p[i] === "*" && p[i + 1] === "*") {
-      if (p[i + 2] === "/") {
+    if (p.charAt(i) === "*" && p.charAt(i + 1) === "*") {
+      if (p.charAt(i + 2) === "/") {
         regex += "(?:.+/)?"; // **/ = zero or more path segments
         i += 3;
       } else {
         regex += ".*"; // ** at end
         i += 2;
       }
-    } else if (p[i] === "*") {
+    } else if (p.charAt(i) === "*") {
       regex += "[^/]*";
       i++;
     } else {
-      regex += p[i].replace(/[.+^${}()|[\]\\]/g, "\\$&");
+      regex += p.charAt(i).replace(/[.+^${}()|[\]\\]/g, "\\$&");
       i++;
     }
   }

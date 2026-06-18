@@ -18688,6 +18688,8 @@ var esm_default = gitInstanceFactory;
 
 // file-sources/base-file-source.ts
 var BaseFileSource = class {
+  repoRoot;
+  options;
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
     this.options = options;
@@ -18703,7 +18705,7 @@ var BaseFileSource = class {
    * @param {object} context - { args: string[] } CLI args for parametric sources.
    * @returns {Promise<string[]>} Absolute paths.
    */
-  async resolve(context) {
+  async resolve(_context) {
     throw new Error("Not implemented: resolve");
   }
   /**
@@ -18763,19 +18765,19 @@ function matchGlob(pattern, filePath) {
   let regex = "";
   let i = 0;
   while (i < p.length) {
-    if (p[i] === "*" && p[i + 1] === "*") {
-      if (p[i + 2] === "/") {
+    if (p.charAt(i) === "*" && p.charAt(i + 1) === "*") {
+      if (p.charAt(i + 2) === "/") {
         regex += "(?:.+/)?";
         i += 3;
       } else {
         regex += ".*";
         i += 2;
       }
-    } else if (p[i] === "*") {
+    } else if (p.charAt(i) === "*") {
       regex += "[^/]*";
       i++;
     } else {
-      regex += p[i].replace(/[.+^${}()|[\]\\]/g, "\\$&");
+      regex += p.charAt(i).replace(/[.+^${}()|[\]\\]/g, "\\$&");
       i++;
     }
   }
@@ -18844,13 +18846,13 @@ var DiffBaseSource = class extends BaseFileSource {
       console.log(`DiffBaseSource: using options.baseRef = "${this.options.baseRef}"`);
       return this.options.baseRef;
     }
-    const ghBaseRef = process.env.GITHUB_BASE_REF;
+    const ghBaseRef = process.env["GITHUB_BASE_REF"];
     if (ghBaseRef) {
       console.log(`DiffBaseSource: using GITHUB_BASE_REF = "${ghBaseRef}" \u2192 origin/${ghBaseRef}`);
       return `origin/${ghBaseRef}`;
     }
-    if (process.env.GITHUB_EVENT_NAME === "push") {
-      const defaultBranch = process.env.GITHUB_DEFAULT_BRANCH || "main";
+    if (process.env["GITHUB_EVENT_NAME"] === "push") {
+      const defaultBranch = process.env["GITHUB_DEFAULT_BRANCH"] || "main";
       console.log(`DiffBaseSource: GITHUB_EVENT_NAME = "push", using default branch "${defaultBranch}" \u2192 origin/${defaultBranch}`);
       return `origin/${defaultBranch}`;
     }
@@ -18971,7 +18973,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "5d73619" : "unknown";
+var LINTER_COMMIT = true ? "04d4dac" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

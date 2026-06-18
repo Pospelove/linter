@@ -3,7 +3,10 @@
  * A file source determines which files to process.
  */
 export class BaseFileSource {
-  constructor(repoRoot, options = {}) {
+  protected repoRoot: string;
+  protected options: any;
+
+  constructor(repoRoot: string, options: any = {}) {
     this.repoRoot = repoRoot;
     this.options = options;
   }
@@ -11,7 +14,7 @@ export class BaseFileSource {
   /**
    * @returns {string} Human-readable name of the source.
    */
-  get name() {
+  get name(): string {
     throw new Error("Not implemented: name");
   }
 
@@ -20,7 +23,7 @@ export class BaseFileSource {
    * @param {object} context - { args: string[] } CLI args for parametric sources.
    * @returns {Promise<string[]>} Absolute paths.
    */
-  async resolve(context) {
+  async resolve(_context: { args: string[] }): Promise<string[]> {
     throw new Error("Not implemented: resolve");
   }
 
