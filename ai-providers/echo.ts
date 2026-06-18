@@ -1,4 +1,4 @@
-import { BaseAiProvider } from "./base-ai-provider.js";
+import { BaseAiProvider, type AiProviderOptions } from "./base-ai-provider.js";
 
 /**
  * Echo AI provider — for testing only.
@@ -10,15 +10,15 @@ import { BaseAiProvider } from "./base-ai-provider.js";
  * Detects mode by sniffing for "fix" keyword in the prompt.
  */
 export class EchoProvider extends BaseAiProvider {
-  get name() {
+  override get name(): string {
     return "echo";
   }
 
-  checkDeps() {
+  override checkDeps(): boolean {
     return true;
   }
 
-  async call(prompt, _options = {}) {
+  override async call(prompt: string, _options: AiProviderOptions = {}): Promise<string> {
     const isFixMode = prompt.includes("fixing assistant") || prompt.includes("fix mode");
     if (isFixMode) {
       return JSON.stringify({ pass: true, reason: "echo-ok (no fix needed)" });
@@ -26,7 +26,7 @@ export class EchoProvider extends BaseAiProvider {
     return JSON.stringify({ pass: true, reason: "echo-ok" });
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string } {
     return {
       name: "EchoProvider",
       description: "Test provider that always returns pass:true. No AI calls made.",

@@ -1,0 +1,17 @@
+## Codebase Patterns
+- Use `override` keyword for all methods that override base class methods (required by `noImplicitOverride` in `tsconfig.json`).
+- Use `AiProviderOptions` interface from `ai-providers/base-ai-provider.ts` for AI provider `call` methods.
+- The `as` operator is strictly banned; use proper typing or `@ts-expect-error` if absolutely necessary.
+- Always run `yarn build` after code changes to keep `dist/linter.mjs` updated.
+
+## 2026-06-18 10:00 - US-001
+- Fixed TypeScript errors in `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, and `ai-providers/echo.ts`.
+- Installed `@types/node` to resolve Node.js built-in type errors.
+- Added `AiProviderOptions` interface to `BaseAiProvider`.
+- Added `override` modifiers to subclasses.
+- Files changed: `ai-providers/base-ai-provider.ts`, `ai-providers/claude.ts`, `ai-providers/echo.ts`, `package.json`.
+- **Learnings for future iterations:**
+  - The codebase has `noImplicitOverride: true` in `tsconfig.json`, so `override` is mandatory.
+  - Node.js types were missing and needed to be installed.
+  - `static override` is accepted by the compiler (tested with TS 6.0.2).
+---

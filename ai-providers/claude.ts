@@ -1,25 +1,25 @@
 import { spawn } from "child_process";
-import { BaseAiProvider } from "./base-ai-provider.js";
+import { BaseAiProvider, type AiProviderOptions } from "./base-ai-provider.js";
 
 /**
  * AI provider that invokes the Claude CLI (`claude --print`).
  */
 export class ClaudeProvider extends BaseAiProvider {
-  get name() {
+  override get name(): string {
     return "Claude CLI";
   }
 
-  checkDeps() {
+  override checkDeps(): boolean {
     return true;
   }
 
   /**
    * Send a prompt to `claude --print` and return the response.
    * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
-  async call(prompt, options = {}) {
+  override async call(prompt: string, options: AiProviderOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
       const args = ["--print"];
 
@@ -32,7 +32,7 @@ export class ClaudeProvider extends BaseAiProvider {
       let stderr = "";
       let settled = false;
 
-      const settle = (fn) => {
+      const settle = (fn: () => void) => {
         if (settled) return;
         settled = true;
         if (timer) clearTimeout(timer);
@@ -46,10 +46,10 @@ export class ClaudeProvider extends BaseAiProvider {
           }, options.timeout)
         : null;
 
-      proc.stdout.on("data", (data) => { stdout += data; });
-      proc.stderr.on("data", (data) => { stderr += data; });
+      proc.stdout.on("data", (data: Buffer | string) => { stdout += data.toString(); });
+      proc.stderr.on("data", (data: Buffer | string) => { stderr += data.toString(); });
 
-      proc.on("error", (err) => {
+      proc.on("error", (err: Error & { code?: string }) => {
         settle(() => {
           if (err.code === "ENOENT") {
             reject(new Error("claude CLI not found on PATH"));
@@ -59,7 +59,7 @@ export class ClaudeProvider extends BaseAiProvider {
         });
       });
 
-      proc.on("close", (code) => {
+      proc.on("close", (code: number | null) => {
         settle(() => {
           if (code !== 0) {
             const parts = [`claude exited with code ${code}`];
@@ -77,7 +77,7 @@ export class ClaudeProvider extends BaseAiProvider {
     });
   }
 
-  static getHelp() {
+  static override getHelp(): { name: string; description: string } {
     return {
       name: "ClaudeProvider",
       description: "Invokes the Claude CLI (claude --print) to get AI responses.",

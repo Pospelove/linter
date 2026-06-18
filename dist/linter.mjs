@@ -5840,11 +5840,11 @@ var BaseAiProvider = class {
   }
   /**
    * Send a prompt and return the AI's text response.
-   * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {string} _prompt
+   * @param {AiProviderOptions} _options
    * @returns {Promise<string>}
    */
-  async call(prompt, options = {}) {
+  async call(_prompt, _options = {}) {
     throw new Error("Not implemented: call");
   }
   /**
@@ -5867,7 +5867,7 @@ var ClaudeProvider = class extends BaseAiProvider {
   /**
    * Send a prompt to `claude --print` and return the response.
    * @param {string} prompt
-   * @param {{ cwd?: string }} options
+   * @param {AiProviderOptions} options
    * @returns {Promise<string>}
    */
   async call(prompt, options = {}) {
@@ -5891,10 +5891,10 @@ var ClaudeProvider = class extends BaseAiProvider {
         settle(() => reject(new Error(`claude CLI timed out after ${options.timeout}ms`)));
       }, options.timeout) : null;
       proc.stdout.on("data", (data) => {
-        stdout += data;
+        stdout += data.toString();
       });
       proc.stderr.on("data", (data) => {
-        stderr += data;
+        stderr += data.toString();
       });
       proc.on("error", (err) => {
         settle(() => {
@@ -18966,7 +18966,7 @@ var builtinRegistry = {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "b2bddf4" : "unknown";
+var LINTER_COMMIT = true ? "bf9a555" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
