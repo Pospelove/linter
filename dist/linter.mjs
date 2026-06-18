@@ -4563,7 +4563,7 @@ var require_dist2 = __commonJS({
   }
 });
 
-// linter.js
+// linter.ts
 import fs22 from "fs";
 import path17 from "path";
 import { fileURLToPath } from "url";
@@ -4725,7 +4725,7 @@ function validateConcurrency(concurrency) {
   }
 }
 
-// util.js
+// util.ts
 function ensureCleanExit(child) {
   if (child.error) {
     throw child.error;
@@ -4739,14 +4739,14 @@ function ensureCleanExit(child) {
   return child;
 }
 
-// checks/crlf-check.js
+// checks/crlf-check.ts
 import fs3 from "fs/promises";
 
-// checks/base-check.js
+// checks/base-check.ts
 import path from "path";
 import fs2 from "fs/promises";
 
-// expanders/base-expander.js
+// expanders/base-expander.ts
 var BaseExpander = class {
   constructor(options = {}) {
     this.options = options;
@@ -4767,7 +4767,7 @@ var BaseExpander = class {
   }
 };
 
-// entries/base-entry.js
+// entries/base-entry.ts
 import { promises as fs } from "fs";
 var BaseEntry = class {
   /**
@@ -4836,7 +4836,7 @@ var BaseEntry = class {
   }
 };
 
-// entries/file-entry.js
+// entries/file-entry.ts
 var FileEntry = class extends BaseEntry {
   #filePath;
   constructor(filePath) {
@@ -4851,7 +4851,7 @@ var FileEntry = class extends BaseEntry {
   }
 };
 
-// expanders/file-expander.js
+// expanders/file-expander.ts
 var FileExpander = class extends BaseExpander {
   async expand(file) {
     return [new FileEntry(file)];
@@ -4864,7 +4864,7 @@ var FileExpander = class extends BaseExpander {
   }
 };
 
-// checks/base-check.js
+// checks/base-check.ts
 var BaseCheck = class {
   #extensions;
   #includePaths;
@@ -5087,7 +5087,7 @@ var BaseCheck = class {
   }
 };
 
-// checks/crlf-check.js
+// checks/crlf-check.ts
 var CrlfCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
@@ -5128,7 +5128,7 @@ var CrlfCheck = class extends BaseCheck {
   }
 };
 
-// checks/encoding-check.js
+// checks/encoding-check.ts
 var import_iconv_lite = __toESM(require_lib(), 1);
 import fs4 from "fs/promises";
 var SUPPORTED = /* @__PURE__ */ new Set(["utf-8", "cp1251", "ascii"]);
@@ -5247,17 +5247,17 @@ var EncodingCheck = class extends BaseCheck {
   }
 };
 
-// checks/linelint-check.js
+// checks/linelint-check.ts
 import { execFile as execFile2 } from "child_process";
 import { promisify } from "util";
 import { promises as fs7 } from "fs";
 
-// tool-resolve/linelint.js
+// tool-resolve/linelint.ts
 import fs6 from "fs";
 import path3 from "path";
 import os2 from "os";
 
-// tool-resolve/tool-utils.js
+// tool-resolve/tool-utils.ts
 import fs5 from "fs";
 import path2 from "path";
 import crypto2 from "crypto";
@@ -5373,7 +5373,7 @@ function extractArchive(archivePath, destDir, members = []) {
   });
 }
 
-// tool-resolve/linelint.js
+// tool-resolve/linelint.ts
 var VERSION = "0.0.6";
 async function getLinelintPath({ shouldDownload, shouldSearchInPath, toolsDir }) {
   const { cachePath: CACHE_PATH } = getToolPaths(toolsDir);
@@ -5420,7 +5420,7 @@ async function getLinelintPath({ shouldDownload, shouldSearchInPath, toolsDir })
   return void 0;
 }
 
-// checks/linelint-check.js
+// checks/linelint-check.ts
 var execFileAsync = promisify(execFile2);
 var LinelintCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
@@ -5483,12 +5483,12 @@ var LinelintCheck = class extends BaseCheck {
   }
 };
 
-// checks/clang-format-check.js
+// checks/clang-format-check.ts
 import { promises as fs9 } from "fs";
 import { execFile as execFile3 } from "child_process";
 import { promisify as promisify2 } from "util";
 
-// tool-resolve/clang-format.js
+// tool-resolve/clang-format.ts
 import fs8 from "fs";
 import path4 from "path";
 import os3 from "os";
@@ -5563,7 +5563,7 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
   return void 0;
 }
 
-// checks/clang-format-check.js
+// checks/clang-format-check.ts
 var execFileAsync2 = promisify2(execFile3);
 var ClangFormatCheck = class extends BaseCheck {
   constructor(repoRoot, options = {}) {
@@ -5626,7 +5626,7 @@ var ClangFormatCheck = class extends BaseCheck {
   }
 };
 
-// checks/paired-files-check.js
+// checks/paired-files-check.ts
 import { promises as fs10 } from "fs";
 import path5 from "path";
 var PairedFilesCheck = class extends BaseCheck {
@@ -5718,7 +5718,7 @@ var PairedFilesCheck = class extends BaseCheck {
   }
 };
 
-// checks/codegen-check.js
+// checks/codegen-check.ts
 import { promises as fs11 } from "fs";
 import { execFile as execFile4 } from "child_process";
 import { promisify as promisify3 } from "util";
@@ -5817,13 +5817,13 @@ var CodegenCheck = class extends BaseCheck {
   }
 };
 
-// checks/ai-prompt-check.js
+// checks/ai-prompt-check.ts
 import path9 from "path";
 
-// ai-providers/claude.js
+// ai-providers/claude.ts
 import { spawn } from "child_process";
 
-// ai-providers/base-ai-provider.js
+// ai-providers/base-ai-provider.ts
 var BaseAiProvider = class {
   /**
    * @returns {string} Human-readable name of the provider.
@@ -5856,7 +5856,7 @@ var BaseAiProvider = class {
   }
 };
 
-// ai-providers/claude.js
+// ai-providers/claude.ts
 var ClaudeProvider = class extends BaseAiProvider {
   get name() {
     return "Claude CLI";
@@ -5929,7 +5929,7 @@ var ClaudeProvider = class extends BaseAiProvider {
   }
 };
 
-// ai-providers/gemini.js
+// ai-providers/gemini.ts
 import { spawn as spawn2 } from "child_process";
 var GeminiProvider = class extends BaseAiProvider {
   #model;
@@ -13161,7 +13161,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// ai-providers/openai-compatible.js
+// ai-providers/openai-compatible.ts
 var OpenAICompatibleProvider = class extends BaseAiProvider {
   #client;
   #model;
@@ -13205,7 +13205,7 @@ var OpenAICompatibleProvider = class extends BaseAiProvider {
   }
 };
 
-// checks/check-utils.js
+// checks/check-utils.ts
 import { promises as fs12 } from "fs";
 import path8 from "path";
 import { createHash } from "crypto";
@@ -13272,7 +13272,7 @@ var lockWriteContent = async (checkName, key, content, repoRoot, opts = {}) => {
   await fs12.writeFile(lp, JSON.stringify(lock, null, 2) + "\n", "utf-8");
 };
 
-// checks/ai-prompt-check.js
+// checks/ai-prompt-check.ts
 var AI_PROVIDERS = {
   claude: ClaudeProvider,
   gemini: GeminiProvider,
@@ -13491,7 +13491,7 @@ If it fails but cannot be fixed, set pass to false and omit content.`;
   }
 };
 
-// checks/regex-check.js
+// checks/regex-check.ts
 import fs13 from "fs/promises";
 import path10 from "path";
 var RegexCheck = class extends BaseCheck {
@@ -13601,7 +13601,7 @@ ${violations.join("\n")}`
   }
 };
 
-// checks/firecrawl-check.js
+// checks/firecrawl-check.ts
 import { promises as fs14 } from "fs";
 import path11 from "path";
 var FirecrawlCheck = class extends BaseCheck {
@@ -13722,7 +13722,7 @@ var FirecrawlCheck = class extends BaseCheck {
   }
 };
 
-// checks/composite-check.js
+// checks/composite-check.ts
 var CompositeCheck = class extends BaseCheck {
   #linter;
   #fixer;
@@ -13770,7 +13770,7 @@ var CompositeCheck = class extends BaseCheck {
   }
 };
 
-// checks/tsc-check.js
+// checks/tsc-check.ts
 import path12 from "path";
 import { execFile as execFile5 } from "child_process";
 import { promisify as promisify4 } from "util";
@@ -13888,7 +13888,7 @@ var TscCheck = class extends BaseCheck {
   }
 };
 
-// checks/always-fail-check.js
+// checks/always-fail-check.ts
 var AlwaysFailCheck = class extends BaseCheck {
   get name() {
     return "always-fail";
@@ -13908,7 +13908,7 @@ var AlwaysFailCheck = class extends BaseCheck {
   }
 };
 
-// checks/localization-key-check.js
+// checks/localization-key-check.ts
 import fs15 from "fs/promises";
 import path13 from "path";
 var LocalizationKeyCheck = class extends BaseCheck {
@@ -14038,7 +14038,7 @@ function findUnregisteredKeys(content, fnName, registeredKeys) {
   return violations;
 }
 
-// checks/custom-check.js
+// checks/custom-check.ts
 import { promises as fs16 } from "fs";
 import { spawn as spawn3 } from "child_process";
 var CustomCheck = class extends BaseCheck {
@@ -14126,7 +14126,7 @@ var CustomCheck = class extends BaseCheck {
   }
 };
 
-// file-sources/all-files-source.js
+// file-sources/all-files-source.ts
 import fs17 from "fs";
 import path14 from "path";
 
@@ -18681,7 +18681,7 @@ function gitInstanceFactory(baseDir, options) {
 init_git_response_error();
 var esm_default = gitInstanceFactory;
 
-// file-sources/base-file-source.js
+// file-sources/base-file-source.ts
 var BaseFileSource = class {
   constructor(repoRoot, options = {}) {
     this.repoRoot = repoRoot;
@@ -18711,7 +18711,7 @@ var BaseFileSource = class {
   }
 };
 
-// file-sources/all-files-source.js
+// file-sources/all-files-source.ts
 var AllFilesSource = class extends BaseFileSource {
   #includePatterns;
   #excludePatterns;
@@ -18777,7 +18777,7 @@ function matchGlob(pattern, filePath) {
   return new RegExp(`^${regex}$`).test(f);
 }
 
-// file-sources/staged-files-source.js
+// file-sources/staged-files-source.ts
 import fs18 from "fs";
 import path15 from "path";
 var StagedFilesSource = class extends BaseFileSource {
@@ -18809,7 +18809,7 @@ var StagedFilesSource = class extends BaseFileSource {
   }
 };
 
-// file-sources/diff-base-source.js
+// file-sources/diff-base-source.ts
 import fs19 from "fs";
 import path16 from "path";
 var DiffBaseSource = class extends BaseFileSource {
@@ -18862,10 +18862,10 @@ var DiffBaseSource = class extends BaseFileSource {
   }
 };
 
-// expanders/json-array-expander.js
+// expanders/json-array-expander.ts
 import fs21 from "fs/promises";
 
-// entries/json-array-entry.js
+// entries/json-array-entry.ts
 import { promises as fs20 } from "fs";
 var JsonArrayEntry = class extends BaseEntry {
   #filePath;
@@ -18914,7 +18914,7 @@ var JsonArrayEntry = class extends BaseEntry {
   }
 };
 
-// expanders/json-array-expander.js
+// expanders/json-array-expander.ts
 var JsonArrayExpander = class extends BaseExpander {
   async expand(file) {
     const text = await fs21.readFile(file, "utf8");
@@ -18930,7 +18930,7 @@ var JsonArrayExpander = class extends BaseExpander {
   }
 };
 
-// registry.js
+// registry.ts
 var builtinChecks = {
   CrlfCheck,
   EncodingCheck,
@@ -18962,11 +18962,11 @@ var builtinRegistry = {
   ...builtinExpanders
 };
 
-// linter.js
+// linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path17.dirname(__filename);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "826b164" : "unknown";
+var LINTER_COMMIT = true ? "b2bddf4" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

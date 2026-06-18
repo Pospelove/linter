@@ -9,7 +9,7 @@ try {
 } catch {}
 
 await esbuild.build({
-  entryPoints: ["linter.js"],
+  entryPoints: ["linter.ts"],
   bundle: true,
   platform: "node",
   target: "node18",
