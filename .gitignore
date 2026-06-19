@@ -2,3 +2,5 @@ node_modules
 tools
 .linter
 .env
+coverage
+dist/*.map

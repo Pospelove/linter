@@ -12,7 +12,8 @@
     "fix": "node .linter/linter.mjs --fix",
     "update-linter": "cp dist/linter.mjs .linter/linter.mjs",
     "test": "yarn build && node tests/integration/run.mjs",
-    "test:update": "yarn build && UPDATE_SNAPSHOTS=1 node tests/integration/run.mjs"
+    "test:update": "yarn build && UPDATE_SNAPSHOTS=1 node tests/integration/run.mjs",
+    "test:coverage": "node esbuild.config.js --sourcemap && c8 --reporter=text --reporter=html --exclude 'node_modules/**' --exclude 'tests/**' node tests/integration/run.mjs"
   },
   "dependencies": {
     "iconv-lite": "^0.7.2",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
+    "c8": "^11.0.0",
     "esbuild": "^0.27.3",
     "typescript": "^6.0.2"
   }
