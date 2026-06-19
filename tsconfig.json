@@ -28,5 +28,5 @@
     "outDir": "dist"
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "esbuild.config.js"]
+  "exclude": ["node_modules", "dist", "esbuild.config.js", "tests/integration/*/fixture"]
 }

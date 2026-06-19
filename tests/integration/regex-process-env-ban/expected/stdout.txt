@@ -1,0 +1,5 @@
+Mode: manual | Source: All tracked files | Checks: process-env-ban
+All tracked files: 4 file(s)
+Linting 3 check(s) across 3 file(s)...
+Summary: 3 check(s), 2 passed, 1 failed
+Completed in <TIME>
