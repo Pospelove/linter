@@ -1,0 +1,18 @@
+{
+  "project": "Project",
+  "branchName": "ralph/lint-fixes",
+  "description": "Fix outstanding lint issues",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix process-env-ban in src/bad.ts",
+      "description": "As a developer, I need to fix process-env-ban issue in src/bad.ts so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks process-env-ban --files src/bad.ts"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -69,6 +69,7 @@ const normalize = (text, tmpDir) => {
   const replacements = [
     [new RegExp(escapeRe(tmpDir), "g"), "<TMPDIR>"],
     [new RegExp(escapeRe(realTmp), "g"), "<TMPDIR>"],
+    [new RegExp(`node ${escapeRe(LINTER)}`, "g"), "node <LINTER>"],
     [/Completed in \d+ minutes?, [\d.]+ seconds/g, "Completed in <TIME>"],
     [/Completed in [\d.]+ seconds/g, "Completed in <TIME>"],
   ];
@@ -125,9 +126,11 @@ const runOne = (testDir) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `linter-it-${name}-`));
   try {
     copyRecursive(fixtureDir, tmpDir);
-    // args.txt is a runner directive, not a fixture file
+    // args.txt and extra-snapshots.txt are runner directives, not fixture files
     const argsCopy = path.join(tmpDir, "args.txt");
     if (fs.existsSync(argsCopy)) fs.unlinkSync(argsCopy);
+    const extraSnapshotsCopy = path.join(tmpDir, "extra-snapshots.txt");
+    if (fs.existsSync(extraSnapshotsCopy)) fs.unlinkSync(extraSnapshotsCopy);
 
     initGitRepo(tmpDir);
 
@@ -140,10 +143,26 @@ const runOne = (testDir) => {
     const stderr = normalize(res.stderr || "", tmpDir);
     const exitCode = String(res.status ?? "null") + "\n";
 
+    // Artifact snapshots: files produced by the linter (e.g. prd.json)
+    const extraSnapshotsFile = path.join(fixtureDir, "extra-snapshots.txt");
+    const artifactNames = fs.existsSync(extraSnapshotsFile)
+      ? fs.readFileSync(extraSnapshotsFile, "utf-8").trim().split("\n").filter(Boolean)
+      : [];
+    const artifacts = new Map();
+    for (const aName of artifactNames) {
+      const actualPath = path.join(tmpDir, aName);
+      artifacts.set(aName, fs.existsSync(actualPath)
+        ? normalize(fs.readFileSync(actualPath, "utf-8"), tmpDir)
+        : "<MISSING>\n");
+    }
+
     if (UPDATE) {
       writeSnapshot(expectedDir, "stdout.txt", stdout);
       writeSnapshot(expectedDir, "stderr.txt", stderr);
       writeSnapshot(expectedDir, "exit-code.txt", exitCode);
+      for (const [aName, content] of artifacts) {
+        writeSnapshot(expectedDir, aName, content);
+      }
       console.log(`[UPDATE] ${name}`);
       return true;
     }
@@ -156,6 +175,9 @@ const runOne = (testDir) => {
     if (stdout !== expectedStdout) mismatches.push("stdout");
     if (stderr !== expectedStderr) mismatches.push("stderr");
     if (exitCode !== expectedExit) mismatches.push("exit-code");
+    for (const [aName, content] of artifacts) {
+      if (content !== readSnapshot(expectedDir, aName)) mismatches.push(aName);
+    }
 
     if (mismatches.length === 0) {
       console.log(`[PASS] ${name}`);
@@ -170,6 +192,11 @@ const runOne = (testDir) => {
     }
     if (mismatches.includes("stderr")) {
       printDiff("stderr", expectedStderr, stderr);
+    }
+    for (const [aName, content] of artifacts) {
+      if (mismatches.includes(aName)) {
+        printDiff(aName, readSnapshot(expectedDir, aName), content);
+      }
     }
     return false;
   } finally {

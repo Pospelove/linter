@@ -1,0 +1,29 @@
+{
+  "project": "Project",
+  "branchName": "ralph/lint-fixes",
+  "description": "Fix outstanding lint issues",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix process-env-ban in src/alpha.ts",
+      "description": "As a developer, I need to fix process-env-ban issue in src/alpha.ts so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks process-env-ban --files src/alpha.ts"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Fix process-env-ban in src/beta.ts",
+      "description": "As a developer, I need to fix process-env-ban issue in src/beta.ts so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks process-env-ban --files src/beta.ts"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
