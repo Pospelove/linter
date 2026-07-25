@@ -87,3 +87,12 @@ Started: Sat Jul 25 07:27:54 PM UTC 2026
   - Integration tests for per-finding CLI can be easily constructed using base64url(JSON.stringify({check, file, snippet})).
   - The aggregate fail logic for lists uses --expect-max 0 for all fingerprints in the list.
 ---
+
+## 2026-07-25 22:00:00 UTC - US-007 (Reserve --fix --finding with explicit error)
+- Verified implementation of reserved --fix --finding flag.
+- Confirmed it correctly exits with code 2 and the specified "not implemented" message.
+- Verified integration test fix-finding-reserved passes.
+- **Learnings for future iterations:**
+  - US-007 was partially implemented during US-005/US-006 but not marked as complete in prd.json.
+  - Always verify existing status before starting a new story.
+---
