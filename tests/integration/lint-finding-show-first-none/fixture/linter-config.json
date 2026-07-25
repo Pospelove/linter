@@ -1,0 +1,16 @@
+{
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "todo",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": {
+        "pattern": "TODO",
+        "message": "Found a TODO"
+      }
+    }
+  ]
+}

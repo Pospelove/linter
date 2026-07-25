@@ -518,3 +518,151 @@ Commits after this doc lands:
    per-hit findings in the same commit (its console `output` stays
    unchanged; the `regex-process-env-ban` snapshot doesn't move).
 3. Anything follow-up you actually want after using it once.
+
+## Addendum: fingerprints completely failed — findings-count in all cases
+
+Fingerprints as a stable per-instance identifier did not work in practice.
+Content-only hashing already collapsed duplicate findings to a single
+fingerprint (see "Handling duplicate findings" above), forcing us to layer
+the `--expect-max <M-K>` counting mechanism on top for multi-instance
+fingerprints. In real use, the same counting-based verification also turned
+out to be the only reliable signal for *unique* fingerprints: snippet edits,
+whitespace drift, and check-side normalization tweaks all invalidate a
+fingerprint that was supposed to identify "the same problem," which meant
+every non-trivial fix caused fingerprints to churn and downstream stories to
+break.
+
+Decision: stop pretending fingerprints identify individual instances. Use
+the findings-count semantics we already apply to duplicate fingerprints for
+**every** finding, unique or not. A story's acceptance criterion is
+"how many instances of this problem remain in this file," never "is this
+specific instance gone." Concretely:
+
+- **All per-finding stories become count-based**, not identity-based. A
+  singleton unique fingerprint is just the degenerate case M=1 of the
+  multi-instance flow: one story with `--expect-max 0`, verified by
+  re-running the check and counting matches.
+- **Fingerprints are demoted to a grouping key**, not a per-instance
+  identifier. They still name a (check, file, normalized-snippet) tuple so
+  the runner knows what to count, but no code path treats a fingerprint as
+  "this exact occurrence."
+- **Bundled stories lose their special path.** Since bundling relied on
+  unique fingerprints being individually addressable, and they no longer
+  are, bundling collapses to the same M-of-M ordered form used for
+  duplicates. `findingsPerStory` still bounds how many *distinct*
+  fingerprints share a story, but each story's acceptance criterion is a
+  count sum across those fingerprints, not a list of identities.
+- **Multi-instance semantics apply uniformly.** For any story covering N
+  findings (whether N identical duplicates or N distinct-fingerprint
+  bundle), the acceptance criterion is `--expect-max <remaining-after-this-story>`.
+  Sequential execution (already guaranteed — see Scope) makes the count
+  monotonically decrease, and each story passes iff the expected number of
+  findings has been fixed since the previous story.
+- **`--lint --finding <fp>` still works** but is understood as "count
+  instances matching this fingerprint's snippet in this file," never "find
+  this specific instance." The `--expect-max` flag is no longer optional
+  scaffolding for duplicates — it is the primary contract for every
+  invocation. The default `--expect-max 0` retains its meaning ("all
+  matching instances must be gone").
+
+Rationale: the counting mechanic was already load-bearing for the only
+case that mattered in practice (repeated snippets). Extending it to cover
+unique fingerprints removes an entire class of drift bugs, deletes the
+identity-vs-count branching from the story generator and verifier, and
+makes the semantics of every story identical: fix N of these, we count
+what's left.
+
+### PRD story shape under count-only semantics
+
+Every per-finding story now has the same three-part shape. The agent does
+not need to reason about which specific instance a story "owns"; it looks
+at the earliest remaining occurrence, fixes it (or fixes X of them for
+X-per-story bundles), and re-runs the count.
+
+Story body template:
+
+- **title**: `Fix <check> in <file> (<K> of <M>)` where M is the total
+  number of findings sharing this story's fingerprint(s) at PRD-generation
+  time, and K is this story's index within that sequence. For X-per-story
+  bundles (X > 1), K counts stories, not individual findings.
+- **description**:
+  1. One-line restatement of the check's `message`.
+  2. **"View the earliest remaining occurrence:"** followed by the exact
+     command the agent should run to see what to fix, e.g.
+     `<baseCommand> --lint --finding <fp> --show first`. This command
+     prints `line <N>: <snippet>` for the first still-matching instance in
+     the file (or the first instance across the story's fingerprints, in
+     bundle order). If nothing matches, it exits 0 with empty output —
+     the story is already satisfied.
+  3. **"Fix that occurrence"** (or "Fix X of the remaining occurrences"
+     for X > 1 bundles). No positional identity is claimed: any matching
+     instance will do.
+  4. **"Then verify:"** followed by the acceptance-criterion command.
+- **acceptanceCriteria**: `[<baseCommand> --lint --finding <fp> --expect-max <M-K*X>]`
+  where `X` is this story's findings-per-story (usually 1) and K is the
+  story's 1-based index in the sequence. Passes iff at least `K*X`
+  instances have been removed since PRD generation.
+
+Because execution is sequential (see Scope), `M - K*X` decreases
+monotonically. Story K's criterion becomes satisfiable only after story
+K-1 has fixed its share, and it stops being satisfiable if a later story
+already fixed too many — which is fine, because the runner processes
+stories in order and never revisits a satisfied one.
+
+### `--show first` (new)
+
+A read-only flag on `--lint --finding`. When present, the runner:
+
+- Re-runs the referenced check against the referenced file.
+- Sorts the resulting findings by `startLine`, then by `snippet`.
+- Prints the first finding as `line <startLine>[-<endLine>]: <snippet>`
+  (single-line snippets on one line; multi-line snippets fenced with
+  triple backticks so the console output is unambiguous).
+- Exits 0 whether or not any finding was found. Exit 2 is reserved for
+  the same malformed/unknown/env-drift errors as bare `--lint --finding`.
+
+`--show first` is mutually exclusive with `--expect-max` (viewing is not
+verification) and with comma-separated `--finding` lists (the "first"
+across multiple fingerprints is ambiguous and the agent can just run the
+command per fingerprint). Violations exit 2.
+
+### Uniform story example
+
+File `src/foo.ts` has 3 identical `TODO` snippets plus 1 unique
+`console.log` snippet. `findingsPerStory: 1` (default). PRD:
+
+- **US-001**: `Fix no-todo in src/foo.ts (1 of 3)`
+  - Description: "Comment left as TODO. View the earliest remaining
+    occurrence: `linter --lint --finding <fp-todo> --show first`. Fix
+    that occurrence. Then verify:
+    `linter --lint --finding <fp-todo> --expect-max 2`."
+  - Acceptance: `linter --lint --finding <fp-todo> --expect-max 2`.
+- **US-002**: same shape, `--expect-max 1`.
+- **US-003**: same shape, `--expect-max 0`.
+- **US-004**: `Fix no-console in src/foo.ts (1 of 1)`
+  - Description: "console.log left in source. View:
+    `linter --lint --finding <fp-console> --show first`. Fix. Verify:
+    `linter --lint --finding <fp-console> --expect-max 0`."
+  - Acceptance: `linter --lint --finding <fp-console> --expect-max 0`.
+
+Note US-004 uses the exact same three-part shape as US-001..US-003 — the
+old "singleton unique fingerprint" specialization is gone. The only
+difference from a multi-instance story is that M=1, so K=1 is also
+M-K=0 for `--expect-max`.
+
+### Bundled stories (X > 1)
+
+When `findingsPerStory: X` with X > 1, stories still target one
+fingerprint each (bundling across distinct fingerprints in one story is
+dropped along with the identity-based bundling path). The X value only
+increases how many instances each story is responsible for:
+
+- M findings of the same fingerprint → `ceil(M / X)` stories.
+- Story K's acceptance: `--expect-max max(M - K*X, 0)`.
+- Description: "Fix X of the remaining occurrences" instead of "that
+  occurrence." The `--show first` command is unchanged; the agent runs
+  it, fixes one, runs it again for the next, until the acceptance
+  criterion passes.
+
+The final story in the sequence may be responsible for fewer than X
+instances (the remainder). Its `--expect-max 0` acceptance still holds.
