@@ -1,6 +1,6 @@
 {
   "project": "linter",
-  "branchName": "per-finding-workflow-implementation",
+  "branchName": "main",
   "description": "Implement the per-finding lint workflow described in docs/per-finding-workflow.md. Each user story is one step in the plan, sized to be picked up by an independent Claude session with cold context. Steps are ordered by dependency: every step lands on main green (yarn build + yarn test pass) before the next one begins.",
   "userStories": [
     {
