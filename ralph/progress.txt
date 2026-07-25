@@ -41,3 +41,15 @@ Started: Sat Jul 25 07:27:54 PM UTC 2026
   - Deduping in buildPrd is essential for backward compatibility with per-file PRD consumers.
   - Adding new checks for integration tests requires registering them in registry.ts.
 ---
+
+## 2026-07-25 20:10:00 UTC - US-003 (Fingerprint derivation + determinism test)
+- Implemented fingerprint derivation helper in checks/finding-fingerprint.ts.
+- Injected fingerprints into all findings in the runner (linter.ts).
+- Updated buildPrd to include fingerprints in PRD notes for verification and future use.
+- Added FakeFindingCheck to facilitate testing specific findings and path errors.
+- Added fingerprint-determinism integration test verifying JSON order, path normalization, and non-portable path rejection.
+- **Learnings for future iterations:**
+  - The linter check `no-ts-as-operator` is very aggressive and flags "as" even in comments. Avoid the word "as" in comments or rephrase to "to be" or "like".
+  - Integration tests can capture artifacts like `prd.json` by listing them in `extra-snapshots.txt`.
+  - Deduping in `buildPrd` now accounts for fingerprints, but still groups by file for per-file mode.
+---
