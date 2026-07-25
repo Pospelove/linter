@@ -1,0 +1,14 @@
+{
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "example",
+      "export": "CrlfCheck",
+      "modes": ["manual"],
+      "options": { "extensions": [".txt"] },
+      "expander": { "export": "FileExpander" }
+    }
+  ]
+}
