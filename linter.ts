@@ -1226,7 +1226,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
           if (botched) {
             aggregateFail = true;
             console.error(`[FAIL] ${payload.file} [${payload.check}]`);
-            console.error(`hey man fingerprint a bit different but check still failed right here so the fix doesnt count`);
+            console.error(`Botched fix detected: the snippet was modified but still fails the check.`);
             console.error(`  Expected snippet: ${payload.snippet}`);
             console.error(`  Found snippet:    ${botched.snippet?.trim().replace(/\s+/g, " ") || ""}`);
           }

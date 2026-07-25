@@ -215,6 +215,17 @@ Exit codes:
 | Any fingerprint references a file no longer in repo | 2 | Env drift. |
 | `--expect-max` combined with comma-separated `--finding` list | 2 | Invalid usage. |
 
+### Botched Fix Detection (Similarity Fallback)
+
+*Note: This edge case was identified and addressed after the initial spec was finalized.*
+
+Because fingerprints are content-based, slightly modifying an offending snippet (e.g., adding a single character to a failing string) without actually fixing the underlying issue changes the fingerprint. This could allow a PRD story to falsely pass because the expected fingerprint is no longer present.
+
+To prevent this, the `--lint --finding` flow implements a Levenshtein similarity fallback:
+- If the expected fingerprint is considered "resolved" (its instance count is ≤ `--expect-max`), the runner checks all *unmatched* findings for the same check in the same file.
+- If an unmatched finding's snippet has a ≥ 60% Levenshtein similarity to the expected snippet, the runner rejects the fix.
+- It outputs a "Botched fix detected" warning and exits 1, ensuring the PRD story remains open until the issue is genuinely resolved.
+
 `--finding` is mutually exclusive with `--files`, `--checks`, and
 `--output-prd`. The fingerprints carry the file+check info themselves, and
 per-finding verification is not a valid moment to regenerate a full PRD —

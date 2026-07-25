@@ -19114,7 +19114,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "968b8cb" : "unknown";
+var LINTER_COMMIT = true ? "8716ea3" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19890,7 +19890,7 @@ ${first2.snippet || ""}`;
           if (botched) {
             aggregateFail = true;
             console.error(`[FAIL] ${payload.file} [${payload.check}]`);
-            console.error(`hey man fingerprint a bit different but check still failed right here so the fix doesnt count`);
+            console.error(`Botched fix detected: the snippet was modified but still fails the check.`);
             console.error(`  Expected snippet: ${payload.snippet}`);
             console.error(`  Found snippet:    ${botched.snippet?.trim().replace(/\s+/g, " ") || ""}`);
           }
