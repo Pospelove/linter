@@ -1,0 +1,31 @@
+# Ralph Progress Log
+Started: Sat Jul 25 07:27:54 PM UTC 2026
+---
+
+## Codebase Patterns
+- `yarn build` compiles source to `dist/linter.mjs`; `yarn test` runs `tests/integration/run.mjs`.
+- Integration tests: each fixture in `tests/integration/<name>/fixture/` is copied to a temp dir, `git init`ed, and the linter runs with `args.txt`. Compare stdout/stderr/exit-code against `expected/`.
+- Snapshot regeneration: `UPDATE_SNAPSHOTS=1 node tests/integration/run.mjs [<fixture-name>]`.
+- The linter's `--no-ts-as-operator` rule matches ` as ` even in strings/comments — reword to "because it", "like", etc.
+- `Record<string, unknown>` options: use `String()`/`Number()`/`!!` for coercion, bracket notation for keys.
+- Errors are `unknown` in catch blocks — use `err instanceof Error ? err.message : String(err)`.
+- Config-load errors are thrown from `loadConfig()` in `linter.ts` and surface via the top-level try/catch as `Error during processing: <message>` on stderr with exit code 1.
+
+## 2026-07-25 - US-001 (Delete virtual entries / expanders)
+- Deleted `entries/{base-entry,file-entry,json-array-entry}.ts` and `expanders/{base-expander,file-expander,json-array-expander}.ts` (plus the now-empty dirs).
+- `checks/base-check.ts`: dropped `#expander`, `expand()`, `setExpander()`, `supportsInMemory`, `lintInMemory`, `fixInMemory`, `lintAndFixInMemory`, and the `_entry` parameter on `lint`/`fix`/`lintAndFix`.
+- `linter.ts`: removed `assertEntrySupported`/`runEntryLint`/`runEntryFix` and the `byEntry` grouping. Runner now calls `check.lint(file, deps)` / `(check.lintAndFix(...) ?? check.fix(...))` directly. Added a config-load error rejecting any check entry with an `expander` block (points at `docs/per-finding-workflow.md`).
+- `registry.ts`: removed `builtinExpanders`; `--help` output no longer prints the "BUILT-IN EXPANDERS" section.
+- Migrated `checks/ai-prompt-check.ts` from `*InMemory` to whole-file `lint`/`fix`/`lintAndFix` (reads the file, sends to the AI provider, writes back the modified content). Lock key is now the relative path.
+- `checks/composite-check.ts`, `checks/crlf-check.ts`, `checks/custom-check.ts`: dropped the `_entry`/`entry` param and the `LINTER_ENTRY_*` env vars in CustomCheck (only `LINTER_FILE`/`LINTER_REPO_ROOT`/`LINTER_MODE` remain).
+- New fixture `tests/integration/config-expander-rejected/` verifies the new config-load error.
+- All 5 integration tests pass; existing snapshots unchanged.
+
+**Learnings for future iterations:**
+- The pre-existing acceptance criterion "grep -r expander returns only doc references, the new config-load validation, and the new test fixture" is satisfied — the remaining hits are in `docs/*`, `.linter/linter.mjs` (downloaded artifact, gitignored), and `coverage/tmp/…` (gitignored).
+- The runner surfaces `loadConfig` errors via the top-level try/catch, so config-load errors show as `Error during processing: <message>` on stderr with exit 1. Design future config validations to throw plain Errors from `loadConfig`.
+- `CompositeCheck.lintAndFix` returns `null` when both linter and fixer are non-null; the runner falls back to `.fix()`. The `?? check.fix(...)` pattern in the fix loop is the idiom.
+- `AiPromptCheck` is now file-based only. If per-finding for AI checks is ever desired, per-spec Non-goals it needs a different stability contract (not content-hash fingerprints).
+- Snapshot fixtures use forward-slash paths in `expected/*.txt`; the runner normalizes `<TMPDIR>` and `<LINTER>` automatically.
+- Files under `dist/` are checked in on purpose (see `AGENTS.md`) — commit them with source changes so downstream clients stay in sync.
+---

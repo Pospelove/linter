@@ -1,0 +1,20 @@
+{
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "process-env-ban",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": {
+        "extensions": [".ts"],
+        "pattern": "\\bprocess\\.env\\b",
+        "message": "Do not use process.env directly."
+      },
+      "expander": {
+        "export": "JsonArrayExpander"
+      }
+    }
+  ]
+}

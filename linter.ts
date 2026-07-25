@@ -5,22 +5,19 @@ import { spawnSync, execSync } from "child_process";
 import pLimit from "p-limit";
 
 import { ensureCleanExit } from "./util.js";
-import { builtinRegistry, builtinChecks, builtinFileSources, builtinExpanders } from "./registry.js";
+import { builtinRegistry, builtinChecks, builtinFileSources } from "./registry.js";
 import { CompositeCheck } from "./checks/composite-check.js";
 import { BaseCheck, CheckResult } from "./checks/base-check.js";
-import { BaseEntry } from "./entries/base-entry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
 interface LinterCheckResult extends CheckResult {
-  content?: string;
   extraFiles?: string[];
 }
 
 interface ResultGroup {
   res: LinterCheckResult;
   checkName: string;
-  entryId: string;
 }
 
 interface CheckPrdConfig {
@@ -41,7 +38,6 @@ interface CheckConfigEntry {
   options?: Record<string, unknown>;
   fixWith?: { export: string; options?: Record<string, unknown> };
   prd?: CheckPrdConfig;
-  expander?: { export: string; options?: Record<string, unknown> };
 }
 
 interface PrdConfig {
@@ -109,6 +105,17 @@ const loadConfig = async (mode: string) => {
   const SrcClass = await resolveClass(srcEntry);
   const fileSource = new SrcClass(REPO_ROOT, srcEntry.options || {});
 
+  // Reject any check entry that still carries an "expander" block. Expanders
+  // were removed by the per-finding workflow; findings replace them.
+  for (const entry of config.checks) {
+    if (entry.expander !== undefined) {
+      throw new Error(
+        `Check "${entry.name}" has an "expander" block, but expanders have been removed. ` +
+        `Findings replace them. See docs/per-finding-workflow.md.`
+      );
+    }
+  }
+
   // --- checks ---
   const checks = [];
   for (const entry of config.checks) {
@@ -125,11 +132,6 @@ const loadConfig = async (mode: string) => {
     }
     check.name = entry.name;
     check._prdConfig = entry.prd || null;
-    if (entry.expander) {
-      const ExpanderClass = await resolveClass(entry.expander);
-      const expander = new ExpanderClass(entry.expander.options || {});
-      check.setExpander(expander);
-    }
     checks.push(check);
   }
 
@@ -220,56 +222,6 @@ const formatFileResults = (results: { res: LinterCheckResult; checkName: string 
 };
 
 /**
- * Refuse virtual entries against checks that don't speak the in-memory contract.
- * A virtual entry (e.g. one element of a JSON array) cannot be processed by a
- * check that does its own raw file I/O — that would corrupt the surrounding file.
- */
-const assertEntrySupported = (check: BaseCheck, entry: BaseEntry) => {
-  if (entry.isVirtual && !check.supportsInMemory) {
-    throw new Error(
-      `Check "${check.name}" does not support in-memory entries (supportsInMemory === false), ` +
-      `but its expander produced a virtual entry "${entry.id}". ` +
-      `Either use a check that implements the *InMemory interface, or drop the expander for this check.`
-    );
-  }
-};
-
-/**
- * Run a single (check, entry) pair in lint-only mode.
- * Routes to lintInMemory when the check supports it; otherwise falls back to file-based lint.
- */
-const runEntryLint = async (check: BaseCheck, entry: BaseEntry, fallbackFile: string, deps: Record<string, unknown>): Promise<LinterCheckResult> => {
-  assertEntrySupported(check, entry);
-  if (check.supportsInMemory) {
-    const content = await entry.readContent();
-    return check.lintInMemory(content, deps, entry);
-  }
-  return check.lint(entry.path ?? fallbackFile, deps, entry);
-};
-
-/**
- * Run a single (check, entry) pair in fix mode.
- * Routes to lintAndFixInMemory/fixInMemory when supported, writing the result back via entry.writeBack.
- * Otherwise falls back to file-based lintAndFix/fix.
- */
-const runEntryFix = async (check: BaseCheck, entry: BaseEntry, fallbackFile: string, deps: Record<string, unknown>): Promise<LinterCheckResult> => {
-  assertEntrySupported(check, entry);
-  if (check.supportsInMemory) {
-    const content = await entry.readContent();
-    const res =
-      (await check.lintAndFixInMemory(content, deps, entry)) ||
-      await check.fixInMemory(content, deps, entry);
-    if (res && res.status === "fixed" && typeof res.content === "string") {
-      await entry.writeBack(res.content);
-    }
-    return res;
-  }
-  const entryPath = entry.path ?? fallbackFile;
-  return (await check.lintAndFix(entryPath, deps, entry)) ||
-    check.fix(entryPath, deps, entry);
-};
-
-/**
  * Core: Run checks (lint or fix) on given files.
  *
  * Lint mode:  all (check, file) pairs run in parallel.
@@ -318,59 +270,48 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
   let fail = false;
   const counters = { pass: 0, fixed: 0, fail: 0, error: 0 };
 
+  const emitResults = (file: string, results: ResultGroup[]) => {
+    const { lines, isFail, stats } = formatFileResults(results, file);
+    counters.pass += stats.pass;
+    counters.fixed += stats.fixed;
+    counters.fail += stats.fail;
+    counters.error += stats.error;
+    if (lines.length > 0) {
+      if (isFail) {
+        console.error(lines.join("\n"));
+      } else if (verbose) {
+        console.log(lines.join("\n"));
+      }
+    }
+    if (isFail) {
+      fail = true;
+      for (const { res, checkName } of results) {
+        if (res.status === "fail" || res.status === "error") {
+          failedPairs.push({ file, checkName });
+        }
+      }
+    }
+  };
+
   if (lintOnly) {
     // Parallel lint: controlled by p-limit per file
     const limit = pLimit(10); // reasonable default for lints
     await Promise.all(
       groupedWork.map(({ file, checks }) =>
         limit(async () => {
-          // For each check, expand the file into entries, then lint each entry
-          const rawResults = await Promise.all(
-            checks.map(async (check) => {
-              const entries = await check.expand(file);
-              return Promise.all(entries.map(async (entry) => {
-                try {
-                  const res = await runEntryLint(check, entry, file, deps);
-                  return { res, checkName: check.name, entryId: entry.id };
-                } catch (err) {
-                  const message = err instanceof Error ? err.message : String(err);
-                  const errorRes: LinterCheckResult = { status: "error", output: message };
-                  return { res: errorRes, checkName: check.name, entryId: entry.id };
-                }
-              }));
+          const results = await Promise.all(
+            checks.map(async (check): Promise<ResultGroup> => {
+              try {
+                const res = await check.lint(file, deps);
+                return { res, checkName: check.name };
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                const errorRes: LinterCheckResult = { status: "error", output: message };
+                return { res: errorRes, checkName: check.name };
+              }
             })
           );
-
-          const results = rawResults.flat();
-
-          // Group results by entryId and format each group independently
-          const byEntry = new Map<string, ResultGroup[]>();
-          for (const r of results) {
-            if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
-            byEntry.get(r.entryId)!.push(r);
-          }
-          for (const [entryId, entryResults] of byEntry) {
-            const { lines, isFail, stats } = formatFileResults(entryResults, entryId);
-            counters.pass += stats.pass;
-            counters.fixed += stats.fixed;
-            counters.fail += stats.fail;
-            counters.error += stats.error;
-            if (lines.length > 0) {
-              if (isFail) {
-                console.error(lines.join("\n"));
-              } else if (verbose) {
-                console.log(lines.join("\n"));
-              }
-            }
-            if (isFail) {
-              fail = true;
-              for (const { res, checkName } of entryResults) {
-                if (res.status === "fail" || res.status === "error") {
-                  failedPairs.push({ file: entryId, checkName });
-                }
-              }
-            }
-          }
+          emitResults(file, results);
         })
       )
     );
@@ -380,48 +321,18 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
       const fileResults: ResultGroup[] = [];
 
       for (const check of checks) {
-        const entries = await check.expand(file);
-        for (const entry of entries) {
-          try {
-            const res = await runEntryFix(check, entry, file, deps);
-            if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
-            fileResults.push({ res, checkName: check.name, entryId: entry.id });
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            const errorRes: LinterCheckResult = { status: "error", output: message };
-            fileResults.push({ res: errorRes, checkName: check.name, entryId: entry.id });
-          }
+        try {
+          const res = (await check.lintAndFix(file, deps)) || await check.fix(file, deps);
+          if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
+          fileResults.push({ res, checkName: check.name });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const errorRes: LinterCheckResult = { status: "error", output: message };
+          fileResults.push({ res: errorRes, checkName: check.name });
         }
       }
 
-      // Group by entryId for display
-      const byEntry = new Map<string, ResultGroup[]>();
-      for (const r of fileResults) {
-        if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
-        byEntry.get(r.entryId)!.push(r);
-      }
-      for (const [entryId, entryResults] of byEntry) {
-        const { lines, isFail, stats } = formatFileResults(entryResults, entryId);
-        counters.pass += stats.pass;
-        counters.fixed += stats.fixed;
-        counters.fail += stats.fail;
-        counters.error += stats.error;
-        if (lines.length > 0) {
-          if (isFail) {
-            console.error(lines.join("\n"));
-          } else if (verbose) {
-            console.log(lines.join("\n"));
-          }
-        }
-        if (isFail) {
-          fail = true;
-          for (const { res, checkName } of entryResults) {
-            if (res.status === "fail" || res.status === "error") {
-              failedPairs.push({ file: entryId, checkName });
-            }
-          }
-        }
-      }
+      emitResults(file, fileResults);
     }
   }
 
@@ -632,21 +543,6 @@ const printHelp = () => {
       const h = Cls.getHelp();
       lines.push(`  ${exportName}`);
       lines.push(`    ${h.description}`);
-      if (h.options) lines.push(`    Options: ${h.options}`);
-    } else {
-      lines.push(`  ${exportName}`);
-    }
-  }
-  lines.push("");
-
-  // --- Built-in expanders ---
-  lines.push("BUILT-IN EXPANDERS:");
-  for (const [exportName, Cls] of Object.entries(builtinExpanders)) {
-    if (typeof Cls.getHelp === "function") {
-      const h = Cls.getHelp();
-      lines.push(`  ${exportName}`);
-      lines.push(`    ${h.description}`);
-      // @ts-expect-error - options might not exist on all expanders
       if (h.options) lines.push(`    Options: ${h.options}`);
     } else {
       lines.push(`  ${exportName}`);
