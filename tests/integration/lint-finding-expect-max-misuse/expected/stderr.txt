@@ -1,0 +1,1 @@
+--expect-max is only valid when --finding names a single fingerprint.

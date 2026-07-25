@@ -64,3 +64,26 @@ Started: Sat Jul 25 07:27:54 PM UTC 2026
   - Remember to run `yarn build` before running integration tests to ensure `dist/linter.mjs` is up to date.
   - When a check is upgraded to emit findings, its fingerprints in PRDs will change because they now use real snippets instead of the synthetic empty snippet. This is an intentional change.
 ---
+
+## 2026-07-25 21:00:00 UTC - US-005 (Add --lint --finding <fp> for a single fingerprint)
+- Implemented --finding <fp> and --expect-max <N> (partially) in CLI.
+- Added decodeFingerprint helper in checks/finding-fingerprint.ts.
+- Implemented mutual exclusivity checks for --finding with other flags.
+- Added explicit error for --fix --finding as reserved but not implemented.
+- Added 7 integration tests covering pass, fail, malformed, config drift, env drift, banned combos, and reserved fix.
+- **Learnings for future iterations:**
+  - The no-ts-as-operator lint rule is very sensitive; it even flags 'as' in variable names or parts of words if not careful (though here it was mostly in comments).
+  - noUncheckedIndexedAccess in tsconfig.json requires explicit checks for undefined when accessing array elements by index.
+  - The integration test runner only supports one filter argument; run multiple tests sequentially in shell if needed.
+---
+
+## 2026-07-25 21:30:00 UTC - US-006 (Add --lint --finding <list> + --expect-max <N>)
+- Implemented support for comma-separated list of fingerprints in --finding.
+- Implemented --expect-max <N> (default 0) for single-fingerprint verification.
+- Added mutual exclusivity between --expect-max and multi-fingerprint lists.
+- Added integration tests: lint-finding-list, lint-finding-list-pass, lint-finding-expect-max, lint-finding-expect-max-fail, lint-finding-expect-max-misuse.
+- **Learnings for future iterations:**
+  - --expect-max N means "pass if count <= N". For Story K of M, --expect-max M-K ensures sequential progress.
+  - Integration tests for per-finding CLI can be easily constructed using base64url(JSON.stringify({check, file, snippet})).
+  - The aggregate fail logic for lists uses --expect-max 0 for all fingerprints in the list.
+---
