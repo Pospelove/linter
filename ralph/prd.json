@@ -79,7 +79,7 @@
         "yarn build && yarn test are green before committing."
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -13561,6 +13561,7 @@ var RegexCheck = class extends BaseCheck {
     try {
       const content = await fs13.readFile(file, "utf-8");
       const violations = [];
+      const findings = [];
       const re = new RegExp(this.#pattern.source, this.#pattern.flags);
       if (this.#multiline) {
         const lineOffsets = [0];
@@ -13570,6 +13571,13 @@ var RegexCheck = class extends BaseCheck {
         let m;
         while ((m = re.exec(content)) !== null) {
           const lineNo = lineOffsets.filter((offset) => offset <= m.index).length;
+          const endLineNo = lineOffsets.filter((offset) => offset <= m.index + m[0].length - (m[0].endsWith("\n") ? 1 : 0)).length;
+          findings.push({
+            message: this.#message,
+            snippet: m[0],
+            startLine: lineNo,
+            endLine: endLineNo
+          });
           const matchText = m[0].length > 80 ? m[0].slice(0, 80) + "\u2026" : m[0];
           violations.push(`  line ${lineNo}: ${matchText.replace(/\n/g, "\\n")}`);
         }
@@ -13577,11 +13585,16 @@ var RegexCheck = class extends BaseCheck {
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          if (!line) continue;
           if (this.#skipLineRes.some((skip) => skip.test(line))) continue;
           re.lastIndex = 0;
           let m;
           while ((m = re.exec(line)) !== null) {
+            findings.push({
+              message: this.#message,
+              snippet: line,
+              startLine: i + 1,
+              endLine: i + 1
+            });
             violations.push(`  line ${i + 1}: ${m[0]}`);
             if (!re.flags.includes("g")) break;
           }
@@ -13591,7 +13604,8 @@ var RegexCheck = class extends BaseCheck {
         return {
           status: "fail",
           output: `${this.#message} (${violations.length} hit(s)):
-${violations.join("\n")}`
+${violations.join("\n")}`,
+          findings
         };
       }
       return { status: "pass" };
@@ -19041,7 +19055,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "1e8367a" : "unknown";
+var LINTER_COMMIT = true ? "8398dc1" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
