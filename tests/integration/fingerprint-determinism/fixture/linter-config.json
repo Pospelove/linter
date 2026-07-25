@@ -1,0 +1,38 @@
+{
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "determinism-real",
+      "export": "FakeFindingCheck",
+      "modes": ["manual"],
+      "options": {
+        "findings": [
+          {
+            "message": "determinism real",
+            "snippet": "  const x = 1;  "
+          }
+        ]
+      }
+    },
+    {
+      "name": "determinism-synth",
+      "export": "AlwaysFailCheck",
+      "modes": ["manual"]
+    },
+    {
+      "name": "determinism-error",
+      "export": "FakeFindingCheck",
+      "modes": ["manual"],
+      "options": {
+        "name": "determinism-error",
+        "testPaths": ["\\\\server\\share\\file.ts", "C:file.ts"]
+      }
+    }
+  ],
+  "prd": {
+    "project": "Fingerprint Determinism",
+    "branchName": "test/fingerprint"
+  }
+}

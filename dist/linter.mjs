@@ -4591,10 +4591,10 @@ var require_src2 = __commonJS({
     var fs_1 = __require("fs");
     var debug_1 = __importDefault(require_src());
     var log = debug_1.default("@kwsites/file-exists");
-    function check(path18, isFile, isDirectory) {
-      log(`checking %s`, path18);
+    function check(path19, isFile, isDirectory) {
+      log(`checking %s`, path19);
       try {
-        const stat = fs_1.statSync(path18);
+        const stat = fs_1.statSync(path19);
         if (stat.isFile() && isFile) {
           log(`[OK] path represents a file`);
           return true;
@@ -4614,8 +4614,8 @@ var require_src2 = __commonJS({
         throw e;
       }
     }
-    function exists2(path18, type = exports.READABLE) {
-      return check(path18, (type & exports.FILE) > 0, (type & exports.FOLDER) > 0);
+    function exists2(path19, type = exports.READABLE) {
+      return check(path19, (type & exports.FILE) > 0, (type & exports.FOLDER) > 0);
     }
     exports.exists = exists2;
     exports.FILE = 1;
@@ -4680,7 +4680,7 @@ var require_dist2 = __commonJS({
 
 // linter.ts
 import fs20 from "fs";
-import path17 from "path";
+import path18 from "path";
 import { fileURLToPath } from "url";
 import { spawnSync as spawnSync3, execSync } from "child_process";
 
@@ -7741,12 +7741,12 @@ function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path18(statics, ...params) {
+var createPathTagFunction = (pathEncoder = encodeURIPath) => function path19(statics, ...params) {
   if (statics.length === 1)
     return statics[0];
   let postPath = false;
   const invalidSegments = [];
-  const path19 = statics.reduce((previousValue, currentValue, index) => {
+  const path20 = statics.reduce((previousValue, currentValue, index) => {
     if (/[?#]/.test(currentValue)) {
       postPath = true;
     }
@@ -7763,7 +7763,7 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path18(sta
     }
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
-  const pathOnly = path19.split(/[?#]/, 1)[0];
+  const pathOnly = path20.split(/[?#]/, 1)[0];
   const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -7784,10 +7784,10 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path18(sta
     }, "");
     throw new OpenAIError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path19}
+${path20}
 ${underline}`);
   }
-  return path19;
+  return path20;
 };
 var path7 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
@@ -12760,9 +12760,9 @@ var OpenAI = class {
     this.apiKey = token;
     return true;
   }
-  buildURL(path18, query, defaultBaseURL) {
+  buildURL(path19, query, defaultBaseURL) {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url = isAbsoluteURL(path18) ? new URL(path18) : new URL(baseURL + (baseURL.endsWith("/") && path18.startsWith("/") ? path18.slice(1) : path18));
+    const url = isAbsoluteURL(path19) ? new URL(path19) : new URL(baseURL + (baseURL.endsWith("/") && path19.startsWith("/") ? path19.slice(1) : path19));
     const defaultQuery = this.defaultQuery();
     const pathQuery = Object.fromEntries(url.searchParams);
     if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -12787,24 +12787,24 @@ var OpenAI = class {
    */
   async prepareRequest(request, { url, options }) {
   }
-  get(path18, opts) {
-    return this.methodRequest("get", path18, opts);
+  get(path19, opts) {
+    return this.methodRequest("get", path19, opts);
   }
-  post(path18, opts) {
-    return this.methodRequest("post", path18, opts);
+  post(path19, opts) {
+    return this.methodRequest("post", path19, opts);
   }
-  patch(path18, opts) {
-    return this.methodRequest("patch", path18, opts);
+  patch(path19, opts) {
+    return this.methodRequest("patch", path19, opts);
   }
-  put(path18, opts) {
-    return this.methodRequest("put", path18, opts);
+  put(path19, opts) {
+    return this.methodRequest("put", path19, opts);
   }
-  delete(path18, opts) {
-    return this.methodRequest("delete", path18, opts);
+  delete(path19, opts) {
+    return this.methodRequest("delete", path19, opts);
   }
-  methodRequest(method, path18, opts) {
+  methodRequest(method, path19, opts) {
     return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path18, ...opts2 };
+      return { method, path: path19, ...opts2 };
     }));
   }
   request(options, remainingRetries = null) {
@@ -12922,8 +12922,8 @@ var OpenAI = class {
     }));
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
-  getAPIList(path18, Page2, opts) {
-    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path18, ...opts2 })) : { method: "get", path: path18, ...opts });
+  getAPIList(path19, Page2, opts) {
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path19, ...opts2 })) : { method: "get", path: path19, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -13014,8 +13014,8 @@ var OpenAI = class {
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path18, query, defaultBaseURL } = options;
-    const url = this.buildURL(path18, query, defaultBaseURL);
+    const { method, path: path19, query, defaultBaseURL } = options;
+    const url = this.buildURL(path19, query, defaultBaseURL);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -14189,9 +14189,65 @@ var TestFindingCheck = class extends BaseCheck {
   }
 };
 
+// checks/finding-fingerprint.ts
+import path14 from "path";
+function deriveFingerprint(checkName, absoluteFilePath, snippet, repoRoot) {
+  const normalizedSnippet = snippet.trim().replace(/\s+/g, " ");
+  if (absoluteFilePath.startsWith("\\\\") || /^[a-zA-Z]:(?!\\|\/)/.test(absoluteFilePath)) {
+    throw new Error(`Non-portable path detected in fingerprint derivation: ${absoluteFilePath}`);
+  }
+  const relativeFile = path14.relative(repoRoot, absoluteFilePath).replace(/\\/g, "/");
+  const payload = {
+    check: checkName,
+    file: relativeFile,
+    snippet: normalizedSnippet
+  };
+  const json = JSON.stringify(payload);
+  const base64 = Buffer.from(json).toString("base64");
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// checks/fake-finding-check.ts
+var FakeFindingCheck = class extends BaseCheck {
+  #findings;
+  #testPaths;
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = String(options["name"] || "fake-finding");
+    const findings = options["findings"];
+    this.#findings = Array.isArray(findings) ? findings : [];
+    this.#testPaths = Array.isArray(options["testPaths"]) ? options["testPaths"].map(String) : [];
+  }
+  async lint(_file, _deps) {
+    const outputs = [];
+    for (const badPath of this.#testPaths) {
+      try {
+        deriveFingerprint(this.name, badPath, "snippet", this.repoRoot);
+        outputs.push(`FAILED to catch non-portable path: ${badPath}`);
+      } catch (err) {
+        outputs.push(`Caught expected error for ${badPath}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    if (outputs.length > 0) {
+      return { status: "fail", output: outputs.join("\n") };
+    }
+    return {
+      status: "fail",
+      findings: this.#findings.map((f) => ({ ...f }))
+    };
+  }
+  static getHelp() {
+    return {
+      name: "FakeFindingCheck",
+      description: "Returns configurable findings for testing.",
+      options: "name, findings (array of CheckFinding objects)"
+    };
+  }
+};
+
 // file-sources/all-files-source.ts
 import fs17 from "fs";
-import path14 from "path";
+import path15 from "path";
 
 // node_modules/simple-git/dist/esm/index.js
 var import_file_exists = __toESM(require_dist(), 1);
@@ -14265,8 +14321,8 @@ function pathspec(...paths) {
   cache.set(key, paths);
   return key;
 }
-function isPathSpec(path18) {
-  return path18 instanceof String && cache.has(path18);
+function isPathSpec(path19) {
+  return path19 instanceof String && cache.has(path19);
 }
 function toPaths(pathSpec) {
   return cache.get(pathSpec) || [];
@@ -14352,8 +14408,8 @@ function toLinesWithContent(input = "", trimmed2 = true, separator = "\n") {
 function forEachLineWithContent(input, callback) {
   return toLinesWithContent(input, true).map((line) => callback(line));
 }
-function folderExists(path18) {
-  return (0, import_file_exists.exists)(path18, import_file_exists.FOLDER);
+function folderExists(path19) {
+  return (0, import_file_exists.exists)(path19, import_file_exists.FOLDER);
 }
 function append(target, item) {
   if (Array.isArray(target)) {
@@ -14744,8 +14800,8 @@ function checkIsRepoRootTask() {
     commands,
     format: "utf-8",
     onError,
-    parser(path18) {
-      return /^\.(git)?$/.test(path18.trim());
+    parser(path19) {
+      return /^\.(git)?$/.test(path19.trim());
     }
   };
 }
@@ -15179,11 +15235,11 @@ function parseGrep(grep) {
   const paths = /* @__PURE__ */ new Set();
   const results = {};
   forEachLineWithContent(grep, (input) => {
-    const [path18, line, preview] = input.split(NULL2);
-    paths.add(path18);
-    (results[path18] = results[path18] || []).push({
+    const [path19, line, preview] = input.split(NULL2);
+    paths.add(path19);
+    (results[path19] = results[path19] || []).push({
       line: asNumber(line),
-      path: path18,
+      path: path19,
       preview
     });
   });
@@ -15946,14 +16002,14 @@ var init_hash_object = __esm({
     init_task();
   }
 });
-function parseInit(bare, path18, text) {
+function parseInit(bare, path19, text) {
   const response = String(text).trim();
   let result;
   if (result = initResponseRegex.exec(response)) {
-    return new InitSummary(bare, path18, false, result[1]);
+    return new InitSummary(bare, path19, false, result[1]);
   }
   if (result = reInitResponseRegex.exec(response)) {
-    return new InitSummary(bare, path18, true, result[1]);
+    return new InitSummary(bare, path19, true, result[1]);
   }
   let gitDir = "";
   const tokens = response.split(" ");
@@ -15964,7 +16020,7 @@ function parseInit(bare, path18, text) {
       break;
     }
   }
-  return new InitSummary(bare, path18, /^re/i.test(response), gitDir);
+  return new InitSummary(bare, path19, /^re/i.test(response), gitDir);
 }
 var InitSummary;
 var initResponseRegex;
@@ -15973,9 +16029,9 @@ var init_InitSummary = __esm({
   "src/lib/responses/InitSummary.ts"() {
     "use strict";
     InitSummary = class {
-      constructor(bare, path18, existing, gitDir) {
+      constructor(bare, path19, existing, gitDir) {
         this.bare = bare;
-        this.path = path18;
+        this.path = path19;
         this.existing = existing;
         this.gitDir = gitDir;
       }
@@ -15987,7 +16043,7 @@ var init_InitSummary = __esm({
 function hasBareCommand(command) {
   return command.includes(bareCommand);
 }
-function initTask(bare = false, path18, customArgs) {
+function initTask(bare = false, path19, customArgs) {
   const commands = ["init", ...customArgs];
   if (bare && !hasBareCommand(commands)) {
     commands.splice(1, 0, bareCommand);
@@ -15996,7 +16052,7 @@ function initTask(bare = false, path18, customArgs) {
     commands,
     format: "utf-8",
     parser(text) {
-      return parseInit(commands.includes("--bare"), path18, text);
+      return parseInit(commands.includes("--bare"), path19, text);
     }
   };
 }
@@ -16807,12 +16863,12 @@ var init_FileStatusSummary = __esm({
     "use strict";
     fromPathRegex = /^(.+)\0(.+)$/;
     FileStatusSummary = class {
-      constructor(path18, index, working_dir) {
-        this.path = path18;
+      constructor(path19, index, working_dir) {
+        this.path = path19;
         this.index = index;
         this.working_dir = working_dir;
         if (index === "R" || working_dir === "R") {
-          const detail = fromPathRegex.exec(path18) || [null, path18, path18];
+          const detail = fromPathRegex.exec(path19) || [null, path19, path19];
           this.from = detail[2] || "";
           this.path = detail[1] || "";
         }
@@ -16843,14 +16899,14 @@ function splitLine(result, lineStr) {
     default:
       return;
   }
-  function data(index, workingDir, path18) {
+  function data(index, workingDir, path19) {
     const raw = `${index}${workingDir}`;
     const handler = parsers6.get(raw);
     if (handler) {
-      handler(result, path18);
+      handler(result, path19);
     }
     if (raw !== "##" && raw !== "!!") {
-      result.files.push(new FileStatusSummary(path18, index, workingDir));
+      result.files.push(new FileStatusSummary(path19, index, workingDir));
     }
   }
 }
@@ -17162,9 +17218,9 @@ var init_simple_git_api = __esm({
           next
         );
       }
-      hashObject(path18, write) {
+      hashObject(path19, write) {
         return this._runTask(
-          hashObjectTask(path18, write === true),
+          hashObjectTask(path19, write === true),
           trailingFunctionArgument(arguments)
         );
       }
@@ -17818,8 +17874,8 @@ __export(sub_module_exports, {
   subModuleTask: () => subModuleTask,
   updateSubModuleTask: () => updateSubModuleTask
 });
-function addSubModuleTask(repo, path18) {
-  return subModuleTask(["add", repo, path18]);
+function addSubModuleTask(repo, path19) {
+  return subModuleTask(["add", repo, path19]);
 }
 function initSubModuleTask(customArgs) {
   return subModuleTask(["init", ...customArgs]);
@@ -18149,8 +18205,8 @@ var require_git = __commonJS2({
       }
       return this._runTask(straightThroughStringTask2(command, this._trimmed), next);
     };
-    Git2.prototype.submoduleAdd = function(repo, path18, then) {
-      return this._runTask(addSubModuleTask2(repo, path18), trailingFunctionArgument2(arguments));
+    Git2.prototype.submoduleAdd = function(repo, path19, then) {
+      return this._runTask(addSubModuleTask2(repo, path19), trailingFunctionArgument2(arguments));
     };
     Git2.prototype.submoduleUpdate = function(args, then) {
       return this._runTask(
@@ -18790,7 +18846,7 @@ var AllFilesSource = class extends BaseFileSource {
       if (this.#includePatterns.length > 0 && !this.#includePatterns.some((p) => matchGlob(p, rel))) return false;
       if (this.#excludePatterns.some((p) => matchGlob(p, rel))) return false;
       return true;
-    }).map((f) => path14.resolve(this.repoRoot, f));
+    }).map((f) => path15.resolve(this.repoRoot, f));
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
@@ -18838,7 +18894,7 @@ function matchGlob(pattern, filePath) {
 
 // file-sources/staged-files-source.ts
 import fs18 from "fs";
-import path15 from "path";
+import path16 from "path";
 var StagedFilesSource = class extends BaseFileSource {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
@@ -18847,7 +18903,7 @@ var StagedFilesSource = class extends BaseFileSource {
   async resolve() {
     const git = esm_default(this.repoRoot);
     const output = await git.diff(["--name-only", "--diff-filter=ACMR", "--cached"]);
-    const files = output.split("\n").filter((f) => f.trim() !== "").map((f) => path15.resolve(this.repoRoot, f));
+    const files = output.split("\n").filter((f) => f.trim() !== "").map((f) => path16.resolve(this.repoRoot, f));
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
@@ -18871,7 +18927,7 @@ var StagedFilesSource = class extends BaseFileSource {
 
 // file-sources/diff-base-source.ts
 import fs19 from "fs";
-import path16 from "path";
+import path17 from "path";
 var DiffBaseSource = class extends BaseFileSource {
   constructor(repoRoot, options = {}) {
     super(repoRoot, options);
@@ -18882,7 +18938,7 @@ var DiffBaseSource = class extends BaseFileSource {
     console.log(`DiffBaseSource: diffing against ${baseRef}`);
     const git = esm_default(this.repoRoot);
     const output = await git.diff(["--name-only", "--diff-filter=ACMR", baseRef]);
-    const files = output.split("\n").filter((f) => f.trim() !== "").map((f) => path16.resolve(this.repoRoot, f));
+    const files = output.split("\n").filter((f) => f.trim() !== "").map((f) => path17.resolve(this.repoRoot, f));
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
@@ -18940,7 +18996,8 @@ var builtinChecks = {
   AlwaysFailCheck,
   LocalizationKeyCheck,
   CustomCheck,
-  TestFindingCheck
+  TestFindingCheck,
+  FakeFindingCheck
 };
 var builtinFileSources = {
   AllFilesSource,
@@ -18979,11 +19036,12 @@ var normalizeFindings = async (file, checkName, res) => {
       const end = finding.endLine ?? finding.startLine ?? start + 1;
       finding.snippet = content.slice(start, end).join("\n");
     }
+    finding.fingerprint = deriveFingerprint(checkName, file, finding.snippet, REPO_ROOT);
   }
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "2a5ece9" : "unknown";
+var LINTER_COMMIT = true ? "1e8367a" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19008,9 +19066,9 @@ var resolveClass = async (entry) => {
   return Cls;
 };
 var loadConfig = async (mode) => {
-  const configPath = path17.join(REPO_ROOT, "linter-config.json");
+  const configPath = path18.join(REPO_ROOT, "linter-config.json");
   const config = JSON.parse(await fs20.promises.readFile(configPath, "utf-8"));
-  const toolsDir = config.toolsDir ? path17.resolve(REPO_ROOT, config.toolsDir) : path17.join(REPO_ROOT, "tools");
+  const toolsDir = config.toolsDir ? path18.resolve(REPO_ROOT, config.toolsDir) : path18.join(REPO_ROOT, "tools");
   const modeConfig = config.modes[mode];
   if (!modeConfig) {
     throw new Error(`Unknown mode "${mode}". Available: ${Object.keys(config.modes).join(", ")}`);
@@ -19046,7 +19104,7 @@ var loadConfig = async (mode) => {
   return { fileSource, checks, toolsDir, prdConfig, checkEntries: config.checks };
 };
 var relPath = (file) => {
-  if (file.startsWith(REPO_ROOT + path17.sep)) {
+  if (file.startsWith(REPO_ROOT + path18.sep)) {
     return file.slice(REPO_ROOT.length + 1);
   }
   return file;
@@ -19223,23 +19281,23 @@ var installHook = () => {
     console.error("Not a git repository. Cannot install hook.");
     process.exit(1);
   }
-  const hooksDir = path17.resolve(REPO_ROOT, gitDirResult.stdout.trim(), "hooks");
-  const hookPath = path17.join(hooksDir, "pre-commit");
-  const relLinterPath = path17.relative(REPO_ROOT, __filename);
+  const hooksDir = path18.resolve(REPO_ROOT, gitDirResult.stdout.trim(), "hooks");
+  const hookPath = path18.join(hooksDir, "pre-commit");
+  const relLinterPath = path18.relative(REPO_ROOT, __filename);
   const hookContent = `#!/bin/sh
 node "${relLinterPath}" --fix --mode hook
 `;
   if (fs20.existsSync(hookPath)) {
     const backup = hookPath + ".bak";
     fs20.copyFileSync(hookPath, backup);
-    console.log(`Existing pre-commit hook backed up to ${path17.basename(backup)}`);
+    console.log(`Existing pre-commit hook backed up to ${path18.basename(backup)}`);
   }
   fs20.mkdirSync(hooksDir, { recursive: true });
   fs20.writeFileSync(hookPath, hookContent, { mode: 493 });
-  console.log(`Installed pre-commit hook at ${path17.relative(REPO_ROOT, hookPath)}`);
+  console.log(`Installed pre-commit hook at ${path18.relative(REPO_ROOT, hookPath)}`);
 };
 var detectInstallMethod = () => {
-  const sep = path17.sep;
+  const sep = path18.sep;
   if (__filename.includes(`${sep}yarn${sep}global${sep}node_modules${sep}`) && __filename.includes(`node_modules${sep}@skyrim-multiplayer${sep}linter`)) {
     return "yarn";
   }
@@ -19374,7 +19432,7 @@ var printHelp = () => {
   console.log(lines.join("\n"));
 };
 var initConfig = () => {
-  const configPath = path17.join(REPO_ROOT, "linter-config.json");
+  const configPath = path18.join(REPO_ROOT, "linter-config.json");
   if (fs20.existsSync(configPath)) {
     console.error(`linter-config.json already exists at ${configPath}`);
     process.exit(1);
@@ -19395,7 +19453,7 @@ var initConfig = () => {
     checks: checkEntries
   };
   fs20.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-  console.log(`Created ${path17.relative(REPO_ROOT, configPath)}`);
+  console.log(`Created ${path18.relative(REPO_ROOT, configPath)}`);
 };
 var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   const project = prdConfig.project || "Project";
@@ -19410,14 +19468,21 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   const userStories = [];
   let counter = 1;
   const byCheck = /* @__PURE__ */ new Map();
-  for (const { file, checkName } of failedPairs) {
+  for (const { file, checkName, finding } of failedPairs) {
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
-    const files = byCheck.get(checkName);
-    if (!files.includes(file)) {
-      files.push(file);
+    const entries = byCheck.get(checkName);
+    let entry = entries.find((e) => e.file === file);
+    if (!entry) {
+      entry = { file, fingerprints: [] };
+      entries.push(entry);
+    }
+    if (finding.fingerprint && !entry.fingerprints.includes(finding.fingerprint)) {
+      entry.fingerprints.push(finding.fingerprint);
     }
   }
-  for (const files of byCheck.values()) files.sort((a, b) => a.localeCompare(b));
+  for (const entries of byCheck.values()) {
+    entries.sort((a, b) => a.file.localeCompare(b.file));
+  }
   const sortedChecks = [...byCheck.entries()].sort(([a], [b]) => a.localeCompare(b));
   const groupToAllCheckNames = /* @__PURE__ */ new Map();
   for (const entry of checkEntries || []) {
@@ -19428,16 +19493,16 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   }
   const prdGroups = /* @__PURE__ */ new Map();
   const ungroupedChecks = [];
-  for (const [checkName, files] of sortedChecks) {
+  for (const [checkName, entries] of sortedChecks) {
     const checkPrd = checkPrdMap[checkName] || {};
     if (checkPrd.group) {
       if (!prdGroups.has(checkPrd.group)) prdGroups.set(checkPrd.group, []);
-      prdGroups.get(checkPrd.group).push({ checkName, files, checkPrd });
+      prdGroups.get(checkPrd.group).push({ checkName, entries, checkPrd });
     } else {
-      ungroupedChecks.push({ checkName, files, checkPrd });
+      ungroupedChecks.push({ checkName, entries, checkPrd });
     }
   }
-  const pushStory = (title, storyDescription, acceptanceCriteria) => {
+  const pushStory = (title, storyDescription, acceptanceCriteria, notes = "") => {
     const idStr = `US-${String(counter).padStart(3, "0")}`;
     userStories.push({
       id: idStr,
@@ -19446,7 +19511,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       acceptanceCriteria,
       priority: counter,
       passes: false,
-      notes: ""
+      notes
     });
     counter++;
   };
@@ -19459,10 +19524,10 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     const rawDescTemplate = groupDescTemplate ? resolveDesc(groupDescTemplate) : memberDescs.length ? memberDescs.map((d, i) => `${i + 1}) ${d}`).join("\n\n") : null;
     const allChecks = members.map((m) => m.checkName).join(", ");
     const extraCriteria = [...new Set(members.flatMap((m) => m.checkPrd.additionalAcceptanceCriteria || []))];
-    const allFiles = [...new Set(members.flatMap((m) => m.files))].sort((a, b) => a.localeCompare(b));
+    const allFiles = [...new Set(members.flatMap((m) => m.entries.map((e) => e.file)))].sort((a, b) => a.localeCompare(b));
     for (let i = 0; i < allFiles.length; i += filesPerStory) {
-      const chunkSet = new Set(allFiles.slice(i, i + filesPerStory));
-      const chunkRelFiles = [...chunkSet].map(relPath);
+      const chunkFiles = allFiles.slice(i, i + filesPerStory);
+      const chunkRelFiles = chunkFiles.map(relPath);
       const fileCount = chunkRelFiles.length;
       const applyGroupPlaceholders = (str2) => str2.replace(/\{files?\}/g, chunkRelFiles.join(", ")).replace(/\{fileCount\}/g, String(fileCount)).replace(/\{checks?\}/g, allChecks).replace(/\{group\}/g, groupName);
       const title = groupTitleTemplate ? applyGroupPlaceholders(groupTitleTemplate) : fileCount === 1 ? `Fix ${allChecks} issues in ${chunkRelFiles[0]}` : `Fix ${allChecks} issues in ${fileCount} files (${groupName})`;
@@ -19472,15 +19537,19 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
         return !entry?.prd?.prdOnly;
       });
       const mainCriteria = allGroupCheckNames.length > 0 ? [`${baseCommand} --lint --checks ${allGroupCheckNames.join(",")} --files ${chunkRelFiles.join(",")}`] : [];
-      pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria]);
+      const fingerprints = members.flatMap(
+        (m) => m.entries.filter((e) => chunkFiles.includes(e.file)).flatMap((e) => e.fingerprints)
+      );
+      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+      pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria], notes);
     }
   }
-  for (const { checkName, files, checkPrd } of ungroupedChecks) {
+  for (const { checkName, entries, checkPrd } of ungroupedChecks) {
     if (checkPrd.prdOnly) continue;
     const filesPerStory = checkPrd.filesPerStory ?? 1;
-    for (let i = 0; i < files.length; i += filesPerStory) {
-      const chunk = files.slice(i, i + filesPerStory);
-      const relFiles = chunk.map(relPath);
+    for (let i = 0; i < entries.length; i += filesPerStory) {
+      const chunk = entries.slice(i, i + filesPerStory);
+      const relFiles = chunk.map((e) => relPath(e.file));
       const filesStr = relFiles.join(",");
       const fileCount = chunk.length;
       const applyPlaceholders = (str2) => str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(fileCount)).replace(/\{check\}/g, checkName);
@@ -19491,7 +19560,9 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const storyDescription = rawDescription ? applyPlaceholders(rawDescription) : defaultDescription;
       const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
       const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
+      const fingerprints = chunk.flatMap((e) => e.fingerprints);
+      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
     }
   }
   return { project, branchName, description, userStories };
@@ -19575,7 +19646,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     }
     let files;
     if (filesArg !== null) {
-      files = filesArg.map((f) => path17.isAbsolute(f) ? f : path17.resolve(REPO_ROOT, f));
+      files = filesArg.map((f) => path18.isAbsolute(f) ? f : path18.resolve(REPO_ROOT, f));
     } else {
       files = await fileSource.resolve();
     }
@@ -19589,10 +19660,10 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     console.log(`Completed in ${timeStr}`);
     if (outputPrdPath !== null) {
       const scriptPath = process.argv[1] ?? "";
-      const relScript = path17.relative(REPO_ROOT, scriptPath);
+      const relScript = path18.relative(REPO_ROOT, scriptPath);
       const baseCommand = relScript.startsWith("..") ? `node ${scriptPath}` : `node ${relScript}`;
       const prd = buildPrd(runResult.failedPairs || [], prdConfig, checkEntries, baseCommand);
-      const absOutputPrdPath = path17.isAbsolute(outputPrdPath) ? outputPrdPath : path17.resolve(process.cwd(), outputPrdPath);
+      const absOutputPrdPath = path18.isAbsolute(outputPrdPath) ? outputPrdPath : path18.resolve(process.cwd(), outputPrdPath);
       fs20.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
       console.log(`PRD written to ${absOutputPrdPath}`);
     }

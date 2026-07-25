@@ -41,4 +41,3 @@ Started: Sat Jul 25 07:27:54 PM UTC 2026
   - Deduping in buildPrd is essential for backward compatibility with per-file PRD consumers.
   - Adding new checks for integration tests requires registering them in registry.ts.
 ---
-

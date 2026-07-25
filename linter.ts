@@ -7,7 +7,8 @@ import pLimit from "p-limit";
 import { ensureCleanExit } from "./util.js";
 import { builtinRegistry, builtinChecks, builtinFileSources } from "./registry.js";
 import { CompositeCheck } from "./checks/composite-check.js";
-import { BaseCheck, CheckResult } from "./checks/base-check.js";
+import { BaseCheck, CheckResult, CheckFinding } from "./checks/base-check.js";
+import { deriveFingerprint } from "./checks/finding-fingerprint.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -53,6 +54,9 @@ const normalizeFindings = async (file: string, checkName: string, res: LinterChe
       const end = finding.endLine ?? finding.startLine ?? (start + 1);
       finding.snippet = content.slice(start, end).join("\n");
     }
+
+    // Fingerprint injection rule
+    finding.fingerprint = deriveFingerprint(checkName, file, finding.snippet, REPO_ROOT);
   }
 
   return findings;
@@ -668,15 +672,24 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   // Group by check name, sort files within each check alphabetically.
   // In per-file mode (the only mode for now), we dedupe multiple findings
   // for the same (file, check) back down to one story.
-  const byCheck = new Map<string, string[]>();
-  for (const { file, checkName } of failedPairs) {
+  const byCheck = new Map<string, { file: string; fingerprints: string[] }[]>();
+  for (const { file, checkName, finding } of failedPairs) {
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
-    const files = byCheck.get(checkName)!;
-    if (!files.includes(file)) {
-      files.push(file);
+    const entries = byCheck.get(checkName)!;
+    let entry = entries.find((e) => e.file === file);
+    if (!entry) {
+      entry = { file, fingerprints: [] };
+      entries.push(entry);
+    }
+    if (finding.fingerprint && !entry.fingerprints.includes(finding.fingerprint)) {
+      entry.fingerprints.push(finding.fingerprint);
     }
   }
-  for (const files of byCheck.values()) files.sort((a: string, b: string) => a.localeCompare(b));
+
+  // Sort files within each check alphabetically
+  for (const entries of byCheck.values()) {
+    entries.sort((a, b) => a.file.localeCompare(b.file));
+  }
 
   // Sort checks alphabetically for stable output
   const sortedChecks = [...byCheck.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -691,19 +704,19 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   }
 
   // Separate checks into prd-grouped vs ungrouped
-  const prdGroups = new Map<string, { checkName: string; files: string[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, files, checkPrd }]
-  const ungroupedChecks: { checkName: string; files: string[]; checkPrd: CheckPrdConfig }[] = [];
-  for (const [checkName, files] of sortedChecks) {
+  const prdGroups = new Map<string, { checkName: string; entries: { file: string; fingerprints: string[] }[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, entries, checkPrd }]
+  const ungroupedChecks: { checkName: string; entries: { file: string; fingerprints: string[] }[]; checkPrd: CheckPrdConfig }[] = [];
+  for (const [checkName, entries] of sortedChecks) {
     const checkPrd = checkPrdMap[checkName] || {};
     if (checkPrd.group) {
       if (!prdGroups.has(checkPrd.group)) prdGroups.set(checkPrd.group, []);
-      prdGroups.get(checkPrd.group)!.push({ checkName, files, checkPrd });
+      prdGroups.get(checkPrd.group)!.push({ checkName, entries, checkPrd });
     } else {
-      ungroupedChecks.push({ checkName, files, checkPrd });
+      ungroupedChecks.push({ checkName, entries, checkPrd });
     }
   }
 
-  const pushStory = (title: string, storyDescription: string | null, acceptanceCriteria: string[]) => {
+  const pushStory = (title: string, storyDescription: string | null, acceptanceCriteria: string[], notes: string = "") => {
     const idStr = `US-${String(counter).padStart(3, "0")}`;
     userStories.push({
       id: idStr,
@@ -712,7 +725,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
       acceptanceCriteria,
       priority: counter,
       passes: false,
-      notes: "",
+      notes,
     });
     counter++;
   };
@@ -737,11 +750,11 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
     // Collect any additionalAcceptanceCriteria from all members (deduplicated)
     const extraCriteria = [...new Set(members.flatMap((m) => m.checkPrd.additionalAcceptanceCriteria || []))];
 
-    const allFiles = [...new Set(members.flatMap((m) => m.files))].sort((a, b) => a.localeCompare(b));
+    const allFiles = [...new Set(members.flatMap((m) => m.entries.map((e) => e.file)))].sort((a, b) => a.localeCompare(b));
 
     for (let i = 0; i < allFiles.length; i += filesPerStory) {
-      const chunkSet = new Set(allFiles.slice(i, i + filesPerStory));
-      const chunkRelFiles = [...chunkSet].map(relPath);
+      const chunkFiles = allFiles.slice(i, i + filesPerStory);
+      const chunkRelFiles = chunkFiles.map(relPath);
       const fileCount = chunkRelFiles.length;
 
       const applyGroupPlaceholders = (str: string) =>
@@ -772,19 +785,26 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
         ? [`${baseCommand} --lint --checks ${allGroupCheckNames.join(",")} --files ${chunkRelFiles.join(",")}`]
         : [];
 
-      pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria]);
+      const fingerprints = members.flatMap((m) =>
+        m.entries
+          .filter((e) => chunkFiles.includes(e.file))
+          .flatMap((e) => e.fingerprints)
+      );
+      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+
+      pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria], notes);
     }
   }
 
   // Emit stories for ungrouped checks (original per-check, per-chunk logic).
   // prdOnly checks must belong to a group to be meaningful; skip them if ungrouped.
-  for (const { checkName, files, checkPrd } of ungroupedChecks) {
+  for (const { checkName, entries, checkPrd } of ungroupedChecks) {
     if (checkPrd.prdOnly) continue;
     const filesPerStory = checkPrd.filesPerStory ?? 1;
 
-    for (let i = 0; i < files.length; i += filesPerStory) {
-      const chunk = files.slice(i, i + filesPerStory);
-      const relFiles = chunk.map(relPath);
+    for (let i = 0; i < entries.length; i += filesPerStory) {
+      const chunk = entries.slice(i, i + filesPerStory);
+      const relFiles = chunk.map((e) => relPath(e.file));
       const filesStr = relFiles.join(",");
       const fileCount = chunk.length;
 
@@ -813,7 +833,11 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
 
       const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
       const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
+
+      const fingerprints = chunk.flatMap((e) => e.fingerprints);
+      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+
+      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
     }
   }
 

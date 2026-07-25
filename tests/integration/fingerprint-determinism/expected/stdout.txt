@@ -1,0 +1,6 @@
+Mode: manual | Source: All tracked files | Checks: determinism-real, determinism-synth, determinism-error
+All tracked files: 2 file(s)
+Linting 6 check(s) across 2 file(s)...
+Summary: 6 check(s), 6 failed
+Completed in <TIME>
+PRD written to <TMPDIR>/prd.json
