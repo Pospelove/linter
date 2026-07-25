@@ -66,6 +66,8 @@ interface CheckPrdConfig {
   group?: string;
   groupTitle?: string;
   groupDescription?: string;
+  storySplitMode?: "per-file" | "per-finding";
+  findingsPerStory?: number;
   filesPerStory?: number;
   userStoryTitle?: string;
   userStoryDescription?: string | string[];
@@ -674,18 +676,16 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   // Group by check name, sort files within each check alphabetically.
   // In per-file mode (the only mode for now), we dedupe multiple findings
   // for the same (file, check) back down to one story.
-  const byCheck = new Map<string, { file: string; fingerprints: string[] }[]>();
+  const byCheck = new Map<string, { file: string; findings: CheckFinding[] }[]>();
   for (const { file, checkName, finding } of failedPairs) {
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
     const entries = byCheck.get(checkName)!;
     let entry = entries.find((e) => e.file === file);
     if (!entry) {
-      entry = { file, fingerprints: [] };
+      entry = { file, findings: [] };
       entries.push(entry);
     }
-    if (finding.fingerprint && !entry.fingerprints.includes(finding.fingerprint)) {
-      entry.fingerprints.push(finding.fingerprint);
-    }
+    entry.findings.push(finding);
   }
 
   // Sort files within each check alphabetically
@@ -706,8 +706,8 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   }
 
   // Separate checks into prd-grouped vs ungrouped
-  const prdGroups = new Map<string, { checkName: string; entries: { file: string; fingerprints: string[] }[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, entries, checkPrd }]
-  const ungroupedChecks: { checkName: string; entries: { file: string; fingerprints: string[] }[]; checkPrd: CheckPrdConfig }[] = [];
+  const prdGroups = new Map<string, { checkName: string; entries: { file: string; findings: CheckFinding[] }[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, entries, checkPrd }]
+  const ungroupedChecks: { checkName: string; entries: { file: string; findings: CheckFinding[] }[]; checkPrd: CheckPrdConfig }[] = [];
   for (const [checkName, entries] of sortedChecks) {
     const checkPrd = checkPrdMap[checkName] || {};
     if (checkPrd.group) {
@@ -790,7 +790,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
       const fingerprints = members.flatMap((m) =>
         m.entries
           .filter((e) => chunkFiles.includes(e.file))
-          .flatMap((e) => e.fingerprints)
+          .flatMap((e) => e.findings.map((f) => f.fingerprint))
       );
       const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
 
@@ -802,44 +802,170 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   // prdOnly checks must belong to a group to be meaningful; skip them if ungrouped.
   for (const { checkName, entries, checkPrd } of ungroupedChecks) {
     if (checkPrd.prdOnly) continue;
-    const filesPerStory = checkPrd.filesPerStory ?? 1;
 
-    for (let i = 0; i < entries.length; i += filesPerStory) {
-      const chunk = entries.slice(i, i + filesPerStory);
-      const relFiles = chunk.map((e) => relPath(e.file));
-      const filesStr = relFiles.join(",");
-      const fileCount = chunk.length;
+    if (checkPrd.storySplitMode === "per-finding") {
+      const findingsPerStory = checkPrd.findingsPerStory ?? 1;
+      const filesPerStory = checkPrd.filesPerStory ?? 1;
 
-      const applyPlaceholders = (str: string) =>
-        str
+      const applyPlaceholdersFinding = (str: string, findings: CheckFinding[], relFiles: string[], instanceIndex?: number, instanceCount?: number, expectMax?: number) => {
+        const first = findings[0];
+        const res = str
           .replace(/\{files?\}/g, relFiles.join(", "))
-          .replace(/\{fileCount\}/g, String(fileCount))
-          .replace(/\{check\}/g, checkName);
+          .replace(/\{fileCount\}/g, String(relFiles.length))
+          .replace(/\{check\}/g, checkName)
+          .replace(/\{findingCount\}/g, String(findings.length))
+          .replace(/\{instanceIndex\}/g, instanceIndex != null ? String(instanceIndex) : "")
+          .replace(/\{instanceCount\}/g, instanceCount != null ? String(instanceCount) : "")
+          .replace(/\{expectMax\}/g, expectMax != null ? String(expectMax) : "")
+          .replace(/\{startLine\}/g, String(first.startLine || 1))
+          .replace(/\{endLine\}/g, String(first.endLine || first.startLine || 1))
+          .replace(/\{message\}/g, first.message)
+          .replace(/\{snippet\}/g, first.snippet || "")
+          .replace(/\{fingerprint\}/g, first.fingerprint || "");
 
-      const defaultTitle = fileCount === 1
-        ? `Fix ${checkName} in ${relFiles[0]}`
-        : `Fix ${checkName} in ${fileCount} files`;
-      const title = checkPrd.userStoryTitle
-        ? applyPlaceholders(checkPrd.userStoryTitle)
-        : defaultTitle;
+        if (res.includes("{findings}")) {
+          const rendered = findings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
+          return res.replace(/\{findings\}/g, rendered);
+        }
+        return res;
+      };
 
-      const rawDescription = Array.isArray(checkPrd.userStoryDescription)
-        ? checkPrd.userStoryDescription.join("\n")
-        : checkPrd.userStoryDescription;
-      const defaultDescription = fileCount === 1
-        ? `As a developer, I need to fix ${checkName} issue in ${relFiles[0]} so the check passes.`
-        : `As a developer, I need to fix ${checkName} issues in ${fileCount} files so the checks pass.`;
-      const storyDescription = rawDescription
-        ? applyPlaceholders(rawDescription)
-        : defaultDescription;
+      const renderDefaultDescriptionFinding = (findings: CheckFinding[]) => {
+        return findings.map((f) => {
+          const range = f.startLine ? (f.endLine && f.endLine !== f.startLine ? `lines ${f.startLine}-${f.endLine}` : `line ${f.startLine}`) : "whole file";
+          return `${f.message}\nRange: ${range}\nSnippet:\n${f.snippet || ""}`;
+        }).join("\n\n");
+      };
 
-      const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
-      const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+      // Group findings by fingerprint across all files to identify multi-instance
+      const globalFpFindings = new Map<string, { file: string; finding: CheckFinding }[]>();
+      for (const entry of entries) {
+        for (const finding of entry.findings) {
+          const fp = finding.fingerprint!;
+          if (!globalFpFindings.has(fp)) globalFpFindings.set(fp, []);
+          globalFpFindings.get(fp)!.push({ file: entry.file, finding });
+        }
+      }
 
-      const fingerprints = chunk.flatMap((e) => e.fingerprints);
-      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+      // Track which fingerprints we've already emitted as multi-instance
+      const emittedMultiInstance = new Set<string>();
+      let uniqueQueue: { file: string; finding: CheckFinding }[] = [];
 
-      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
+      const flushUniqueQueue = () => {
+        while (uniqueQueue.length > 0) {
+          const storyFindings: CheckFinding[] = [];
+          const storyFiles = new Set<string>();
+          const storyFpList: string[] = [];
+
+          let j = 0;
+          while (j < uniqueQueue.length) {
+            const item = uniqueQueue[j];
+            if (storyFindings.length >= findingsPerStory) break;
+            if (!storyFiles.has(item.file) && storyFiles.size >= filesPerStory) break;
+
+            storyFindings.push(item.finding);
+            storyFiles.add(item.file);
+            storyFpList.push(item.finding.fingerprint!);
+            uniqueQueue.splice(j, 1);
+          }
+
+          if (storyFindings.length === 0) break;
+
+          const relFiles = [...storyFiles].map(relPath).sort();
+          const fileCount = relFiles.length;
+          const findingCount = storyFindings.length;
+          const first = storyFindings[0];
+
+          const title = checkPrd.userStoryTitle
+            ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles)
+            : fileCount === 1
+              ? findingCount === 1
+                ? `Fix ${checkName} in ${relFiles[0]}:${first.startLine || 1}`
+                : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)`
+              : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
+
+          const storyDescription = checkPrd.userStoryDescription
+            ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, storyFindings, relFiles)
+            : renderDefaultDescriptionFinding(storyFindings);
+
+          const mainCriteria = `${baseCommand} --lint --finding ${storyFpList.join(",")}`;
+          const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+
+          pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], `Fingerprints: ${storyFpList.join(", ")}`);
+        }
+      };
+
+      for (const entry of entries) {
+        // Find all fingerprints that appear in this file
+        const fpsInFile = [...new Set(entry.findings.map((f) => f.fingerprint!))];
+
+        for (const fp of fpsInFile) {
+          const allInstances = globalFpFindings.get(fp)!;
+          if (allInstances.length > 1) {
+            // Multi-instance: emit all stories if this is the first file it appears in
+            if (!emittedMultiInstance.has(fp) && allInstances[0].file === entry.file) {
+              emittedMultiInstance.add(fp);
+              for (let k = 1; k <= allInstances.length; k++) {
+                const item = allInstances[k - 1];
+                const relFile = relPath(item.file);
+                const title = `Fix ${checkName} in ${relFile} (instance ${k} of ${allInstances.length}) // TODO US-009: multi-instance across files`;
+                const storyDescription = `TODO US-009: multi-instance placeholder.\n\n` + renderDefaultDescriptionFinding([item.finding]);
+                const mainCriteria = `${baseCommand} --lint --finding ${fp}`;
+                pushStory(title, storyDescription, [mainCriteria, ...(checkPrd.additionalAcceptanceCriteria || [])], `Fingerprint: ${fp}`);
+              }
+            }
+          } else {
+            // Unique fingerprint
+            uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+          }
+        }
+
+        // If filesPerStory is 1, we must flush after each file
+        if (filesPerStory === 1) {
+          flushUniqueQueue();
+        }
+      }
+      flushUniqueQueue();
+    } else {
+      const filesPerStory = checkPrd.filesPerStory ?? 1;
+
+      for (let i = 0; i < entries.length; i += filesPerStory) {
+        const chunk = entries.slice(i, i + filesPerStory);
+        const relFiles = chunk.map((e) => relPath(e.file));
+        const filesStr = relFiles.join(",");
+        const fileCount = chunk.length;
+
+        const applyPlaceholders = (str: string) =>
+          str
+            .replace(/\{files?\}/g, relFiles.join(", "))
+            .replace(/\{fileCount\}/g, String(fileCount))
+            .replace(/\{check\}/g, checkName);
+
+        const defaultTitle = fileCount === 1
+          ? `Fix ${checkName} in ${relFiles[0]}`
+          : `Fix ${checkName} in ${fileCount} files`;
+        const title = checkPrd.userStoryTitle
+          ? applyPlaceholders(checkPrd.userStoryTitle)
+          : defaultTitle;
+
+        const rawDescription = Array.isArray(checkPrd.userStoryDescription)
+          ? checkPrd.userStoryDescription.join("\n")
+          : checkPrd.userStoryDescription;
+        const defaultDescription = fileCount === 1
+          ? `As a developer, I need to fix ${checkName} issue in ${relFiles[0]} so the check passes.`
+          : `As a developer, I need to fix ${checkName} issues in ${fileCount} files so the checks pass.`;
+        const storyDescription = rawDescription
+          ? applyPlaceholders(rawDescription)
+          : defaultDescription;
+
+        const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
+        const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+
+        const fingerprints = chunk.flatMap((e) => e.findings.map((f) => f.fingerprint!));
+        const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+
+        pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
+      }
     }
   }
 

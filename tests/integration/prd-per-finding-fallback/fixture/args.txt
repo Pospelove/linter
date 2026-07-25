@@ -1,0 +1,1 @@
+--lint --output-prd prd.json --files src/file1.txt,src/file2.txt

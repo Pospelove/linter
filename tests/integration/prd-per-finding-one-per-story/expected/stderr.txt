@@ -1,0 +1,8 @@
+[FAIL] linter-config.json [todo-check]
+  regex violation (1 hit(s)):
+  line 11: TODO
+[FAIL] src/test.txt [todo-check]
+  regex violation (3 hit(s)):
+  line 1: TODO
+  line 2: TODO
+  line 3: TODO

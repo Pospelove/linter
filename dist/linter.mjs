@@ -19072,7 +19072,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "4c0bef3" : "unknown";
+var LINTER_COMMIT = true ? "f81a426" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19506,12 +19506,10 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     const entries = byCheck.get(checkName);
     let entry = entries.find((e) => e.file === file);
     if (!entry) {
-      entry = { file, fingerprints: [] };
+      entry = { file, findings: [] };
       entries.push(entry);
     }
-    if (finding.fingerprint && !entry.fingerprints.includes(finding.fingerprint)) {
-      entry.fingerprints.push(finding.fingerprint);
-    }
+    entry.findings.push(finding);
   }
   for (const entries of byCheck.values()) {
     entries.sort((a, b) => a.file.localeCompare(b.file));
@@ -19571,7 +19569,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       });
       const mainCriteria = allGroupCheckNames.length > 0 ? [`${baseCommand} --lint --checks ${allGroupCheckNames.join(",")} --files ${chunkRelFiles.join(",")}`] : [];
       const fingerprints = members.flatMap(
-        (m) => m.entries.filter((e) => chunkFiles.includes(e.file)).flatMap((e) => e.fingerprints)
+        (m) => m.entries.filter((e) => chunkFiles.includes(e.file)).flatMap((e) => e.findings.map((f) => f.fingerprint))
       );
       const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
       pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria], notes);
@@ -19579,23 +19577,110 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   }
   for (const { checkName, entries, checkPrd } of ungroupedChecks) {
     if (checkPrd.prdOnly) continue;
-    const filesPerStory = checkPrd.filesPerStory ?? 1;
-    for (let i = 0; i < entries.length; i += filesPerStory) {
-      const chunk = entries.slice(i, i + filesPerStory);
-      const relFiles = chunk.map((e) => relPath(e.file));
-      const filesStr = relFiles.join(",");
-      const fileCount = chunk.length;
-      const applyPlaceholders = (str2) => str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(fileCount)).replace(/\{check\}/g, checkName);
-      const defaultTitle = fileCount === 1 ? `Fix ${checkName} in ${relFiles[0]}` : `Fix ${checkName} in ${fileCount} files`;
-      const title = checkPrd.userStoryTitle ? applyPlaceholders(checkPrd.userStoryTitle) : defaultTitle;
-      const rawDescription = Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription;
-      const defaultDescription = fileCount === 1 ? `As a developer, I need to fix ${checkName} issue in ${relFiles[0]} so the check passes.` : `As a developer, I need to fix ${checkName} issues in ${fileCount} files so the checks pass.`;
-      const storyDescription = rawDescription ? applyPlaceholders(rawDescription) : defaultDescription;
-      const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
-      const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-      const fingerprints = chunk.flatMap((e) => e.fingerprints);
-      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
-      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
+    if (checkPrd.storySplitMode === "per-finding") {
+      const findingsPerStory = checkPrd.findingsPerStory ?? 1;
+      const filesPerStory = checkPrd.filesPerStory ?? 1;
+      const applyPlaceholdersFinding = (str2, findings, relFiles, instanceIndex, instanceCount, expectMax) => {
+        const first2 = findings[0];
+        const res = str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(relFiles.length)).replace(/\{check\}/g, checkName).replace(/\{findingCount\}/g, String(findings.length)).replace(/\{instanceIndex\}/g, instanceIndex != null ? String(instanceIndex) : "").replace(/\{instanceCount\}/g, instanceCount != null ? String(instanceCount) : "").replace(/\{expectMax\}/g, expectMax != null ? String(expectMax) : "").replace(/\{startLine\}/g, String(first2.startLine || 1)).replace(/\{endLine\}/g, String(first2.endLine || first2.startLine || 1)).replace(/\{message\}/g, first2.message).replace(/\{snippet\}/g, first2.snippet || "").replace(/\{fingerprint\}/g, first2.fingerprint || "");
+        if (res.includes("{findings}")) {
+          const rendered = findings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
+          return res.replace(/\{findings\}/g, rendered);
+        }
+        return res;
+      };
+      const renderDefaultDescriptionFinding = (findings) => {
+        return findings.map((f) => {
+          const range = f.startLine ? f.endLine && f.endLine !== f.startLine ? `lines ${f.startLine}-${f.endLine}` : `line ${f.startLine}` : "whole file";
+          return `${f.message}
+Range: ${range}
+Snippet:
+${f.snippet || ""}`;
+        }).join("\n\n");
+      };
+      const globalFpFindings = /* @__PURE__ */ new Map();
+      for (const entry of entries) {
+        for (const finding of entry.findings) {
+          const fp = finding.fingerprint;
+          if (!globalFpFindings.has(fp)) globalFpFindings.set(fp, []);
+          globalFpFindings.get(fp).push({ file: entry.file, finding });
+        }
+      }
+      const emittedMultiInstance = /* @__PURE__ */ new Set();
+      let uniqueQueue = [];
+      const flushUniqueQueue = () => {
+        while (uniqueQueue.length > 0) {
+          const storyFindings = [];
+          const storyFiles = /* @__PURE__ */ new Set();
+          const storyFpList = [];
+          let j = 0;
+          while (j < uniqueQueue.length) {
+            const item = uniqueQueue[j];
+            if (storyFindings.length >= findingsPerStory) break;
+            if (!storyFiles.has(item.file) && storyFiles.size >= filesPerStory) break;
+            storyFindings.push(item.finding);
+            storyFiles.add(item.file);
+            storyFpList.push(item.finding.fingerprint);
+            uniqueQueue.splice(j, 1);
+          }
+          if (storyFindings.length === 0) break;
+          const relFiles = [...storyFiles].map(relPath).sort();
+          const fileCount = relFiles.length;
+          const findingCount = storyFindings.length;
+          const first2 = storyFindings[0];
+          const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles) : fileCount === 1 ? findingCount === 1 ? `Fix ${checkName} in ${relFiles[0]}:${first2.startLine || 1}` : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)` : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
+          const storyDescription = checkPrd.userStoryDescription ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, storyFindings, relFiles) : renderDefaultDescriptionFinding(storyFindings);
+          const mainCriteria = `${baseCommand} --lint --finding ${storyFpList.join(",")}`;
+          const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+          pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], `Fingerprints: ${storyFpList.join(", ")}`);
+        }
+      };
+      for (const entry of entries) {
+        const fpsInFile = [...new Set(entry.findings.map((f) => f.fingerprint))];
+        for (const fp of fpsInFile) {
+          const allInstances = globalFpFindings.get(fp);
+          if (allInstances.length > 1) {
+            if (!emittedMultiInstance.has(fp) && allInstances[0].file === entry.file) {
+              emittedMultiInstance.add(fp);
+              for (let k = 1; k <= allInstances.length; k++) {
+                const item = allInstances[k - 1];
+                const relFile = relPath(item.file);
+                const title = `Fix ${checkName} in ${relFile} (instance ${k} of ${allInstances.length}) // TODO US-009: multi-instance across files`;
+                const storyDescription = `TODO US-009: multi-instance placeholder.
+
+` + renderDefaultDescriptionFinding([item.finding]);
+                const mainCriteria = `${baseCommand} --lint --finding ${fp}`;
+                pushStory(title, storyDescription, [mainCriteria, ...checkPrd.additionalAcceptanceCriteria || []], `Fingerprint: ${fp}`);
+              }
+            }
+          } else {
+            uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+          }
+        }
+        if (filesPerStory === 1) {
+          flushUniqueQueue();
+        }
+      }
+      flushUniqueQueue();
+    } else {
+      const filesPerStory = checkPrd.filesPerStory ?? 1;
+      for (let i = 0; i < entries.length; i += filesPerStory) {
+        const chunk = entries.slice(i, i + filesPerStory);
+        const relFiles = chunk.map((e) => relPath(e.file));
+        const filesStr = relFiles.join(",");
+        const fileCount = chunk.length;
+        const applyPlaceholders = (str2) => str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(fileCount)).replace(/\{check\}/g, checkName);
+        const defaultTitle = fileCount === 1 ? `Fix ${checkName} in ${relFiles[0]}` : `Fix ${checkName} in ${fileCount} files`;
+        const title = checkPrd.userStoryTitle ? applyPlaceholders(checkPrd.userStoryTitle) : defaultTitle;
+        const rawDescription = Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription;
+        const defaultDescription = fileCount === 1 ? `As a developer, I need to fix ${checkName} issue in ${relFiles[0]} so the check passes.` : `As a developer, I need to fix ${checkName} issues in ${fileCount} files so the checks pass.`;
+        const storyDescription = rawDescription ? applyPlaceholders(rawDescription) : defaultDescription;
+        const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
+        const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+        const fingerprints = chunk.flatMap((e) => e.findings.map((f) => f.fingerprint));
+        const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
+        pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
+      }
     }
   }
   return { project, branchName, description, userStories };

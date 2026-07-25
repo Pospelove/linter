@@ -1,0 +1,7 @@
+[FAIL] src/file1.txt [todo-check]
+  regex violation (2 hit(s)):
+  line 1: TODO
+  line 2: TODO
+[FAIL] src/file2.txt [todo-check]
+  regex violation (1 hit(s)):
+  line 1: TODO

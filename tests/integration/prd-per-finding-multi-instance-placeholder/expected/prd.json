@@ -1,0 +1,40 @@
+{
+  "project": "Project",
+  "branchName": "ralph/lint-fixes",
+  "description": "Fix outstanding lint issues",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix todo-check in src/file1.txt (instance 1 of 2) // TODO US-009: multi-instance across files",
+      "description": "TODO US-009: multi-instance placeholder.\n\nregex violation\nRange: line 1\nSnippet:\nTODO SAME",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Fingerprint: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+    },
+    {
+      "id": "US-002",
+      "title": "Fix todo-check in src/file1.txt (instance 2 of 2) // TODO US-009: multi-instance across files",
+      "description": "TODO US-009: multi-instance placeholder.\n\nregex violation\nRange: line 2\nSnippet:\nTODO SAME",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Fingerprint: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+    },
+    {
+      "id": "US-003",
+      "title": "Fix todo-check in src/file2.txt:1",
+      "description": "regex violation\nRange: line 1\nSnippet:\nTODO SAME",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+    }
+  ]
+}

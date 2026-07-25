@@ -1,0 +1,19 @@
+{
+  "toolsDir": "tools",
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "todo-check",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": { "pattern": "TODO" },
+      "prd": {
+        "storySplitMode": "per-finding",
+        "findingsPerStory": 2,
+        "filesPerStory": 1
+      }
+    }
+  ]
+}
