@@ -1208,6 +1208,9 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
           // Exact matches satisfied! Check for botched fixes.
           const unmatchedFindings = findings.filter((f) => f.fingerprint !== fp);
           let botched: CheckFinding | null = null;
+          
+          let expectedLines: Set<number> | null = null;
+          
           for (const uf of unmatchedFindings) {
             const e = payload.snippet;
             const a = uf.snippet ? uf.snippet.trim().replace(/\s+/g, " ") : "";
@@ -1218,6 +1221,81 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             const sim = maxLen === 0 ? 0 : 1 - (dist / maxLen);
 
             if (sim >= 0.6) {
+              // Without git, we can use line number proximity if we can extract expected lines from prd.json.
+              if (expectedLines === null) {
+                expectedLines = new Set<number>();
+                
+                // We also load all known fingerprints from PRD to avoid overreacting
+                // to other legitimate findings that happen to look similar.
+                if (!payload.knownFps) {
+                  payload.knownFps = new Set<string>();
+                  try {
+                    const prdPath = path.resolve(REPO_ROOT, "prd.json");
+                    if (fs.existsSync(prdPath)) {
+                      const prd = JSON.parse(fs.readFileSync(prdPath, "utf-8"));
+                      for (const story of prd.userStories || []) {
+                        if (story.acceptanceCriteria) {
+                          for (const crit of story.acceptanceCriteria) {
+                            const match = crit.match(/--finding\s+([a-zA-Z0-9_-]+(?:,[a-zA-Z0-9_-]+)*)/);
+                            if (match) {
+                              for (const fp of match[1].split(",")) {
+                                payload.knownFps.add(fp);
+                              }
+                            }
+                          }
+                        }
+                        
+                        if (story.acceptanceCriteria && story.acceptanceCriteria.some((c: string) => c.includes(fp))) {
+                          // Extract lines from title: "Fix ... in file.ts:42"
+                          const titleMatch = story.title.match(/:(\d+)$/);
+                          if (titleMatch) {
+                            expectedLines.add(parseInt(titleMatch[1], 10));
+                          }
+                          // Extract lines from multi-instance description: "existed at lines [12, 47, 89]"
+                          const descMatch = story.description.match(/existed at lines \[([^\]]+)\]/);
+                          if (descMatch) {
+                            for (const l of descMatch[1].split(",")) {
+                              expectedLines.add(parseInt(l.trim(), 10));
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } catch {
+                    // Ignore parse errors
+                  }
+                }
+              }
+              
+              // If this finding was already a known separate finding in the PRD,
+              // it's not a botched fix, it's just another finding that looks similar.
+              if (payload.knownFps && payload.knownFps.has(uf.fingerprint!)) {
+                continue;
+              }
+              
+              const startLine = uf.startLine;
+              if (startLine && expectedLines.size > 0) {
+                // If we know the expected lines from the PRD, the unmatched finding
+                // must be within +/- 3 lines of one of the expected lines to be considered a botched fix.
+                let near = false;
+                for (const el of expectedLines) {
+                  if (Math.abs(startLine - el) <= 3) {
+                    near = true;
+                    break;
+                  }
+                }
+                if (!near) {
+                  continue;
+                }
+              } else if (expectedLines.size === 0) {
+                 // If we couldn't find the PRD or extract lines, we can't safely 
+                 // correlate this without overreacting on files with many similar findings.
+                 // We still check, but we need high similarity.
+                 if (sim < 0.85) {
+                   continue;
+                 }
+              }
+
               botched = uf;
               break;
             }

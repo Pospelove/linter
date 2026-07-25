@@ -19114,7 +19114,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "8716ea3" : "unknown";
+var LINTER_COMMIT = true ? "fd830c1" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19875,6 +19875,7 @@ ${first2.snippet || ""}`;
         } else {
           const unmatchedFindings = findings.filter((f) => f.fingerprint !== fp);
           let botched = null;
+          let expectedLines = null;
           for (const uf of unmatchedFindings) {
             const e = payload.snippet;
             const a = uf.snippet ? uf.snippet.trim().replace(/\s+/g, " ") : "";
@@ -19883,6 +19884,63 @@ ${first2.snippet || ""}`;
             const maxLen = Math.max(e.length, a.length);
             const sim = maxLen === 0 ? 0 : 1 - dist / maxLen;
             if (sim >= 0.6) {
+              if (expectedLines === null) {
+                expectedLines = /* @__PURE__ */ new Set();
+                if (!payload.knownFps) {
+                  payload.knownFps = /* @__PURE__ */ new Set();
+                  try {
+                    const prdPath = path18.resolve(REPO_ROOT, "prd.json");
+                    if (fs20.existsSync(prdPath)) {
+                      const prd = JSON.parse(fs20.readFileSync(prdPath, "utf-8"));
+                      for (const story of prd.userStories || []) {
+                        if (story.acceptanceCriteria) {
+                          for (const crit of story.acceptanceCriteria) {
+                            const match = crit.match(/--finding\s+([a-zA-Z0-9_-]+(?:,[a-zA-Z0-9_-]+)*)/);
+                            if (match) {
+                              for (const fp2 of match[1].split(",")) {
+                                payload.knownFps.add(fp2);
+                              }
+                            }
+                          }
+                        }
+                        if (story.acceptanceCriteria && story.acceptanceCriteria.some((c) => c.includes(fp))) {
+                          const titleMatch = story.title.match(/:(\d+)$/);
+                          if (titleMatch) {
+                            expectedLines.add(parseInt(titleMatch[1], 10));
+                          }
+                          const descMatch = story.description.match(/existed at lines \[([^\]]+)\]/);
+                          if (descMatch) {
+                            for (const l of descMatch[1].split(",")) {
+                              expectedLines.add(parseInt(l.trim(), 10));
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } catch {
+                  }
+                }
+              }
+              if (payload.knownFps && payload.knownFps.has(uf.fingerprint)) {
+                continue;
+              }
+              const startLine = uf.startLine;
+              if (startLine && expectedLines.size > 0) {
+                let near = false;
+                for (const el of expectedLines) {
+                  if (Math.abs(startLine - el) <= 3) {
+                    near = true;
+                    break;
+                  }
+                }
+                if (!near) {
+                  continue;
+                }
+              } else if (expectedLines.size === 0) {
+                if (sim < 0.85) {
+                  continue;
+                }
+              }
               botched = uf;
               break;
             }

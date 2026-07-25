@@ -1,0 +1,18 @@
+{
+  "userStories": [
+    {
+      "title": "Fix botched-check in src/test.txt:1",
+      "description": "existed at lines [1]",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6ImJvdGNoZWQtY2hlY2siLCJmaWxlIjoic3JjL3Rlc3QudHh0Iiwic25pcHBldCI6ImZvbyBiYXIgMSJ9"
+      ]
+    },
+    {
+      "title": "Fix botched-check in src/test.txt:2",
+      "description": "existed at lines [2]",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6ImJvdGNoZWQtY2hlY2siLCJmaWxlIjoic3JjL3Rlc3QudHh0Iiwic25pcHBldCI6ImZvbyBiYXIgMiJ9"
+      ]
+    }
+  ]
+}
