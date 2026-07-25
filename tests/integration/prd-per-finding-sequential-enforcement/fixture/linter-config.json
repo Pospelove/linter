@@ -1,0 +1,18 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": { "export": "AllFilesSource" }
+    }
+  },
+  "checks": [
+    {
+      "name": "todo-check",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": {
+        "pattern": "TODO",
+        "message": "regex violation"
+      }
+    }
+  ]
+}

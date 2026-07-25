@@ -1,0 +1,4 @@
+[FAIL] src/example.ts [regex-hits]
+  Found a task. (2 hit(s)):
+  line 1: TODO
+  line 3: FIXME

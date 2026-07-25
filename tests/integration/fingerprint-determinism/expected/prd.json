@@ -1,0 +1,73 @@
+{
+  "project": "Fingerprint Determinism",
+  "branchName": "test/fingerprint",
+  "description": "Fix outstanding lint issues",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix determinism-error in linter-config.json",
+      "description": "As a developer, I need to fix determinism-error issue in linter-config.json so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks determinism-error --files linter-config.json"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6ImRldGVybWluaXNtLWVycm9yIiwiZmlsZSI6ImxpbnRlci1jb25maWcuanNvbiIsInNuaXBwZXQiOiIifQ"
+    },
+    {
+      "id": "US-002",
+      "title": "Fix determinism-error in src/example.ts",
+      "description": "As a developer, I need to fix determinism-error issue in src/example.ts so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks determinism-error --files src/example.ts"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6ImRldGVybWluaXNtLWVycm9yIiwiZmlsZSI6InNyYy9leGFtcGxlLnRzIiwic25pcHBldCI6IiJ9"
+    },
+    {
+      "id": "US-003",
+      "title": "Fix determinism-real in linter-config.json",
+      "description": "As a developer, I need to fix determinism-real issue in linter-config.json so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks determinism-real --files linter-config.json"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6ImRldGVybWluaXNtLXJlYWwiLCJmaWxlIjoibGludGVyLWNvbmZpZy5qc29uIiwic25pcHBldCI6ImNvbnN0IHggPSAxOyJ9"
+    },
+    {
+      "id": "US-004",
+      "title": "Fix determinism-real in src/example.ts",
+      "description": "As a developer, I need to fix determinism-real issue in src/example.ts so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks determinism-real --files src/example.ts"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6ImRldGVybWluaXNtLXJlYWwiLCJmaWxlIjoic3JjL2V4YW1wbGUudHMiLCJzbmlwcGV0IjoiY29uc3QgeCA9IDE7In0"
+    },
+    {
+      "id": "US-005",
+      "title": "Fix determinism-synth in linter-config.json",
+      "description": "As a developer, I need to fix determinism-synth issue in linter-config.json so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks determinism-synth --files linter-config.json"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6ImRldGVybWluaXNtLXN5bnRoIiwiZmlsZSI6ImxpbnRlci1jb25maWcuanNvbiIsInNuaXBwZXQiOiIifQ"
+    },
+    {
+      "id": "US-006",
+      "title": "Fix determinism-synth in src/example.ts",
+      "description": "As a developer, I need to fix determinism-synth issue in src/example.ts so the check passes.",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks determinism-synth --files src/example.ts"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6ImRldGVybWluaXNtLXN5bnRoIiwiZmlsZSI6InNyYy9leGFtcGxlLnRzIiwic25pcHBldCI6IiJ9"
+    }
+  ]
+}

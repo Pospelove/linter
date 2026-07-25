@@ -1,0 +1,135 @@
+# Ralph Progress Log
+Started: Sat Jul 25 07:27:54 PM UTC 2026
+---
+
+## Codebase Patterns
+- `yarn build` compiles source to `dist/linter.mjs`; `yarn test` runs `tests/integration/run.mjs`.
+- Integration tests: each fixture in `tests/integration/<name>/fixture/` is copied to a temp dir, `git init`ed, and the linter runs with `args.txt`. Compare stdout/stderr/exit-code against `expected/`.
+- Snapshot regeneration: `UPDATE_SNAPSHOTS=1 node tests/integration/run.mjs [<fixture-name>]`.
+- The linter's `--no-ts-as-operator` rule matches ` as ` even in strings/comments — reword to "because it", "like", etc.
+- `Record<string, unknown>` options: use `String()`/`Number()`/`!!` for coercion, bracket notation for keys.
+- Errors are `unknown` in catch blocks — use `err instanceof Error ? err.message : String(err)`.
+- Config-load errors are thrown from `loadConfig()` in `linter.ts` and surface via the top-level try/catch as `Error during processing: <message>` on stderr with exit code 1.
+
+## 2026-07-25 - US-001 (Delete virtual entries / expanders)
+- Deleted `entries/{base-entry,file-entry,json-array-entry}.ts` and `expanders/{base-expander,file-expander,json-array-expander}.ts` (plus the now-empty dirs).
+- `checks/base-check.ts`: dropped `#expander`, `expand()`, `setExpander()`, `supportsInMemory`, `lintInMemory`, `fixInMemory`, `lintAndFixInMemory`, and the `_entry` parameter on `lint`/`fix`/`lintAndFix`.
+- `linter.ts`: removed `assertEntrySupported`/`runEntryLint`/`runEntryFix` and the `byEntry` grouping. Runner now calls `check.lint(file, deps)` / `(check.lintAndFix(...) ?? check.fix(...))` directly. Added a config-load error rejecting any check entry with an `expander` block (points at `docs/per-finding-workflow.md`).
+- `registry.ts`: removed `builtinExpanders`; `--help` output no longer prints the "BUILT-IN EXPANDERS" section.
+- Migrated `checks/ai-prompt-check.ts` from `*InMemory` to whole-file `lint`/`fix`/`lintAndFix` (reads the file, sends to the AI provider, writes back the modified content). Lock key is now the relative path.
+- `checks/composite-check.ts`, `checks/crlf-check.ts`, `checks/custom-check.ts`: dropped the `_entry`/`entry` param and the `LINTER_ENTRY_*` env vars in CustomCheck (only `LINTER_FILE`/`LINTER_REPO_ROOT`/`LINTER_MODE` remain).
+- New fixture `tests/integration/config-expander-rejected/` verifies the new config-load error.
+- All 5 integration tests pass; existing snapshots unchanged.
+
+**Learnings for future iterations:**
+- The pre-existing acceptance criterion "grep -r expander returns only doc references, the new config-load validation, and the new test fixture" is satisfied — the remaining hits are in `docs/*`, `.linter/linter.mjs` (downloaded artifact, gitignored), and `coverage/tmp/…` (gitignored).
+- The runner surfaces `loadConfig` errors via the top-level try/catch, so config-load errors show as `Error during processing: <message>` on stderr with exit 1. Design future config validations to throw plain Errors from `loadConfig`.
+- `CompositeCheck.lintAndFix` returns `null` when both linter and fixer are non-null; the runner falls back to `.fix()`. The `?? check.fix(...)` pattern in the fix loop is the idiom.
+- `AiPromptCheck` is now file-based only. If per-finding for AI checks is ever desired, per-spec Non-goals it needs a different stability contract (not content-hash fingerprints).
+- Snapshot fixtures use forward-slash paths in `expected/*.txt`; the runner normalizes `<TMPDIR>` and `<LINTER>` automatically.
+- Files under dist/ are checked in on purpose (see AGENTS.md) — commit them with source changes so downstream clients stay in sync.
+---
+
+## 2026-07-25 19:50:00 UTC - US-002 (Add CheckFinding data model + synthetic-finding fallback)
+- Implemented CheckFinding data model in checks/base-check.ts.
+- Added normalizeFindings in linter.ts to handle synthetic findings, snippet population, and invariant enforcement.
+- Widened failedPairs in the runner to include the finding detail.
+- Updated buildPrd to dedupe findings in per-file mode, ensuring byte-identical output for existing tests.
+- Added TestFindingCheck and finding-invariant-pass-with-findings integration test.
+- **Learnings for future iterations:**
+  - The runner is the source of truth for finding normalization. Checks can omit snippets if they provide line ranges; the runner fills them.
+  - Deduping in buildPrd is essential for backward compatibility with per-file PRD consumers.
+  - Adding new checks for integration tests requires registering them in registry.ts.
+---
+
+## 2026-07-25 20:10:00 UTC - US-003 (Fingerprint derivation + determinism test)
+- Implemented fingerprint derivation helper in checks/finding-fingerprint.ts.
+- Injected fingerprints into all findings in the runner (linter.ts).
+- Updated buildPrd to include fingerprints in PRD notes for verification and future use.
+- Added FakeFindingCheck to facilitate testing specific findings and path errors.
+- Added fingerprint-determinism integration test verifying JSON order, path normalization, and non-portable path rejection.
+- **Learnings for future iterations:**
+  - The linter check `no-ts-as-operator` is very aggressive and flags "as" even in comments. Avoid the word "as" in comments or rephrase to "to be" or "like".
+  - Integration tests can capture artifacts like `prd.json` by listing them in `extra-snapshots.txt`.
+  - Deduping in `buildPrd` now accounts for fingerprints, but still groups by file for per-file mode.
+---
+
+## 2026-07-25 20:30:00 UTC - US-004 (Migrate RegexCheck to emit real findings)
+- Migrated RegexCheck to populate CheckResult.findings for both line-by-line and multiline modes.
+- Ensured console output remains byte-identical for backward compatibility.
+- Snippet for line-by-line mode is the full line; for multiline mode it is the matched span.
+- Added regex-emits-findings integration test.
+- Updated existing PRD snapshots where fingerprints changed from synthetic (empty snippet) to real (RegexCheck-emitted snippet).
+- **Learnings for future iterations:**
+  - Remember to run `yarn build` before running integration tests to ensure `dist/linter.mjs` is up to date.
+  - When a check is upgraded to emit findings, its fingerprints in PRDs will change because they now use real snippets instead of the synthetic empty snippet. This is an intentional change.
+---
+
+## 2026-07-25 21:00:00 UTC - US-005 (Add --lint --finding <fp> for a single fingerprint)
+- Implemented --finding <fp> and --expect-max <N> (partially) in CLI.
+- Added decodeFingerprint helper in checks/finding-fingerprint.ts.
+- Implemented mutual exclusivity checks for --finding with other flags.
+- Added explicit error for --fix --finding as reserved but not implemented.
+- Added 7 integration tests covering pass, fail, malformed, config drift, env drift, banned combos, and reserved fix.
+- **Learnings for future iterations:**
+  - The no-ts-as-operator lint rule is very sensitive; it even flags 'as' in variable names or parts of words if not careful (though here it was mostly in comments).
+  - noUncheckedIndexedAccess in tsconfig.json requires explicit checks for undefined when accessing array elements by index.
+  - The integration test runner only supports one filter argument; run multiple tests sequentially in shell if needed.
+---
+
+## 2026-07-25 21:30:00 UTC - US-006 (Add --lint --finding <list> + --expect-max <N>)
+- Implemented support for comma-separated list of fingerprints in --finding.
+- Implemented --expect-max <N> (default 0) for single-fingerprint verification.
+- Added mutual exclusivity between --expect-max and multi-fingerprint lists.
+- Added integration tests: lint-finding-list, lint-finding-list-pass, lint-finding-expect-max, lint-finding-expect-max-fail, lint-finding-expect-max-misuse.
+- **Learnings for future iterations:**
+  - --expect-max N means "pass if count <= N". For Story K of M, --expect-max M-K ensures sequential progress.
+  - Integration tests for per-finding CLI can be easily constructed using base64url(JSON.stringify({check, file, snippet})).
+  - The aggregate fail logic for lists uses --expect-max 0 for all fingerprints in the list.
+---
+
+## 2026-07-25 22:00:00 UTC - US-007 (Reserve --fix --finding with explicit error)
+- Verified implementation of reserved --fix --finding flag.
+- Confirmed it correctly exits with code 2 and the specified "not implemented" message.
+- Verified integration test fix-finding-reserved passes.
+- **Learnings for future iterations:**
+  - US-007 was partially implemented during US-005/US-006 but not marked as complete in prd.json.
+  - Always verify existing status before starting a new story.
+---
+
+## 2026-07-25 23:00:00 UTC - US-008 (Add prd.storySplitMode: per-finding for unique fingerprints)
+- Implemented storySplitMode: "per-finding" in buildPrd.
+- Added findingsPerStory and filesPerStory support for bundling unique fingerprints.
+- Implemented title templates and placeholder replacement ({findingCount}, {findings}, {startLine}, etc.).
+- Multi-instance fingerprints currently emit singleton stories as placeholders for US-009.
+- Added integration tests: prd-per-finding-one-per-story, prd-per-finding-bundled, prd-per-finding-fallback, prd-per-finding-multi-instance-placeholder.
+- **Learnings for future iterations:**
+  - Fingerprints are file-specific because they include the relative file path.
+  - applyPlaceholdersFinding uses global regexes to ensure all template placeholders are replaced.
+  - Unique fingerprint bundling respects both findingsPerStory and filesPerStory caps greedily.
+---
+
+## 2026-07-25 23:30:00 UTC - US-009 (Add multi-instance ordered stories + --expect-max acceptance criteria)
+- Implemented multi-instance story generation in buildPrd.
+- M instances of the same fingerprint produce M singleton stories with --expect-max M-K.
+- Titles and descriptions follow the spec, including partial-fix semantics and line number callouts.
+- Placeholder replacement now supports {instanceIndex}, {instanceCount}, and {expectMax}.
+- Ordering ensures multi-instance stories for a fingerprint are contiguous and appear before unique findings for the same file.
+- Added integration tests: prd-per-finding-multi-instance, prd-per-finding-mixed, prd-per-finding-sequential-enforcement.
+- Deleted obsolete prd-per-finding-multi-instance-placeholder test.
+- **Learnings for future iterations:**
+  - Multi-instance stories are always singletons (not bundled) to keep --expect-max semantics clear.
+  - The flushUniqueQueue helper ensures unique findings are correctly bundled and ordered relative to multi-instance stories.
+  - Fingerprints are file-specific, so "multi-instance" always refers to findings within a single file.
+---
+
+## 2026-07-26 00:00:00 UTC - US-010 (Add config validation + interaction-matrix hard errors and warnings)
+- Implemented hard errors for `storySplitMode: "per-finding"` combined with `prd.group`.
+- Implemented validation for unknown `storySplitMode` values.
+- Added stderr warning when `findingsPerStory` is used in per-file mode.
+- Verified US-001's expander rejection still works.
+- Added integration tests: `config-per-finding-with-group`, `config-storysplit-unknown-value`, `config-findings-per-story-warning`.
+- **Learnings for future iterations:**
+  - Config validations should be placed in `loadConfig` to catch issues early.
+  - Integration tests that use `RegexCheck` and `AllFilesSource` might match the `linter-config.json` itself if the pattern is present in the file; use character classes or specific patterns to avoid self-matching.
+---

@@ -12,7 +12,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": ""
+      "notes": "Fingerprints: eyJjaGVjayI6InByb2Nlc3MtZW52LWJhbiIsImZpbGUiOiJzcmMvYWxwaGEudHMiLCJzbmlwcGV0IjoiZXhwb3J0IGNvbnN0IEEgPSBwcm9jZXNzLmVudi5BOyJ9"
     },
     {
       "id": "US-002",
@@ -23,7 +23,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": ""
+      "notes": "Fingerprints: eyJjaGVjayI6InByb2Nlc3MtZW52LWJhbiIsImZpbGUiOiJzcmMvYmV0YS50cyIsInNuaXBwZXQiOiJleHBvcnQgY29uc3QgQiA9IHByb2Nlc3MuZW52LkI7In0"
     }
   ]
 }

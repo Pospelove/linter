@@ -1,0 +1,62 @@
+{
+  "project": "Project",
+  "branchName": "ralph/lint-fixes",
+  "description": "Fix outstanding lint issues",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix todo-check in linter-config.json:13",
+      "description": "regex violation\nRange: line 13\nSnippet:\n        \"pattern\": \"TODO.*\",",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoibGludGVyLWNvbmZpZy5qc29uIiwic25pcHBldCI6IlwicGF0dGVyblwiOiBcIlRPRE8uKlwiLCJ9"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoibGludGVyLWNvbmZpZy5qc29uIiwic25pcHBldCI6IlwicGF0dGVyblwiOiBcIlRPRE8uKlwiLCJ9"
+    },
+    {
+      "id": "US-002",
+      "title": "Fix todo-check in src/mixed.txt (instance 1 of 3)",
+      "description": "Fix ONE remaining instance matching the snippet. At PRD generation time, 3 instances existed at lines [1, 3, 5]; 0 have already been fixed by prior stories.\n\nregex violation\nRange: line 1\nSnippet:\nTODO SAME",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --expect-max 2"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Fingerprint: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+    },
+    {
+      "id": "US-003",
+      "title": "Fix todo-check in src/mixed.txt (instance 2 of 3)",
+      "description": "Fix ONE remaining instance matching the snippet. At PRD generation time, 3 instances existed at lines [1, 3, 5]; 1 have already been fixed by prior stories.\n\nregex violation\nRange: line 3\nSnippet:\nTODO SAME",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --expect-max 1"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Fingerprint: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+    },
+    {
+      "id": "US-004",
+      "title": "Fix todo-check in src/mixed.txt (instance 3 of 3)",
+      "description": "Fix ONE remaining instance matching the snippet. At PRD generation time, 3 instances existed at lines [1, 3, 5]; 2 have already been fixed by prior stories.\n\nregex violation\nRange: line 5\nSnippet:\nTODO SAME",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --expect-max 0"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Fingerprint: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+    },
+    {
+      "id": "US-005",
+      "title": "Fix todo-check in src/mixed.txt (2 findings)",
+      "description": "regex violation\nRange: line 2\nSnippet:\nTODO UNIQUE 1\n\nregex violation\nRange: line 4\nSnippet:\nTODO UNIQUE 2",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFVOSVFVRSAxIn0,eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFVOSVFVRSAyIn0"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Fingerprints: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFVOSVFVRSAxIn0, eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFVOSVFVRSAyIn0"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+[FAIL] src/file1.txt [fail-check]
+  always-fail: this check always fails
+[FAIL] src/file2.txt [fail-check]
+  always-fail: this check always fails

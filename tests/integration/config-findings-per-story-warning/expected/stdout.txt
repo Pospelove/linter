@@ -1,0 +1,6 @@
+Mode: manual | Source: All tracked files | Checks: check1
+All tracked files: 2 file(s)
+Linting 2 check(s) across 2 file(s)...
+Summary: 2 check(s), 2 passed
+Linting completed.
+Completed in <TIME>

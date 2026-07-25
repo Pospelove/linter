@@ -1,0 +1,1 @@
+Warning: findingsPerStory is ignored when storySplitMode is not per-finding (check "check1").
