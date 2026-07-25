@@ -4,7 +4,6 @@ export interface FingerprintPayload {
   check: string;
   file: string;
   snippet: string;
-  knownFps?: Set<string>;
 }
 
 /**
