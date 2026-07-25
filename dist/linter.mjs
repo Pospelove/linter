@@ -19072,7 +19072,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "f81a426" : "unknown";
+var LINTER_COMMIT = true ? "719359e" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19129,6 +19129,17 @@ var loadConfig = async (mode) => {
     }
     check.name = entry.name;
     check._prdConfig = entry.prd || null;
+    if (entry.prd) {
+      if (entry.prd.storySplitMode === "per-finding" && entry.prd.group) {
+        throw new Error(`Check "${entry.name}" has storySplitMode: "per-finding" combined with prd.group. This is not supported. See docs/per-finding-workflow.md.`);
+      }
+      if (entry.prd.storySplitMode && !["per-file", "per-finding"].includes(entry.prd.storySplitMode)) {
+        throw new Error(`Check "${entry.name}" has unknown storySplitMode "${entry.prd.storySplitMode}". Valid values: per-file, per-finding.`);
+      }
+      if (!entry.prd.storySplitMode && entry.prd.findingsPerStory !== void 0) {
+        console.warn(`Warning: findingsPerStory is ignored when storySplitMode is not per-finding (check "${entry.name}").`);
+      }
+    }
     checks.push(check);
   }
   const prdConfig = config.prd || {};
@@ -19581,7 +19592,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const findingsPerStory = checkPrd.findingsPerStory ?? 1;
       const filesPerStory = checkPrd.filesPerStory ?? 1;
       const applyPlaceholdersFinding = (str2, findings, relFiles, instanceIndex, instanceCount, expectMax) => {
-        const first2 = findings[0];
+        const first2 = findings[instanceIndex != null ? instanceIndex - 1 : 0];
         const res = str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(relFiles.length)).replace(/\{check\}/g, checkName).replace(/\{findingCount\}/g, String(findings.length)).replace(/\{instanceIndex\}/g, instanceIndex != null ? String(instanceIndex) : "").replace(/\{instanceCount\}/g, instanceCount != null ? String(instanceCount) : "").replace(/\{expectMax\}/g, expectMax != null ? String(expectMax) : "").replace(/\{startLine\}/g, String(first2.startLine || 1)).replace(/\{endLine\}/g, String(first2.endLine || first2.startLine || 1)).replace(/\{message\}/g, first2.message).replace(/\{snippet\}/g, first2.snippet || "").replace(/\{fingerprint\}/g, first2.fingerprint || "");
         if (res.includes("{findings}")) {
           const rendered = findings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
@@ -19597,6 +19608,17 @@ Range: ${range}
 Snippet:
 ${f.snippet || ""}`;
         }).join("\n\n");
+      };
+      const renderMultiInstanceDescription = (findings, k, m) => {
+        const lines = findings.map((f) => f.startLine || "whole file");
+        const first2 = findings[k - 1];
+        const range = first2.startLine ? first2.endLine && first2.endLine !== first2.startLine ? `lines ${first2.startLine}-${first2.endLine}` : `line ${first2.startLine}` : "whole file";
+        return `Fix ONE remaining instance matching the snippet. At PRD generation time, ${m} instances existed at lines [${lines.join(", ")}]; ${k - 1} have already been fixed by prior stories.
+
+${first2.message}
+Range: ${range}
+Snippet:
+${first2.snippet || ""}`;
       };
       const globalFpFindings = /* @__PURE__ */ new Map();
       for (const entry of entries) {
@@ -19642,14 +19664,15 @@ ${f.snippet || ""}`;
           if (allInstances.length > 1) {
             if (!emittedMultiInstance.has(fp) && allInstances[0].file === entry.file) {
               emittedMultiInstance.add(fp);
-              for (let k = 1; k <= allInstances.length; k++) {
+              const m = allInstances.length;
+              const instances = allInstances.map((i) => i.finding);
+              for (let k = 1; k <= m; k++) {
                 const item = allInstances[k - 1];
                 const relFile = relPath(item.file);
-                const title = `Fix ${checkName} in ${relFile} (instance ${k} of ${allInstances.length}) // TODO US-009: multi-instance across files`;
-                const storyDescription = `TODO US-009: multi-instance placeholder.
-
-` + renderDefaultDescriptionFinding([item.finding]);
-                const mainCriteria = `${baseCommand} --lint --finding ${fp}`;
+                const expectMax = m - k;
+                const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, instances, [relFile], k, m, expectMax) : `Fix ${checkName} in ${relFile} (instance ${k} of ${m})`;
+                const storyDescription = checkPrd.userStoryDescription ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, instances, [relFile], k, m, expectMax) : renderMultiInstanceDescription(instances, k, m);
+                const mainCriteria = `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}`;
                 pushStory(title, storyDescription, [mainCriteria, ...checkPrd.additionalAcceptanceCriteria || []], `Fingerprint: ${fp}`);
               }
             }

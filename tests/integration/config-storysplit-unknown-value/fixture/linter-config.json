@@ -1,0 +1,16 @@
+{
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "check1",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": { "pattern": "foo" },
+      "prd": {
+        "storySplitMode": "invalid-mode"
+      }
+    }
+  ]
+}

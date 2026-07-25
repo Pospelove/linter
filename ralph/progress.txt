@@ -108,3 +108,28 @@ Started: Sat Jul 25 07:27:54 PM UTC 2026
   - applyPlaceholdersFinding uses global regexes to ensure all template placeholders are replaced.
   - Unique fingerprint bundling respects both findingsPerStory and filesPerStory caps greedily.
 ---
+
+## 2026-07-25 23:30:00 UTC - US-009 (Add multi-instance ordered stories + --expect-max acceptance criteria)
+- Implemented multi-instance story generation in buildPrd.
+- M instances of the same fingerprint produce M singleton stories with --expect-max M-K.
+- Titles and descriptions follow the spec, including partial-fix semantics and line number callouts.
+- Placeholder replacement now supports {instanceIndex}, {instanceCount}, and {expectMax}.
+- Ordering ensures multi-instance stories for a fingerprint are contiguous and appear before unique findings for the same file.
+- Added integration tests: prd-per-finding-multi-instance, prd-per-finding-mixed, prd-per-finding-sequential-enforcement.
+- Deleted obsolete prd-per-finding-multi-instance-placeholder test.
+- **Learnings for future iterations:**
+  - Multi-instance stories are always singletons (not bundled) to keep --expect-max semantics clear.
+  - The flushUniqueQueue helper ensures unique findings are correctly bundled and ordered relative to multi-instance stories.
+  - Fingerprints are file-specific, so "multi-instance" always refers to findings within a single file.
+---
+
+## 2026-07-26 00:00:00 UTC - US-010 (Add config validation + interaction-matrix hard errors and warnings)
+- Implemented hard errors for `storySplitMode: "per-finding"` combined with `prd.group`.
+- Implemented validation for unknown `storySplitMode` values.
+- Added stderr warning when `findingsPerStory` is used in per-file mode.
+- Verified US-001's expander rejection still works.
+- Added integration tests: `config-per-finding-with-group`, `config-storysplit-unknown-value`, `config-findings-per-story-warning`.
+- **Learnings for future iterations:**
+  - Config validations should be placed in `loadConfig` to catch issues early.
+  - Integration tests that use `RegexCheck` and `AllFilesSource` might match the `linter-config.json` itself if the pattern is present in the file; use character classes or specific patterns to avoid self-matching.
+---

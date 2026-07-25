@@ -176,6 +176,21 @@ const loadConfig = async (mode: string) => {
     }
     check.name = entry.name;
     check._prdConfig = entry.prd || null;
+
+    if (entry.prd) {
+      if (entry.prd.storySplitMode === "per-finding" && entry.prd.group) {
+        throw new Error(`Check "${entry.name}" has storySplitMode: "per-finding" combined with prd.group. This is not supported. See docs/per-finding-workflow.md.`);
+      }
+
+      if (entry.prd.storySplitMode && !["per-file", "per-finding"].includes(entry.prd.storySplitMode)) {
+        throw new Error(`Check "${entry.name}" has unknown storySplitMode "${entry.prd.storySplitMode}". Valid values: per-file, per-finding.`);
+      }
+
+      if (!entry.prd.storySplitMode && entry.prd.findingsPerStory !== undefined) {
+        console.warn(`Warning: findingsPerStory is ignored when storySplitMode is not per-finding (check "${entry.name}").`);
+      }
+    }
+
     checks.push(check);
   }
 
@@ -808,7 +823,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
       const filesPerStory = checkPrd.filesPerStory ?? 1;
 
       const applyPlaceholdersFinding = (str: string, findings: CheckFinding[], relFiles: string[], instanceIndex?: number, instanceCount?: number, expectMax?: number) => {
-        const first = findings[0];
+        const first = findings[instanceIndex != null ? instanceIndex - 1 : 0];
         const res = str
           .replace(/\{files?\}/g, relFiles.join(", "))
           .replace(/\{fileCount\}/g, String(relFiles.length))
@@ -835,6 +850,13 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
           const range = f.startLine ? (f.endLine && f.endLine !== f.startLine ? `lines ${f.startLine}-${f.endLine}` : `line ${f.startLine}`) : "whole file";
           return `${f.message}\nRange: ${range}\nSnippet:\n${f.snippet || ""}`;
         }).join("\n\n");
+      };
+
+      const renderMultiInstanceDescription = (findings: CheckFinding[], k: number, m: number) => {
+        const lines = findings.map((f) => f.startLine || "whole file");
+        const first = findings[k - 1];
+        const range = first.startLine ? (first.endLine && first.endLine !== first.startLine ? `lines ${first.startLine}-${first.endLine}` : `line ${first.startLine}`) : "whole file";
+        return `Fix ONE remaining instance matching the snippet. At PRD generation time, ${m} instances existed at lines [${lines.join(", ")}]; ${k - 1} have already been fixed by prior stories.\n\n${first.message}\nRange: ${range}\nSnippet:\n${first.snippet || ""}`;
       };
 
       // Group findings by fingerprint across all files to identify multi-instance
@@ -905,12 +927,22 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             // Multi-instance: emit all stories if this is the first file it appears in
             if (!emittedMultiInstance.has(fp) && allInstances[0].file === entry.file) {
               emittedMultiInstance.add(fp);
-              for (let k = 1; k <= allInstances.length; k++) {
+              const m = allInstances.length;
+              const instances = allInstances.map(i => i.finding);
+              for (let k = 1; k <= m; k++) {
                 const item = allInstances[k - 1];
                 const relFile = relPath(item.file);
-                const title = `Fix ${checkName} in ${relFile} (instance ${k} of ${allInstances.length}) // TODO US-009: multi-instance across files`;
-                const storyDescription = `TODO US-009: multi-instance placeholder.\n\n` + renderDefaultDescriptionFinding([item.finding]);
-                const mainCriteria = `${baseCommand} --lint --finding ${fp}`;
+                const expectMax = m - k;
+
+                const title = checkPrd.userStoryTitle
+                  ? applyPlaceholdersFinding(checkPrd.userStoryTitle, instances, [relFile], k, m, expectMax)
+                  : `Fix ${checkName} in ${relFile} (instance ${k} of ${m})`;
+
+                const storyDescription = checkPrd.userStoryDescription
+                  ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, instances, [relFile], k, m, expectMax)
+                  : renderMultiInstanceDescription(instances, k, m);
+
+                const mainCriteria = `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}`;
                 pushStory(title, storyDescription, [mainCriteria, ...(checkPrd.additionalAcceptanceCriteria || [])], `Fingerprint: ${fp}`);
               }
             }

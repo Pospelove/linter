@@ -1,0 +1,1 @@
+Error during processing: Check "check1" has unknown storySplitMode "invalid-mode". Valid values: per-file, per-finding.
