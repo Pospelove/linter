@@ -10,6 +10,32 @@ import { CompositeCheck } from "./checks/composite-check.js";
 import { BaseCheck, CheckResult, CheckFinding } from "./checks/base-check.js";
 import { deriveFingerprint, decodeFingerprint } from "./checks/finding-fingerprint.js";
 
+function levenshtein(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 const __filename = fileURLToPath(import.meta.url);
 
 interface LinterCheckResult extends CheckResult {
@@ -1177,6 +1203,32 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             if (f.snippet) {
               console.error(`  Snippet: ${f.snippet.replace(/\n/g, "\n  ")}`);
             }
+          }
+        } else {
+          // Exact matches satisfied! Check for botched fixes.
+          const unmatchedFindings = findings.filter((f) => f.fingerprint !== fp);
+          let botched: CheckFinding | null = null;
+          for (const uf of unmatchedFindings) {
+            const e = payload.snippet;
+            const a = uf.snippet ? uf.snippet.trim().replace(/\s+/g, " ") : "";
+            if (!a) continue;
+
+            const dist = levenshtein(e, a);
+            const maxLen = Math.max(e.length, a.length);
+            const sim = maxLen === 0 ? 0 : 1 - (dist / maxLen);
+
+            if (sim >= 0.6) {
+              botched = uf;
+              break;
+            }
+          }
+
+          if (botched) {
+            aggregateFail = true;
+            console.error(`[FAIL] ${payload.file} [${payload.check}]`);
+            console.error(`hey man fingerprint a bit different but check still failed right here so the fix doesnt count`);
+            console.error(`  Expected snippet: ${payload.snippet}`);
+            console.error(`  Found snippet:    ${botched.snippet?.trim().replace(/\s+/g, " ") || ""}`);
           }
         }
       }

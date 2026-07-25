@@ -1,0 +1,1 @@
+--lint --finding eyJjaGVjayI6ImJvdGNoZWQtY2hlY2siLCJmaWxlIjoic3JjL3Rlc3QudHh0Iiwic25pcHBldCI6ImZvbyBiYXIifQ
