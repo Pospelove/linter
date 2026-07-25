@@ -8,6 +8,25 @@ import fs from "fs/promises";
 export type CheckStatus = "pass" | "fail" | "fixed" | "error";
 
 /**
+ * A machine-readable finding attached to a CheckResult. Populated by
+ * per-finding-aware checks; the runner also synthesizes one whole-file
+ * finding for legacy fail/error results (see docs/per-finding-workflow.md).
+ *
+ * @property {string} message     One-line human summary.
+ * @property {string} snippet     Verbatim offending text (may span lines); "" for whole-file findings.
+ * @property {number} [startLine] 1-based; omit for whole-file findings.
+ * @property {number} [endLine]   1-based, inclusive; defaults to startLine.
+ * @property {string} [fingerprint] Filled in by the runner; checks do not set this.
+ */
+export interface CheckFinding {
+  message: string;
+  snippet: string;
+  startLine?: number;
+  endLine?: number;
+  fingerprint?: string;
+}
+
+/**
  * @typedef {Object} CheckResult
  * @property {CheckStatus} status  - Outcome of the check.
  * @property {string}      [output] - Optional diagnostic text (diff, error message, etc.).
@@ -17,6 +36,7 @@ export interface CheckResult {
   status: CheckStatus;
   output?: string;
   extraFiles?: string[];
+  findings?: CheckFinding[];
 }
 
 /**

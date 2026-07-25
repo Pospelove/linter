@@ -27,5 +27,18 @@ Started: Sat Jul 25 07:27:54 PM UTC 2026
 - `CompositeCheck.lintAndFix` returns `null` when both linter and fixer are non-null; the runner falls back to `.fix()`. The `?? check.fix(...)` pattern in the fix loop is the idiom.
 - `AiPromptCheck` is now file-based only. If per-finding for AI checks is ever desired, per-spec Non-goals it needs a different stability contract (not content-hash fingerprints).
 - Snapshot fixtures use forward-slash paths in `expected/*.txt`; the runner normalizes `<TMPDIR>` and `<LINTER>` automatically.
-- Files under `dist/` are checked in on purpose (see `AGENTS.md`) — commit them with source changes so downstream clients stay in sync.
+- Files under dist/ are checked in on purpose (see AGENTS.md) — commit them with source changes so downstream clients stay in sync.
 ---
+
+## 2026-07-25 19:50:00 UTC - US-002 (Add CheckFinding data model + synthetic-finding fallback)
+- Implemented CheckFinding data model in checks/base-check.ts.
+- Added normalizeFindings in linter.ts to handle synthetic findings, snippet population, and invariant enforcement.
+- Widened failedPairs in the runner to include the finding detail.
+- Updated buildPrd to dedupe findings in per-file mode, ensuring byte-identical output for existing tests.
+- Added TestFindingCheck and finding-invariant-pass-with-findings integration test.
+- **Learnings for future iterations:**
+  - The runner is the source of truth for finding normalization. Checks can omit snippets if they provide line ranges; the runner fills them.
+  - Deduping in buildPrd is essential for backward compatibility with per-file PRD consumers.
+  - Adding new checks for integration tests requires registering them in registry.ts.
+---
+

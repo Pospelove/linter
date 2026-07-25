@@ -14168,6 +14168,27 @@ var CustomCheck = class extends BaseCheck {
   }
 };
 
+// checks/test-finding-check.ts
+var TestFindingCheck = class extends BaseCheck {
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "test-finding";
+  }
+  async lint(_file, _deps) {
+    return {
+      status: "pass",
+      findings: [{ message: "this should not happen", snippet: "" }]
+    };
+  }
+  static getHelp() {
+    return {
+      name: "TestFindingCheck",
+      description: "Returns status: pass with findings to test runner invariant.",
+      options: "extensions, includePaths, excludePaths, textOnly, priority (inherited from BaseCheck)"
+    };
+  }
+};
+
 // file-sources/all-files-source.ts
 import fs17 from "fs";
 import path14 from "path";
@@ -18918,7 +18939,8 @@ var builtinChecks = {
   TscCheck,
   AlwaysFailCheck,
   LocalizationKeyCheck,
-  CustomCheck
+  CustomCheck,
+  TestFindingCheck
 };
 var builtinFileSources = {
   AllFilesSource,
@@ -18932,8 +18954,36 @@ var builtinRegistry = {
 
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
+var normalizeFindings = async (file, checkName, res) => {
+  if (res.status === "pass") {
+    if (res.findings && res.findings.length > 0) {
+      throw new Error(`Implementation bug in check "${checkName}": returned "pass" status with ${res.findings.length} findings for file "${file}".`);
+    }
+    return [];
+  }
+  const findings = res.findings ? [...res.findings] : [];
+  if (findings.length === 0 && (res.status === "fail" || res.status === "error")) {
+    findings.push({ message: res.output ?? "check failed", snippet: "" });
+  }
+  let content = null;
+  for (const finding of findings) {
+    if ((finding.startLine || finding.endLine) && !finding.snippet) {
+      if (content === null) {
+        try {
+          content = (await fs20.promises.readFile(file, "utf-8")).split("\n");
+        } catch (err) {
+          throw new Error(`Failed to read file "${file}" to populate snippet for check "${checkName}": ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      const start = Math.max(0, (finding.startLine ?? 1) - 1);
+      const end = finding.endLine ?? finding.startLine ?? start + 1;
+      finding.snippet = content.slice(start, end).join("\n");
+    }
+  }
+  return findings;
+};
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "286ac74" : "unknown";
+var LINTER_COMMIT = true ? "2a5ece9" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19009,7 +19059,8 @@ var formatFileResults = (results, file) => {
   const passed = [];
   const fixed = [];
   const bad = [];
-  for (const { res, checkName } of results) {
+  for (const group of results) {
+    const { res, checkName } = group;
     switch (res.status) {
       case "pass":
         passed.push(checkName);
@@ -19020,12 +19071,12 @@ var formatFileResults = (results, file) => {
         stats.fixed++;
         break;
       case "fail":
-        bad.push({ res, checkName });
+        bad.push(group);
         stats.fail++;
         break;
       case "error":
       default:
-        bad.push({ res, checkName });
+        bad.push(group);
         stats.error++;
         break;
     }
@@ -19103,9 +19154,9 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
     }
     if (isFail) {
       fail = true;
-      for (const { res, checkName } of results) {
-        if (res.status === "fail" || res.status === "error") {
-          failedPairs.push({ file, checkName });
+      for (const { checkName, findings } of results) {
+        for (const finding of findings) {
+          failedPairs.push({ file, checkName, finding });
         }
       }
     }
@@ -19119,11 +19170,13 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
             checks2.map(async (check) => {
               try {
                 const res = await check.lint(file, deps);
-                return { res, checkName: check.name };
+                const findings = await normalizeFindings(file, check.name, res);
+                return { res, checkName: check.name, findings };
               } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 const errorRes = { status: "error", output: message };
-                return { res: errorRes, checkName: check.name };
+                const findings = await normalizeFindings(file, check.name, errorRes);
+                return { res: errorRes, checkName: check.name, findings };
               }
             })
           );
@@ -19138,11 +19191,13 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
         try {
           const res = await check.lintAndFix(file, deps) || await check.fix(file, deps);
           if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
-          fileResults.push({ res, checkName: check.name });
+          const findings = await normalizeFindings(file, check.name, res);
+          fileResults.push({ res, checkName: check.name, findings });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           const errorRes = { status: "error", output: message };
-          fileResults.push({ res: errorRes, checkName: check.name });
+          const findings = await normalizeFindings(file, check.name, errorRes);
+          fileResults.push({ res: errorRes, checkName: check.name, findings });
         }
       }
       emitResults(file, fileResults);
@@ -19357,7 +19412,10 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   const byCheck = /* @__PURE__ */ new Map();
   for (const { file, checkName } of failedPairs) {
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
-    byCheck.get(checkName).push(file);
+    const files = byCheck.get(checkName);
+    if (!files.includes(file)) {
+      files.push(file);
+    }
   }
   for (const files of byCheck.values()) files.sort((a, b) => a.localeCompare(b));
   const sortedChecks = [...byCheck.entries()].sort(([a], [b]) => a.localeCompare(b));

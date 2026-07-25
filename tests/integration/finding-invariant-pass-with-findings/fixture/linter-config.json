@@ -1,0 +1,14 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": { "export": "AllFilesSource" }
+    }
+  },
+  "checks": [
+    {
+      "name": "test-finding",
+      "export": "TestFindingCheck",
+      "modes": ["manual"]
+    }
+  ]
+}

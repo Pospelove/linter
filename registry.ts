@@ -20,6 +20,7 @@ import { TscCheck } from "./checks/tsc-check.js";
 import { AlwaysFailCheck } from "./checks/always-fail-check.js";
 import { LocalizationKeyCheck } from "./checks/localization-key-check.js";
 import { CustomCheck } from "./checks/custom-check.js";
+import { TestFindingCheck } from "./checks/test-finding-check.js";
 
 // --- file sources ---
 import { AllFilesSource } from "./file-sources/all-files-source.js";
@@ -41,6 +42,7 @@ export const builtinChecks = {
   AlwaysFailCheck,
   LocalizationKeyCheck,
   CustomCheck,
+  TestFindingCheck,
 };
 
 export const builtinFileSources = {
