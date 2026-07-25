@@ -14118,8 +14118,22 @@ var CustomCheck = class extends BaseCheck {
   }
   async lint(file, _deps) {
     const env = this.#buildEnv(file, "lint");
-    const { code, output } = await this.#run(this.#lintCommand, env);
+    const { code, stdout, stderr, output } = await this.#run(this.#lintCommand, env);
     if (code === 0) return { status: "pass" };
+    try {
+      const parsed = JSON.parse(stdout);
+      if (Array.isArray(parsed)) {
+        const result = { status: "fail", findings: parsed };
+        if (stderr) {
+          result.output = stderr;
+        }
+        return result;
+      }
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.findings)) {
+        return { status: "fail", ...parsed };
+      }
+    } catch {
+    }
     if (code === 1) return { status: "fail", output };
     return { status: "error", output };
   }
@@ -14154,7 +14168,7 @@ var CustomCheck = class extends BaseCheck {
       LINTER_MODE: mode
     };
   }
-  /** Run a shell command, capturing stdout+stderr, resolving to { code, output }. */
+  /** Run a shell command, capturing stdout+stderr, resolving to { code, stdout, stderr, output }. */
   #run(command, env) {
     return new Promise((resolve) => {
       const proc = spawn3(command, [], {
@@ -14162,22 +14176,25 @@ var CustomCheck = class extends BaseCheck {
         cwd: this.repoRoot,
         env
       });
-      const chunks = [];
-      proc.stdout.on("data", (d) => chunks.push(d));
-      proc.stderr.on("data", (d) => chunks.push(d));
+      const stdoutChunks = [];
+      const stderrChunks = [];
+      proc.stdout.on("data", (d) => stdoutChunks.push(d));
+      proc.stderr.on("data", (d) => stderrChunks.push(d));
       proc.on("close", (code) => {
-        const output = Buffer.concat(chunks).toString().trim();
-        resolve({ code: code ?? 1, output });
+        const stdout = Buffer.concat(stdoutChunks).toString().trim();
+        const stderr = Buffer.concat(stderrChunks).toString().trim();
+        const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+        resolve({ code: code ?? 1, stdout, stderr, output });
       });
       proc.on("error", (err) => {
-        resolve({ code: -1, output: err.message });
+        resolve({ code: -1, stdout: "", stderr: err.message, output: err.message });
       });
     });
   }
   static getHelp() {
     return {
       name: "CustomCheck",
-      description: "Delegates lint and fix to user-provided shell commands. File details are passed via environment variables (LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE). Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error.",
+      description: "Delegates lint and fix to user-provided shell commands. File details are passed via environment variables (LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE). Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error. On fail (exit 1), if stdout is a JSON array of findings, it is used for per-finding reporting.",
       options: "command \u2014 shell command for both modes; lintCommand \u2014 overrides command for lint; fixCommand \u2014 overrides command for fix; name \u2014 display name for the check"
     };
   }
@@ -19072,7 +19089,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "8266d5f" : "unknown";
+var LINTER_COMMIT = true ? "c468144" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19593,6 +19610,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const filesPerStory = checkPrd.filesPerStory ?? 1;
       const applyPlaceholdersFinding = (str2, findings, relFiles, instanceIndex, instanceCount, expectMax) => {
         const first2 = findings[instanceIndex != null ? instanceIndex - 1 : 0];
+        if (!first2) return str2;
         const res = str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(relFiles.length)).replace(/\{check\}/g, checkName).replace(/\{findingCount\}/g, String(findings.length)).replace(/\{instanceIndex\}/g, instanceIndex != null ? String(instanceIndex) : "").replace(/\{instanceCount\}/g, instanceCount != null ? String(instanceCount) : "").replace(/\{expectMax\}/g, expectMax != null ? String(expectMax) : "").replace(/\{startLine\}/g, String(first2.startLine || 1)).replace(/\{endLine\}/g, String(first2.endLine || first2.startLine || 1)).replace(/\{message\}/g, first2.message).replace(/\{snippet\}/g, first2.snippet || "").replace(/\{fingerprint\}/g, first2.fingerprint || "");
         if (res.includes("{findings}")) {
           const rendered = findings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
@@ -19612,6 +19630,7 @@ ${f.snippet || ""}`;
       const renderMultiInstanceDescription = (findings, k, m) => {
         const lines = findings.map((f) => f.startLine || "whole file");
         const first2 = findings[k - 1];
+        if (!first2) return "";
         const range = first2.startLine ? first2.endLine && first2.endLine !== first2.startLine ? `lines ${first2.startLine}-${first2.endLine}` : `line ${first2.startLine}` : "whole file";
         return `Fix ONE remaining instance matching the snippet. At PRD generation time, ${m} instances existed at lines [${lines.join(", ")}]; ${k - 1} have already been fixed by prior stories.
 
@@ -19638,6 +19657,7 @@ ${first2.snippet || ""}`;
           let j = 0;
           while (j < uniqueQueue.length) {
             const item = uniqueQueue[j];
+            if (!item) break;
             if (storyFindings.length >= findingsPerStory) break;
             if (!storyFiles.has(item.file) && storyFiles.size >= filesPerStory) break;
             storyFindings.push(item.finding);
@@ -19650,7 +19670,7 @@ ${first2.snippet || ""}`;
           const fileCount = relFiles.length;
           const findingCount = storyFindings.length;
           const first2 = storyFindings[0];
-          const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles) : fileCount === 1 ? findingCount === 1 ? `Fix ${checkName} in ${relFiles[0]}:${first2.startLine || 1}` : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)` : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
+          const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles) : fileCount === 1 ? findingCount === 1 ? `Fix ${checkName} in ${relFiles[0]}:${first2?.startLine || 1}` : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)` : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
           const storyDescription = checkPrd.userStoryDescription ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, storyFindings, relFiles) : renderDefaultDescriptionFinding(storyFindings);
           const mainCriteria = `${baseCommand} --lint --finding ${storyFpList.join(",")}`;
           const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
@@ -19662,12 +19682,13 @@ ${first2.snippet || ""}`;
         for (const fp of fpsInFile) {
           const allInstances = globalFpFindings.get(fp);
           if (allInstances.length > 1) {
-            if (!emittedMultiInstance.has(fp) && allInstances[0].file === entry.file) {
+            if (!emittedMultiInstance.has(fp) && allInstances[0] && allInstances[0].file === entry.file) {
               emittedMultiInstance.add(fp);
               const m = allInstances.length;
               const instances = allInstances.map((i) => i.finding);
               for (let k = 1; k <= m; k++) {
                 const item = allInstances[k - 1];
+                if (!item) continue;
                 const relFile = relPath(item.file);
                 const expectMax = m - k;
                 const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, instances, [relFile], k, m, expectMax) : `Fix ${checkName} in ${relFile} (instance ${k} of ${m})`;
@@ -19677,7 +19698,9 @@ ${first2.snippet || ""}`;
               }
             }
           } else {
-            uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+            if (allInstances[0]) {
+              uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+            }
           }
         }
         if (filesPerStory === 1) {

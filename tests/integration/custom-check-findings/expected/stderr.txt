@@ -1,0 +1,3 @@
+[FAIL] src/test.txt [custom-findings]
+[FAIL] src/test.txt [custom-legacy]
+  Legacy failure

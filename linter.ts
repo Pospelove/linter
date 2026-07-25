@@ -824,6 +824,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
 
       const applyPlaceholdersFinding = (str: string, findings: CheckFinding[], relFiles: string[], instanceIndex?: number, instanceCount?: number, expectMax?: number) => {
         const first = findings[instanceIndex != null ? instanceIndex - 1 : 0];
+        if (!first) return str;
         const res = str
           .replace(/\{files?\}/g, relFiles.join(", "))
           .replace(/\{fileCount\}/g, String(relFiles.length))
@@ -855,6 +856,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
       const renderMultiInstanceDescription = (findings: CheckFinding[], k: number, m: number) => {
         const lines = findings.map((f) => f.startLine || "whole file");
         const first = findings[k - 1];
+        if (!first) return "";
         const range = first.startLine ? (first.endLine && first.endLine !== first.startLine ? `lines ${first.startLine}-${first.endLine}` : `line ${first.startLine}`) : "whole file";
         return `Fix ONE remaining instance matching the snippet. At PRD generation time, ${m} instances existed at lines [${lines.join(", ")}]; ${k - 1} have already been fixed by prior stories.\n\n${first.message}\nRange: ${range}\nSnippet:\n${first.snippet || ""}`;
       };
@@ -882,6 +884,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
           let j = 0;
           while (j < uniqueQueue.length) {
             const item = uniqueQueue[j];
+            if (!item) break;
             if (storyFindings.length >= findingsPerStory) break;
             if (!storyFiles.has(item.file) && storyFiles.size >= filesPerStory) break;
 
@@ -902,7 +905,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles)
             : fileCount === 1
               ? findingCount === 1
-                ? `Fix ${checkName} in ${relFiles[0]}:${first.startLine || 1}`
+                ? `Fix ${checkName} in ${relFiles[0]}:${first?.startLine || 1}`
                 : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)`
               : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
 
@@ -925,12 +928,13 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
           const allInstances = globalFpFindings.get(fp)!;
           if (allInstances.length > 1) {
             // Multi-instance: emit all stories if this is the first file it appears in
-            if (!emittedMultiInstance.has(fp) && allInstances[0].file === entry.file) {
+            if (!emittedMultiInstance.has(fp) && allInstances[0] && allInstances[0].file === entry.file) {
               emittedMultiInstance.add(fp);
               const m = allInstances.length;
               const instances = allInstances.map(i => i.finding);
               for (let k = 1; k <= m; k++) {
                 const item = allInstances[k - 1];
+                if (!item) continue;
                 const relFile = relPath(item.file);
                 const expectMax = m - k;
 
@@ -948,7 +952,9 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             }
           } else {
             // Unique fingerprint
-            uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+            if (allInstances[0]) {
+              uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+            }
           }
         }
 

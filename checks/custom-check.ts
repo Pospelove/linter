@@ -60,9 +60,27 @@ export class CustomCheck extends BaseCheck {
 
   override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     const env = this.#buildEnv(file, "lint");
-    const { code, output } = await this.#run(this.#lintCommand!, env);
+    const { code, stdout, stderr, output } = await this.#run(this.#lintCommand!, env);
 
     if (code === 0) return { status: "pass" };
+
+    // Try to parse stdout as a JSON array of findings or a CheckResult object.
+    try {
+      const parsed = JSON.parse(stdout);
+      if (Array.isArray(parsed)) {
+        const result: CheckResult = { status: "fail", findings: parsed };
+        if (stderr) {
+          result.output = stderr;
+        }
+        return result;
+      }
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.findings)) {
+        return { status: "fail", ...parsed };
+      }
+    } catch {
+      // Not JSON, fall back to legacy behavior.
+    }
+
     if (code === 1) return { status: "fail", output };
     return { status: "error", output };
   }
@@ -105,8 +123,11 @@ export class CustomCheck extends BaseCheck {
     };
   }
 
-  /** Run a shell command, capturing stdout+stderr, resolving to { code, output }. */
-  #run(command: string, env: NodeJS.ProcessEnv): Promise<{ code: number; output: string }> {
+  /** Run a shell command, capturing stdout+stderr, resolving to { code, stdout, stderr, output }. */
+  #run(
+    command: string,
+    env: NodeJS.ProcessEnv
+  ): Promise<{ code: number; stdout: string; stderr: string; output: string }> {
     return new Promise((resolve) => {
       const proc = spawn(command, [], {
         shell: true,
@@ -114,17 +135,20 @@ export class CustomCheck extends BaseCheck {
         env,
       });
 
-      const chunks: Buffer[] = [];
-      proc.stdout.on("data", (d: Buffer) => chunks.push(d));
-      proc.stderr.on("data", (d: Buffer) => chunks.push(d));
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      proc.stdout.on("data", (d: Buffer) => stdoutChunks.push(d));
+      proc.stderr.on("data", (d: Buffer) => stderrChunks.push(d));
 
       proc.on("close", (code: number | null) => {
-        const output = Buffer.concat(chunks).toString().trim();
-        resolve({ code: code ?? 1, output });
+        const stdout = Buffer.concat(stdoutChunks).toString().trim();
+        const stderr = Buffer.concat(stderrChunks).toString().trim();
+        const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+        resolve({ code: code ?? 1, stdout, stderr, output });
       });
 
       proc.on("error", (err: Error) => {
-        resolve({ code: -1, output: err.message });
+        resolve({ code: -1, stdout: "", stderr: err.message, output: err.message });
       });
     });
   }
@@ -136,7 +160,8 @@ export class CustomCheck extends BaseCheck {
         "Delegates lint and fix to user-provided shell commands. " +
         "File details are passed via environment variables " +
         "(LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE). " +
-        "Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error.",
+        "Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error. " +
+        "On fail (exit 1), if stdout is a JSON array of findings, it is used for per-finding reporting.",
       options:
         "command — shell command for both modes; " +
         "lintCommand — overrides command for lint; " +
