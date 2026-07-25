@@ -1,4 +1,4 @@
 [FAIL] src/test.txt [botched-check]
-Botched fix detected: the snippet was modified but still fails the check.
+hey man fingerprint a bit different but check still failed right here so the fix doesnt count
   Expected snippet: foo bar
   Found snippet:    fooX bar
