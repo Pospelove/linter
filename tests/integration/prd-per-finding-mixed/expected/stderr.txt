@@ -1,7 +1,7 @@
-[FAIL] linter-config.json [todo-check]
+[FAIL] linter-config.json [todo-check] (1 finding)
   regex violation (1 hit(s)):
   line 13: TODO.*",
-[FAIL] src/mixed.txt [todo-check]
+[FAIL] src/mixed.txt [todo-check] (5 findings)
   regex violation (5 hit(s)):
   line 1: TODO SAME
   line 2: TODO UNIQUE 1

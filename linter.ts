@@ -273,7 +273,11 @@ const formatFileResults = (results: ResultGroup[], file: string) => {
     }
     for (const { res, checkName } of bad) {
       const status = res.status === "fail" ? "FAIL" : res.status === "error" ? "ERROR" : "UNKNOWN";
-      lines.push(`[${status}] ${rel} [${checkName}]`);
+      let extra = "";
+      if (res.findings && res.findings.length > 0) {
+        extra = ` (${res.findings.length} finding${res.findings.length === 1 ? "" : "s"})`;
+      }
+      lines.push(`[${status}] ${rel} [${checkName}]${extra}`);
       if (res.output) lines.push(`  ${res.output}`);
     }
   }

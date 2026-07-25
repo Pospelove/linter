@@ -19089,7 +19089,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "8d97f4e" : "unknown";
+var LINTER_COMMIT = true ? "a2366cc" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19219,7 +19219,11 @@ var formatFileResults = (results, file) => {
     }
     for (const { res, checkName } of bad) {
       const status = res.status === "fail" ? "FAIL" : res.status === "error" ? "ERROR" : "UNKNOWN";
-      lines.push(`[${status}] ${rel} [${checkName}]`);
+      let extra = "";
+      if (res.findings && res.findings.length > 0) {
+        extra = ` (${res.findings.length} finding${res.findings.length === 1 ? "" : "s"})`;
+      }
+      lines.push(`[${status}] ${rel} [${checkName}]${extra}`);
       if (res.output) lines.push(`  ${res.output}`);
     }
   }

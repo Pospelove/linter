@@ -1,4 +1,4 @@
-[FAIL] src/bad.ts [process-env-ban]
+[FAIL] src/bad.ts [process-env-ban] (3 findings)
   Do not use process.env directly. (3 hit(s)):
   line 1: process.env
   line 2: process.env
