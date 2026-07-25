@@ -19058,31 +19058,6 @@ var builtinRegistry = {
 };
 
 // linter.ts
-function levenshtein(a, b) {
-  if (a.length === 0) return b.length;
-  if (b.length === 0) return a.length;
-  const matrix = [];
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-  return matrix[b.length][a.length];
-}
 var __filename = fileURLToPath(import.meta.url);
 var normalizeFindings = async (file, checkName, res) => {
   if (res.status === "pass") {
@@ -19114,7 +19089,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "968b8cb" : "unknown";
+var LINTER_COMMIT = true ? "a2366cc" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19871,28 +19846,6 @@ ${first2.snippet || ""}`;
             if (f.snippet) {
               console.error(`  Snippet: ${f.snippet.replace(/\n/g, "\n  ")}`);
             }
-          }
-        } else {
-          const unmatchedFindings = findings.filter((f) => f.fingerprint !== fp);
-          let botched = null;
-          for (const uf of unmatchedFindings) {
-            const e = payload.snippet;
-            const a = uf.snippet ? uf.snippet.trim().replace(/\s+/g, " ") : "";
-            if (!a) continue;
-            const dist = levenshtein(e, a);
-            const maxLen = Math.max(e.length, a.length);
-            const sim = maxLen === 0 ? 0 : 1 - dist / maxLen;
-            if (sim >= 0.6) {
-              botched = uf;
-              break;
-            }
-          }
-          if (botched) {
-            aggregateFail = true;
-            console.error(`[FAIL] ${payload.file} [${payload.check}]`);
-            console.error(`hey man fingerprint a bit different but check still failed right here so the fix doesnt count`);
-            console.error(`  Expected snippet: ${payload.snippet}`);
-            console.error(`  Found snippet:    ${botched.snippet?.trim().replace(/\s+/g, " ") || ""}`);
           }
         }
       }
