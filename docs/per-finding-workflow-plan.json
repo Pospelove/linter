@@ -1,0 +1,205 @@
+{
+  "project": "linter",
+  "branchName": "per-finding-workflow-implementation",
+  "description": "Implement the per-finding lint workflow described in docs/per-finding-workflow.md. Each user story is one step in the plan, sized to be picked up by an independent Claude session with cold context. Steps are ordered by dependency: every step lands on main green (yarn build + yarn test pass) before the next one begins.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Delete virtual entries / expanders",
+      "description": "As an implementer, I need to remove the entries/ and expanders/ machinery from the codebase so that later per-finding steps do not have to reason about entry IDs vs file paths. Spec: docs/per-finding-workflow.md \"Scope & assumptions\" bullet 1 (lines 20-38) and \"Rollout\" commit 1 (line 509). Rationale: entries/expanders duplicate the fingerprint surface; ripping them out first keeps the later diffs unambiguous.",
+      "acceptanceCriteria": [
+        "Read docs/per-finding-workflow.md before starting; it is the source of truth.",
+        "Delete entries/base-entry.ts, entries/file-entry.ts, entries/json-array-entry.ts.",
+        "Delete expanders/base-expander.ts, expanders/file-expander.ts, expanders/json-array-expander.ts.",
+        "Remove the expander field, expand(), and setExpander() on BaseCheck (checks/base-check.ts:48, 70, 85-102).",
+        "Remove supportsInMemory, lintInMemory, fixInMemory, lintAndFixInMemory on BaseCheck (checks/base-check.ts:213-265).",
+        "Remove builtinExpanders in registry.ts and the corresponding --help output.",
+        "In linter.ts, remove assertEntrySupported, runEntryLint, runEntryFix, the byEntry grouping, and per-entry code paths (linter.ts:223-420); replace with direct check.lint(file, ...) / check.fix(file, ...) calls.",
+        "Remove the entry parameter from BaseCheck.lint / fix / lintAndFix and all overrides.",
+        "Add a config-load error when any check entry in linter-config.json contains an expander block; the error message must link to docs/per-finding-workflow.md.",
+        "Add integration fixture tests/integration/config-expander-rejected/ whose linter-config.json has an expander block; expected stdout/stderr shows the config-load error and non-zero exit code.",
+        "All existing integration tests pass unchanged.",
+        "grep -r expander in the repo returns only doc references, the new config-load validation, and the new test fixture.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add CheckFinding data model + synthetic-finding fallback",
+      "description": "As an implementer, I need to introduce the CheckFinding data model and the runner-side normalization that guarantees findings.length == 0 iff status == \"pass\", so downstream code never needs a special case for legacy checks. Spec: \"Data model\" (lines 55-121), \"Universal invariant\" (lines 103-121), \"Snippet population rule\" (lines 87-102). No CLI changes yet.",
+      "acceptanceCriteria": [
+        "Add CheckFinding interface and optional findings?: CheckFinding[] field on CheckResult in checks/base-check.ts.",
+        "In the runner (linter.ts), normalize every failed (file, check) result into at least one finding: if res.findings is populated, use it as-is and apply the snippet-population rule (read file, fill blank snippets from line ranges).",
+        "If res.status is \"fail\" or \"error\" with no findings, synthesize { message: res.output ?? \"check failed\", snippet: \"\" }.",
+        "If res.status is \"pass\" with findings.length > 0, throw (implementation bug).",
+        "Widen internal failedPairs shape to Array<{ file, checkName, finding }> where finding is always populated (per spec lines 402-409).",
+        "buildPrd() continues to dedupe multiple findings for the same (file, check) back down to one story so per-file mode output stays byte-identical.",
+        "Do NOT compute fingerprints (that is US-003), do NOT migrate any check to populate findings (US-004), do NOT add any CLI flags (US-005 through US-007).",
+        "All existing snapshots (regex-process-env-ban, prd-single-file-multi-hit, prd-two-files-two-stories, prd-no-failures) pass byte-identical (spec lines 349-368).",
+        "Add integration fixture tests/integration/finding-invariant-pass-with-findings/: a check that returns status: pass with findings: [{...}] triggers the runner's implementation-bug throw.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Fingerprint derivation + determinism test",
+      "description": "As an implementer, I need to add the fingerprint helper and have the runner inject fingerprint on every finding (real or synthesized), so that findings become addressable across runs. Spec: \"Fingerprint\" (lines 122-184).",
+      "acceptanceCriteria": [
+        "Add one helper (e.g. checks/finding-fingerprint.ts) that normalizes the snippet with s.trim().replace(/\\s+/g, \" \").",
+        "The helper constructs { check, file, snippet } in that fixed alphabetical key order via one function only (no external dependency).",
+        "The helper normalizes the file value with path.relative(repo, file).replace(/\\\\/g, \"/\").",
+        "The helper rejects UNC / \\\\?\\ / drive-relative paths with a clear error rather than silently producing non-portable fingerprints.",
+        "The helper encodes as base64url(JSON.stringify(payload)); base64 -d on any fingerprint yields readable JSON.",
+        "The runner injects finding.fingerprint on every finding (real or synthesized) before it flows anywhere downstream.",
+        "Add integration fixture tests/integration/fingerprint-determinism/: a check emits a known finding with a fixed snippet; the fixture snapshots the exact fingerprint value. Any drift in JSON serialization order, path normalization, or the empty-snippet path trips the build.",
+        "The fixture covers both a real finding and a synthesized whole-file finding (empty-snippet path).",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Migrate RegexCheck to emit real findings",
+      "description": "As an implementer, I need RegexCheck to populate CheckResult.findings (one per hit) while keeping its console output byte-identical, so it becomes the reference implementation for checks that opt into per-finding. Spec: \"Backward compatibility → Console output\" (lines 359-364) and \"Rollout\" commit 2 (line 517).",
+      "acceptanceCriteria": [
+        "checks/regex-check.ts populates CheckResult.findings with one finding per regex hit; each has message, startLine, endLine, and snippet (the matched line, or matched span if multiline).",
+        "The output string (\"N hit(s):\\n  line 1: …\") stays byte-identical so the regex-process-env-ban snapshot doesn't move.",
+        "If the implementation absolutely has to tweak output, update the regex-process-env-ban expected snapshot in the same commit and note it in the commit body (spec allows this at lines 361-363).",
+        "regex-process-env-ban passes (byte-identical output preferred; tweaked snapshot with justification allowed).",
+        "All other existing snapshots pass unchanged.",
+        "Add integration fixture tests/integration/regex-emits-findings/: two regex hits in one file produce two findings with the expected fingerprints attached (identical fingerprint if the normalized snippet matches, distinct otherwise).",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add --lint --finding <fp> for a single fingerprint",
+      "description": "As an implementer, I need the CLI to accept a single fingerprint via --lint --finding <fp> and verify it by running the referenced check on the referenced file, so per-finding stories can be re-verified after a fix. Spec: \"CLI: --lint --finding\" (lines 186-222) and exit-code table (lines 209-216). Single fingerprint only in this step — no list, no --expect-max yet (treated as implicit --expect-max 0).",
+      "acceptanceCriteria": [
+        "Parse --finding <fp> in linter.ts arg handling.",
+        "--finding is mutually exclusive with --files, --checks, and --output-prd — exit 2 with the explicit \"combination not supported\" message from spec lines 218-222.",
+        "Decode the base64url payload, extract check + file, and resolve to the configured check for the current --mode.",
+        "Malformed base64, malformed JSON, or missing keys → exit 2.",
+        "Check not in config or not enabled for --mode → exit 2 with the \"config drift\" message.",
+        "File no longer in repo → exit 2 with the \"env drift\" message.",
+        "Run the check against the single file, collect its findings, and count how many share the target fingerprint.",
+        "Exit 0 if the count is 0; exit 1 otherwise, printing message + range + snippet for each remaining instance.",
+        "Add integration fixture tests/integration/lint-finding-single/ that covers: exit 0 when resolved; exit 1 with remaining-instances output when not; exit 2 for each of malformed base64, malformed JSON, missing key, unknown check, check disabled for mode, missing file; exit 2 for --lint --finding combined with each of --files, --checks, --output-prd.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add --lint --finding <list> + --expect-max <N>",
+      "description": "As an implementer, I need --lint --finding to accept a comma-separated list of fingerprints (each independently resolved and aggregated) and --expect-max <N> for single-fingerprint calls, so multi-instance stories from the PRD can be re-verified. Spec: \"CLI\" (lines 186-216) — the list and --expect-max parts; \"Handling duplicate findings\" (lines 411-441).",
+      "acceptanceCriteria": [
+        "Accept a comma-separated fingerprint list; each fingerprint may reference a different check/file.",
+        "Process each fingerprint independently; aggregate result is exit 1 if any is still failing, else exit 0. Exit 2 rules from US-005 still apply per-fingerprint.",
+        "Parse --expect-max <N> with default 0.",
+        "--expect-max is only valid with a single fingerprint; combined with a list → exit 2 with the invalid-usage message from spec line 216.",
+        "The exit-1 output prints message, range, and snippet for each remaining instance.",
+        "Add integration fixture tests/integration/lint-finding-list/: three fingerprints across two files with one still failing → exit 1 aggregate; all resolved → exit 0.",
+        "Add integration fixture tests/integration/lint-finding-expect-max/: three identical findings; --expect-max 2 → exit 0; --expect-max 1 → exit 1.",
+        "Add integration fixture tests/integration/lint-finding-expect-max-misuse/: --expect-max 1 combined with a comma-separated list → exit 2.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Reserve --fix --finding with explicit error",
+      "description": "As an implementer, I need the CLI to accept --fix --finding at parse time and exit 2 with an explicit \"not implemented\" message, so users learn the feature is planned but not yet built. Spec: \"CLI: --fix --finding\" (lines 224-236) and \"Non-goals\" bullet 1 (lines 490-494). Kept as a separate step so it doesn't muddy US-006.",
+      "acceptanceCriteria": [
+        "Parse --fix --finding at CLI level so it isn't rejected as unknown.",
+        "Exit 2 with the exact message from spec lines 227-232: \"--fix --finding is not implemented. Per-finding auto-fix is not yet supported. Use --lint --finding to verify a specific finding, or --fix (without --finding) to apply the check's whole-file fix path.\"",
+        "Add integration fixture tests/integration/fix-finding-reserved/: single fingerprint and list forms both exit 2 with the reserved message.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Add prd.storySplitMode: per-finding for unique fingerprints",
+      "description": "As an implementer, I need buildPrd to support storySplitMode: \"per-finding\" for the unique-fingerprint case (each fingerprint has 1 instance), packing greedily under findingsPerStory and filesPerStory. Spec: \"PRD: prd.storySplitMode\" (lines 238-262), \"per-finding chunking\" — unique cases only (lines 264-297), \"Templates\" (lines 331-347). Multi-instance handling is deferred to US-009.",
+      "acceptanceCriteria": [
+        "Add prd.storySplitMode, prd.findingsPerStory, prd.filesPerStory to the config schema.",
+        "When a check has storySplitMode: \"per-finding\", group findings by fingerprint.",
+        "Handle the unique-fingerprint case (1 instance per fingerprint): pack greedily under findingsPerStory (default 1) and filesPerStory (default 1).",
+        "Emit acceptance criterion <baseCommand> --lint --finding <fp1>,<fp2>,... (implicit --expect-max 0).",
+        "Titles per spec: singleton → \"Fix <check> in <file>:<startLine>\"; bundled same file → \"Fix <check> in <file> (N findings)\"; bundled multi-file → \"Fix <check> in N files (M findings)\".",
+        "Description per finding includes message, line range, and raw snippet.",
+        "Template placeholders {findingCount}, {startLine}, {endLine}, {message}, {snippet}, {fingerprint}, {findings} are honored if the check sets userStoryTitle / userStoryDescription.",
+        "Files are processed in alphabetical order.",
+        "For multi-instance fingerprints in this step, emit M identical unique-style stories as a temporary placeholder with a TODO comment referencing US-009.",
+        "Add integration fixture tests/integration/prd-per-finding-one-per-story/: RegexCheck with defaults → one story per finding, each with --lint --finding <fp>.",
+        "Add integration fixture tests/integration/prd-per-finding-bundled/: findingsPerStory: 2, filesPerStory: 1, 5 findings across 2 files → assert exact story count and titles.",
+        "Add integration fixture tests/integration/prd-per-finding-fallback/: AlwaysFailCheck with storySplitMode: \"per-finding\" → one story per failed file (synthesized finding).",
+        "Backward compat: prd-single-file-multi-hit, prd-two-files-two-stories, prd-no-failures remain byte-identical.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add multi-instance ordered stories + --expect-max acceptance criteria",
+      "description": "As an implementer, I need to replace the temporary placeholder from US-008 with the ordered K-of-M story generation for multi-instance fingerprints, so the \"3 identical TODOs\" scenario from the spec works end-to-end. Spec: \"per-finding chunking\" — multi-instance case (lines 270-282) and \"Handling duplicate findings\" (lines 411-441).",
+      "acceptanceCriteria": [
+        "Replace US-008's temporary behavior for multi-instance fingerprints.",
+        "M instances → M singleton stories K=1..M, contiguous, in K order.",
+        "Story K's acceptance criterion is <baseCommand> --lint --finding <fp> --expect-max <M-K>.",
+        "Story K's title is \"Fix <check> in <file> (instance <K> of <M>)\".",
+        "Story K's description clarifies partial-fix semantics per spec lines 313-318 (line numbers may have shifted; M instances existed at lines […]; K-1 have already been fixed by prior stories).",
+        "Multi-instance stories are always singleton; bundling caps (findingsPerStory / filesPerStory) do not apply to them.",
+        "Ordering across the PRD (spec lines 299-302): multi-instance stories for a given fingerprint are contiguous and in K order; unique fingerprints appear after multi-instance stories for the same file; files alphabetical.",
+        "Template placeholders {instanceIndex}, {instanceCount}, {expectMax} are wired up.",
+        "Add integration fixture tests/integration/prd-per-finding-multi-instance/: file with 3 identical TODO snippets → 3 stories with --expect-max 2, 1, 0.",
+        "Add integration fixture tests/integration/prd-per-finding-sequential-enforcement/: running US-002's criterion before US-001's fix has happened → exit 1 (proves out-of-order runs fail loudly).",
+        "Add integration fixture tests/integration/prd-per-finding-mixed/: file with 3 identical TODOs + 2 unique findings → exactly the layout from the spec's \"Concrete scenario\" (lines 421-429).",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Add config validation + interaction-matrix hard errors and warnings",
+      "description": "As an implementer, I need to add the remaining config-load validations from the interaction matrix so misconfiguration is caught at load time rather than producing confusing runtime output. Spec: \"Interaction matrix\" (lines 371-390) and scattered config errors elsewhere in the spec.",
+      "acceptanceCriteria": [
+        "storySplitMode: \"per-finding\" combined with prd.group set → hard error at config load (spec lines 322-327).",
+        "Unknown storySplitMode value → hard error at config load listing valid values.",
+        "storySplitMode absent (per-file mode) combined with findingsPerStory set → stderr warning \"findingsPerStory is ignored when storySplitMode is not per-finding\"; still succeeds.",
+        "Confirm US-001's expander config-load error is still active and its message still points at docs/per-finding-workflow.md.",
+        "Add integration fixture tests/integration/config-per-finding-with-group/ asserting the hard error and non-zero exit.",
+        "Add integration fixture tests/integration/config-storysplit-unknown-value/ asserting the hard error and non-zero exit.",
+        "Add integration fixture tests/integration/config-findings-per-story-warning/ asserting the stderr warning is emitted and the process still succeeds.",
+        "Confirm the existing config-expander-rejected fixture (from US-001) still passes.",
+        "The interaction-matrix table in the spec (lines 373-390) is exercised row-by-row by tests.",
+        "yarn build && yarn test are green before committing."
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
