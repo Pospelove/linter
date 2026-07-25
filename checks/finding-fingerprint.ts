@@ -50,3 +50,33 @@ export function deriveFingerprint(
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
+
+/**
+ * Decodes a base64url encoded fingerprint into its payload.
+ *
+ * @param fingerprint The base64url encoded fingerprint.
+ * @returns The decoded payload.
+ * @throws Error if the fingerprint is malformed or missing keys.
+ */
+export function decodeFingerprint(fingerprint: string): FingerprintPayload {
+  try {
+    // 1. Reverse base64url to base64
+    let base64 = fingerprint.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+
+    // 2. Decode base64 to JSON
+    const json = Buffer.from(base64, "base64").toString("utf-8");
+    const payload = JSON.parse(json);
+
+    // 3. Validate keys
+    if (!payload.check || !payload.file || payload.snippet === undefined) {
+      throw new Error("Missing required keys (check, file, snippet)");
+    }
+
+    return payload as FingerprintPayload;
+  } catch (err) {
+    throw new Error(`Malformed fingerprint: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}

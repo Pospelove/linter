@@ -106,6 +106,7 @@ export class RegexCheck extends BaseCheck {
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
+          if (line === undefined) continue;
           if (this.#skipLineRes.some((skip: RegExp) => skip.test(line))) continue;
 
           re.lastIndex = 0;

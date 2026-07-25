@@ -8,7 +8,7 @@ import { ensureCleanExit } from "./util.js";
 import { builtinRegistry, builtinChecks, builtinFileSources } from "./registry.js";
 import { CompositeCheck } from "./checks/composite-check.js";
 import { BaseCheck, CheckResult, CheckFinding } from "./checks/base-check.js";
-import { deriveFingerprint } from "./checks/finding-fingerprint.js";
+import { deriveFingerprint, decodeFingerprint } from "./checks/finding-fingerprint.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -564,6 +564,8 @@ const printHelp = () => {
   lines.push("  --mode <name>         Execution mode from config (default: manual)");
   lines.push("  --checks <n1,n2,...>  Only run checks with these names (comma-separated, from config)");
   lines.push("  --files <p1,p2,...>   Use these exact files instead of the configured file source");
+  lines.push("  --finding <f1,...>    Only verify these findings (comma-separated fingerprints)");
+  lines.push("  --expect-max <N>      Maximum instances of finding allowed to remain (default: 0)");
   lines.push("  --no-download         Do not download tools if missing");
   lines.push("  --no-path             Do not search for tools in PATH");
   lines.push("  --output-prd [path]   Write a ralph-compatible PRD JSON to [path] after linting (requires --lint); defaults to prd.json");
@@ -926,12 +928,93 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
     ? filesParam.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
 
+  const findingIndex = args.indexOf("--finding");
+  const rawFindingArg = findingIndex !== -1 ? args[findingIndex + 1] : null;
+  const findingArg = (rawFindingArg && !rawFindingArg.startsWith("--")) ? rawFindingArg : null;
+
+  const expectMaxIndex = args.indexOf("--expect-max");
+  const rawExpectMaxArg = expectMaxIndex !== -1 ? args[expectMaxIndex + 1] : null;
+  const expectMaxArg = (rawExpectMaxArg && !rawExpectMaxArg.startsWith("--")) ? rawExpectMaxArg : "0";
+  const expectMax = parseInt(expectMaxArg, 10);
+
+  if (findingArg !== null) {
+    if (filesArg !== null || checksFilter !== null || outputPrdPath !== null) {
+      console.error("--finding is mutually exclusive with --files, --checks, and --output-prd.");
+      process.exit(2);
+    }
+    if (shouldFix) {
+      console.error("--fix --finding is not implemented. Per-finding auto-fix is not yet supported. Use --lint --finding to verify a specific finding, or --fix (without --finding) to apply the check's whole-file fix path.");
+      process.exit(2);
+    }
+  }
+
   if (!shouldLint && !shouldFix) {
     console.error("Either --lint or --fix must be specified. Run --help for usage.");
     process.exit(127);
   }
   try {
     let { fileSource, checks, toolsDir, prdConfig, checkEntries } = await loadConfig(mode);
+
+    if (findingArg !== null) {
+      const fingerprints = findingArg.split(",");
+      if (fingerprints.length > 1 && expectMaxIndex !== -1) {
+        console.error("--expect-max is only valid when --finding names a single fingerprint.");
+        process.exit(2);
+      }
+
+      let aggregateFail = false;
+      const toolOptions = { shouldDownload, shouldSearchInPath, toolsDir };
+
+      for (const fp of fingerprints) {
+        let payload;
+        try {
+          payload = decodeFingerprint(fp);
+        } catch (err) {
+          console.error(err instanceof Error ? err.message : String(err));
+          process.exit(2);
+        }
+
+        const checkEntry = checkEntries.find((e: CheckConfigEntry) => e.name === payload.check);
+        if (!checkEntry || !checkEntry.modes.includes(mode)) {
+          console.error(`Config drift: check "${payload.check}" is not in config or not enabled for mode "${mode}".`);
+          process.exit(2);
+        }
+
+        const absoluteFile = path.resolve(REPO_ROOT, payload.file);
+        if (!fs.existsSync(absoluteFile)) {
+          console.error(`Env drift: file "${payload.file}" no longer exists in repo.`);
+          process.exit(2);
+        }
+
+        const CheckClass = await resolveClass(checkEntry);
+        const check = new CheckClass(REPO_ROOT, checkEntry.options || {});
+        check.name = checkEntry.name;
+
+        const deps = await check.resolveDeps(toolOptions);
+        const res = await check.lint(absoluteFile, deps);
+        const findings = await normalizeFindings(absoluteFile, check.name, res);
+
+        const matchingFindings = findings.filter((f) => f.fingerprint === fp);
+        const allowed = fingerprints.length === 1 ? expectMax : 0;
+
+        if (matchingFindings.length > allowed) {
+          aggregateFail = true;
+          for (const f of matchingFindings) {
+            const range = f.startLine
+              ? f.endLine && f.endLine !== f.startLine
+                ? `${f.startLine}-${f.endLine}`
+                : `${f.startLine}`
+              : "whole file";
+            console.error(`${payload.file}:${range}: ${f.message}`);
+            if (f.snippet) {
+              console.error(`  Snippet: ${f.snippet.replace(/\n/g, "\n  ")}`);
+            }
+          }
+        }
+      }
+
+      process.exit(aggregateFail ? 1 : 0);
+    }
 
     // Apply --checks filter
     if (checksFilter !== null) {

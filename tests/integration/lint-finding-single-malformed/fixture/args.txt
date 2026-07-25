@@ -1,0 +1,1 @@
+--lint --mode manual --finding not-a-base64-string
