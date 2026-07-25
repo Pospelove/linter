@@ -1,0 +1,1 @@
+Error during processing: Check "pass-with-findings" returned status "pass" with 1 finding(s) for <TMPDIR>/placeholder.txt. This violates the runner invariant that findings.length == 0 iff status == "pass". See docs/per-finding-workflow.md → "Universal invariant".

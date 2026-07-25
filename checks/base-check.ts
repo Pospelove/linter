@@ -8,6 +8,18 @@ import fs from "fs/promises";
 export type CheckStatus = "pass" | "fail" | "fixed" | "error";
 
 /**
+ * A single finding produced by a check. See docs/per-finding-workflow.md.
+ * `fingerprint` is filled in by the runner; checks do not set it.
+ */
+export interface CheckFinding {
+  message: string;
+  snippet: string;
+  startLine?: number;
+  endLine?: number;
+  fingerprint?: string;
+}
+
+/**
  * @typedef {Object} CheckResult
  * @property {CheckStatus} status  - Outcome of the check.
  * @property {string}      [output] - Optional diagnostic text (diff, error message, etc.).
@@ -17,6 +29,7 @@ export interface CheckResult {
   status: CheckStatus;
   output?: string;
   extraFiles?: string[];
+  findings?: CheckFinding[];
 }
 
 /**

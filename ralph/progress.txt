@@ -10,6 +10,8 @@ Started: Sat Jul 25 06:40:22 PM UTC 2026
 - `linter-config.json` is loaded and validated in `loadConfig()` in `linter.ts`. Add hard errors for disallowed config fields there so misconfiguration is caught before any check runs.
 - `CompositeCheck` is created automatically by the runner when a check config has a `fixWith` block.
 - `.linter/` and `dist/*.map` are gitignored; `dist/linter.mjs` is committed on purpose.
+- The `no-ts-as-operator` check is regex-based and matches ` as ` even inside string/type literals. Prefer `const x: T = ...; return x;` over `return ... as T` even in a return statement inline. Verify with `node dist/linter.mjs --lint --mode manual` before committing.
+- `runChecks` in `linter.ts` returns `failedPairs: Array<{ file, checkName, finding }>` (one entry per finding). Multiple entries per (file, check) are normal now; `buildPrd()` dedupes them for per-file mode.
 
 ---
 
@@ -30,4 +32,19 @@ Started: Sat Jul 25 06:40:22 PM UTC 2026
   - `builtinRegistry` in `registry.ts` is what the config `export` field looks up. Anything referenced in `linter-config.json` must appear here.
   - The pre-commit hook uses `.git/hooks/linter.mjs` (see `pre-commit`), which is a snapshot — not the current source. `dist/linter.mjs` is what everyone else uses.
   - `path.relative(repoRoot, file)` is now the canonical "identity" of a file across the codebase (lock keys, PRD paths). Reuse it in later steps rather than inventing new key shapes.
+---
+
+## 2026-07-25 - US-002
+- Added `CheckFinding` interface (message, snippet, startLine?, endLine?, fingerprint?) and optional `findings?: CheckFinding[]` on `CheckResult` in `checks/base-check.ts`. `fingerprint` is documented as filled-in-by-the-runner; US-003 will actually populate it.
+- Added `normalizeFindings(res, file, checkName)` helper in `linter.ts` that enforces the universal invariant. For fail/error results with no findings it synthesizes `[{ message: res.output ?? "check failed", snippet: "" }]`. For fail/error with findings, it applies the snippet-population rule (reads the file once, per-call, and fills blank snippets from `startLine..endLine`). For status "pass" with a non-empty findings array it throws with a message that points at the spec.
+- Widened `failedPairs` to `Array<{ file, checkName, finding }>` (one entry per finding). Updated `runChecks` to emit one entry per synthesized/real finding.
+- `buildPrd()` now dedupes multiple findings for the same (file, check) back to one story via a `seenPairs` Set. Per-file mode output stays byte-identical (regex-process-env-ban, prd-single-file-multi-hit, prd-two-files-two-stories, prd-no-failures all pass unchanged).
+- Added a test-only `PassWithFindingsCheck` (checks/pass-with-findings-check.ts) that deliberately returns `status: "pass"` with a finding, registered it in `registry.ts`, and added `tests/integration/finding-invariant-pass-with-findings/` that locks the runner's implementation-bug throw (exit 1 with the invariant-violation message on stderr).
+- Files changed: `checks/base-check.ts`, `linter.ts`, `registry.ts`, added `checks/pass-with-findings-check.ts`, added `tests/integration/finding-invariant-pass-with-findings/*`, rebuilt `dist/linter.mjs`.
+- **Learnings for future iterations:**
+  - `normalizeFindings` is the single choke point where the invariant is enforced. Later steps (US-003 fingerprint injection, US-004 real regex findings, US-008 per-finding PRD mode) should thread through here rather than adding parallel normalization paths.
+  - The snippet-population rule reads the file lazily (only when at least one finding needs it) and caches the line array per call — cheap enough that we don't need to plumb file contents down from the check.
+  - `buildPrd`'s dedup uses `${checkName} ${file}` as the pair key. When US-008 adds per-finding PRD mode, it will branch here based on the check's `prd.storySplitMode` and consume findings directly instead.
+  - The `no-ts-as-operator` regex matches ` as ` even in `[] as {...}[]` typed-empty-literal patterns. Use explicit `const x: T[] = []` instead — pattern already added to the top-level Codebase Patterns.
+  - New test-only checks (like `PassWithFindingsCheck`) live in `checks/` and are registered in `registry.ts` under `builtinChecks`. Fixture configs then reference them by their `export` name.
 ---

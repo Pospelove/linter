@@ -7,7 +7,7 @@ import pLimit from "p-limit";
 import { ensureCleanExit } from "./util.js";
 import { builtinRegistry, builtinChecks, builtinFileSources } from "./registry.js";
 import { CompositeCheck } from "./checks/composite-check.js";
-import { BaseCheck, CheckResult } from "./checks/base-check.js";
+import { BaseCheck, CheckFinding, CheckResult } from "./checks/base-check.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -219,18 +219,74 @@ const formatFileResults = (results: { res: LinterCheckResult; checkName: string 
 };
 
 /**
+ * Enforce the "findings.length == 0 iff status == \"pass\"" invariant and
+ * normalize `res.findings` so downstream code always sees populated findings
+ * on failure. Called once per (file, check) result. See
+ * docs/per-finding-workflow.md → "Universal invariant" and
+ * "Snippet population rule".
+ */
+const normalizeFindings = async (res: LinterCheckResult, file: string, checkName: string): Promise<CheckFinding[]> => {
+  const hasFindings = Array.isArray(res.findings) && res.findings.length > 0;
+
+  if (res.status === "pass") {
+    if (hasFindings) {
+      throw new Error(
+        `Check "${checkName}" returned status "pass" with ${res.findings!.length} finding(s) for ${file}. ` +
+        `This violates the runner invariant that findings.length == 0 iff status == "pass". ` +
+        `See docs/per-finding-workflow.md → "Universal invariant".`
+      );
+    }
+    return [];
+  }
+
+  if (res.status !== "fail" && res.status !== "error") {
+    return [];
+  }
+
+  if (!hasFindings) {
+    return [{
+      message: res.output ?? "check failed",
+      snippet: "",
+    }];
+  }
+
+  const populated: CheckFinding[] = [];
+  let cachedLines: string[] | null = null;
+  for (const finding of res.findings!) {
+    let snippet = finding.snippet ?? "";
+    const start = finding.startLine;
+    if ((snippet === "" || snippet == null) && typeof start === "number") {
+      const end = typeof finding.endLine === "number" ? finding.endLine : start;
+      if (cachedLines === null) {
+        try {
+          const content = await fs.promises.readFile(file, "utf-8");
+          cachedLines = content.split("\n");
+        } catch {
+          cachedLines = [];
+        }
+      }
+      const sliceStart = Math.max(0, start - 1);
+      const sliceEnd = Math.max(sliceStart, end);
+      snippet = cachedLines.slice(sliceStart, sliceEnd).join("\n");
+    }
+    populated.push({ ...finding, snippet });
+  }
+  return populated;
+};
+
+/**
  * Core: Run checks (lint or fix) on given files.
  *
  * Lint mode:  all (check, file) pairs run in parallel.
  * Fix mode:   one file at a time (sequential) to avoid races on shared files.
  *
  * Returns { extraFiles, failed, failedPairs } instead of calling process.exit(1).
- * failedPairs: Array<{ file: string, checkName: string }>
+ * failedPairs: Array<{ file: string, checkName: string, finding: CheckFinding }>
  */
 const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = false, verbose = false, ...deps }: Record<string, unknown>) => {
 
   const extraFiles = new Set<string>();
-  const failedPairs: { file: string, checkName: string }[] = [];
+  const failedPairs: { file: string, checkName: string, finding: CheckFinding }[] = [];
 
   // Group checks by file instead of a sequential flat array
   const fileToChecks = new Map<string, BaseCheck[]>();
@@ -259,7 +315,8 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
 
   if (groupedWork.length === 0) {
     console.log("No matching files found for checks.");
-    return { extraFiles: new Set<string>(), failed: false, failedPairs: [] };
+    const emptyPairs: { file: string, checkName: string, finding: CheckFinding }[] = [];
+    return { extraFiles: new Set<string>(), failed: false, failedPairs: emptyPairs };
   }
 
   console.log(`${lintOnly ? "Linting" : "Fixing"} ${totalChecks} check(s) across ${groupedWork.length} file(s)...`);
@@ -286,6 +343,10 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
         res = { status: "error", output: message };
       }
       if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
+
+      const findings = await normalizeFindings(res, file, check.name);
+      res.findings = findings;
+
       results.push({ res, checkName: check.name });
     }
     const { lines, isFail, stats } = formatFileResults(results, file);
@@ -304,7 +365,9 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
       fail = true;
       for (const { res, checkName } of results) {
         if (res.status === "fail" || res.status === "error") {
-          failedPairs.push({ file, checkName });
+          for (const finding of res.findings!) {
+            failedPairs.push({ file, checkName, finding });
+          }
         }
       }
     }
@@ -593,7 +656,7 @@ interface UserStory {
  * @param {CheckConfigEntry[]} checkEntries  Raw check entries from linter-config.json (for per-check prd config).
  * @returns {object}  PRD object ready to JSON.stringify.
  */
-const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig: PrdConfig, checkEntries: CheckConfigEntry[], baseCommand: string) => {
+const buildPrd = (failedPairs: { file: string, checkName: string, finding: CheckFinding }[], prdConfig: PrdConfig, checkEntries: CheckConfigEntry[], baseCommand: string) => {
   const project = prdConfig.project || "Project";
   const branchName = prdConfig.branchName || "ralph/lint-fixes";
   const description = prdConfig.description || "Fix outstanding lint issues";
@@ -609,9 +672,14 @@ const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig:
   const userStories: UserStory[] = [];
   let counter = 1;
 
-  // Group by check name, sort files within each check alphabetically
+  // Per-file mode: collapse multiple findings for the same (file, check) back to one entry.
+  // Per-finding mode (added in US-008) will consume findings directly instead.
   const byCheck = new Map<string, string[]>();
+  const seenPairs = new Set<string>();
   for (const { file, checkName } of failedPairs) {
+    const key = `${checkName} ${file}`;
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
     byCheck.get(checkName)!.push(file);
   }

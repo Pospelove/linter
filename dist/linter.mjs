@@ -14163,6 +14163,32 @@ var CustomCheck = class extends BaseCheck {
   }
 };
 
+// checks/pass-with-findings-check.ts
+var PassWithFindingsCheck = class extends BaseCheck {
+  constructor(repoRoot, options = {}) {
+    super(repoRoot, options);
+    this.name = "pass-with-findings";
+  }
+  async lint(_file, _deps) {
+    return {
+      status: "pass",
+      findings: [
+        { message: "invariant violation: pass with a finding", snippet: "sentinel" }
+      ]
+    };
+  }
+  async fix(file, deps) {
+    return this.lint(file, deps);
+  }
+  static getHelp() {
+    return {
+      name: "PassWithFindingsCheck",
+      description: `Test-only check that returns status "pass" with a finding to exercise the runner's invariant enforcement. Do not use in real configs.`,
+      options: "extensions, includePaths, excludePaths, textOnly, priority (inherited from BaseCheck)"
+    };
+  }
+};
+
 // file-sources/all-files-source.ts
 import fs17 from "fs";
 import path14 from "path";
@@ -18913,7 +18939,8 @@ var builtinChecks = {
   TscCheck,
   AlwaysFailCheck,
   LocalizationKeyCheck,
-  CustomCheck
+  CustomCheck,
+  PassWithFindingsCheck
 };
 var builtinFileSources = {
   AllFilesSource,
@@ -18928,7 +18955,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "ffc9ea0" : "unknown";
+var LINTER_COMMIT = true ? "d340d5b" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19052,6 +19079,48 @@ var formatFileResults = (results, file) => {
   }
   return { lines, isFail, stats };
 };
+var normalizeFindings = async (res, file, checkName) => {
+  const hasFindings = Array.isArray(res.findings) && res.findings.length > 0;
+  if (res.status === "pass") {
+    if (hasFindings) {
+      throw new Error(
+        `Check "${checkName}" returned status "pass" with ${res.findings.length} finding(s) for ${file}. This violates the runner invariant that findings.length == 0 iff status == "pass". See docs/per-finding-workflow.md \u2192 "Universal invariant".`
+      );
+    }
+    return [];
+  }
+  if (res.status !== "fail" && res.status !== "error") {
+    return [];
+  }
+  if (!hasFindings) {
+    return [{
+      message: res.output ?? "check failed",
+      snippet: ""
+    }];
+  }
+  const populated = [];
+  let cachedLines = null;
+  for (const finding of res.findings) {
+    let snippet = finding.snippet ?? "";
+    const start = finding.startLine;
+    if ((snippet === "" || snippet == null) && typeof start === "number") {
+      const end = typeof finding.endLine === "number" ? finding.endLine : start;
+      if (cachedLines === null) {
+        try {
+          const content = await fs20.promises.readFile(file, "utf-8");
+          cachedLines = content.split("\n");
+        } catch {
+          cachedLines = [];
+        }
+      }
+      const sliceStart = Math.max(0, start - 1);
+      const sliceEnd = Math.max(sliceStart, end);
+      snippet = cachedLines.slice(sliceStart, sliceEnd).join("\n");
+    }
+    populated.push({ ...finding, snippet });
+  }
+  return populated;
+};
 var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...deps }) => {
   const extraFiles = /* @__PURE__ */ new Set();
   const failedPairs = [];
@@ -19078,7 +19147,8 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
   });
   if (groupedWork.length === 0) {
     console.log("No matching files found for checks.");
-    return { extraFiles: /* @__PURE__ */ new Set(), failed: false, failedPairs: [] };
+    const emptyPairs = [];
+    return { extraFiles: /* @__PURE__ */ new Set(), failed: false, failedPairs: emptyPairs };
   }
   console.log(`${lintOnly ? "Linting" : "Fixing"} ${totalChecks} check(s) across ${groupedWork.length} file(s)...`);
   let fail = false;
@@ -19101,6 +19171,8 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
         res = { status: "error", output: message };
       }
       if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
+      const findings = await normalizeFindings(res, file, check.name);
+      res.findings = findings;
       results.push({ res, checkName: check.name });
     }
     const { lines, isFail, stats } = formatFileResults(results, file);
@@ -19119,7 +19191,9 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
       fail = true;
       for (const { res, checkName } of results) {
         if (res.status === "fail" || res.status === "error") {
-          failedPairs.push({ file, checkName });
+          for (const finding of res.findings) {
+            failedPairs.push({ file, checkName, finding });
+          }
         }
       }
     }
@@ -19341,7 +19415,11 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   const userStories = [];
   let counter = 1;
   const byCheck = /* @__PURE__ */ new Map();
+  const seenPairs = /* @__PURE__ */ new Set();
   for (const { file, checkName } of failedPairs) {
+    const key = `${checkName}\0${file}`;
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
     byCheck.get(checkName).push(file);
   }

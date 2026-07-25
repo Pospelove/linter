@@ -1,0 +1,13 @@
+{
+  "modes": {
+    "manual": { "fileSource": { "export": "AllFilesSource" } }
+  },
+  "checks": [
+    {
+      "name": "pass-with-findings",
+      "export": "PassWithFindingsCheck",
+      "modes": ["manual"],
+      "options": { "extensions": [".txt"] }
+    }
+  ]
+}
