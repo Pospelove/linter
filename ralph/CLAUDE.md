@@ -70,21 +70,6 @@ Before committing, check if any edited files have learnings worth preserving in 
 
 Only update CLAUDE.md if you have **genuinely reusable knowledge** that would help future work in that directory.
 
-## Per-finding stories
-
-If a story description begins with `File: <path>` and `Check: <name>` followed by an instruction to "STOP after N iterations", the story was generated in per-finding mode. Follow the embedded workflow literally:
-
-1. At the start of each iteration, ask the linter for the earliest remaining finding with fresh coordinates:
-   ```
-   <baseCommand> --lint --checks <check> --files <file> --show first
-   ```
-   This prints one line of JSON: `{ "startLine", "endLine", "snippet", "message" }` (or `null` if nothing is left). Line numbers change every time you edit, so re-query on every iteration — never bake numbers from the story description into your Read/Edit calls.
-2. Read only the affected range using the returned `startLine`/`endLine`.
-3. Apply the fix with an Edit whose `old_string` matches the returned `snippet` exactly. If the JSON has `"unique": false`, widen the surrounding lines yourself until the match is unique.
-4. **STOP after N iterations even if the linter still reports remaining findings** — later stories in the PRD will address them. Do not do their work.
-
-Verify by running the story's `--expect-max <M>` acceptance criterion. Exit 0 means the story is done; exit 1 lists the still-remaining findings.
-
 ## Quality Requirements
 
 - ALL commits must pass your project's quality checks (typecheck, lint, test)

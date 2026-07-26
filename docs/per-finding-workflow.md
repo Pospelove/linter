@@ -355,6 +355,19 @@ mode with these placeholders (in addition to existing `{file}`, `{files}`,
 
 If unset, the built-in defaults above apply.
 
+### Workflow appended by default
+
+When `userStoryDescription` is set in per-finding mode, the default
+workflow-script body is appended **after** the custom description
+(separated by a blank line). This ties the fix-time query loop
+(`--show first`, `--expect-max`) into every generated story so PRDs are
+consumable by any agent without needing runner-specific prompt tweaks.
+
+To opt out, set `omitWorkflow: true` under `prd` (per-check or
+top-level). Precedence: `checkPrd.omitWorkflow ?? topLevelPrd.omitWorkflow ?? false`.
+When no `userStoryDescription` is provided, the workflow is still emitted
+(as before) regardless of `omitWorkflow`.
+
 ## Backward compatibility
 
 ### Invariants (no config change → no behavior change)

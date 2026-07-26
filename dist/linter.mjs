@@ -19001,7 +19001,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "c348941" : "unknown";
+var LINTER_COMMIT = true ? "6b14390" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19597,12 +19597,11 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
             return str2.replace(/\{file\}/g, relFile).replace(/\{files\}/g, relFile).replace(/\{fileCount\}/g, "1").replace(/\{check\}/g, check).replace(/\{findingCount\}/g, String(M)).replace(/\{storyCount\}/g, String(S)).replace(/\{storyIndex\}/g, String(K)).replace(/\{storyBudget\}/g, String(Nk)).replace(/\{expectMax\}/g, String(expectMax)).replace(/\{startLine\}/g, startLine !== void 0 ? String(startLine) : "").replace(/\{endLine\}/g, endLine !== void 0 ? String(endLine) : "").replace(/\{message\}/g, message).replace(/\{snippet\}/g, snippet).replace(/\{findings\}/g, JSON.stringify(findings)).replace(/\{workflow\}/g, workflowTemplate.replace(/\{file\}/g, relFile).replace(/\{check\}/g, check).replace(/\{findingCount\}/g, String(M)).replace(/\{storyBudget\}/g, String(Nk)).replace(/\{startLine\}/g, startLine !== void 0 ? String(startLine) : "").replace(/\{endLine\}/g, endLine !== void 0 ? String(endLine) : "").replace(/\{expectMax\}/g, String(expectMax)));
           };
           const rawDescription = Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription;
-          let storyDescription = "";
-          if (rawDescription) {
-            storyDescription = applyPlaceholders(rawDescription);
-          } else {
-            storyDescription = applyPlaceholders(workflowTemplate);
-          }
+          const omitWorkflow = checkPrd.omitWorkflow ?? prdConfig.omitWorkflow ?? false;
+          const parts = [];
+          if (rawDescription) parts.push(applyPlaceholders(rawDescription));
+          if (!omitWorkflow) parts.push(applyPlaceholders(workflowTemplate));
+          const storyDescription = parts.join("\n\n");
           const mainCriteria = baseCommand + " --lint --checks " + check + " --files " + relFile + " --expect-max " + expectMax;
           const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
           pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);

@@ -318,10 +318,13 @@ Landed after Phase 2:
   `summary` counts. Informational logs are diverted to stderr so stdout
   stays parseable. Rejects `--fix`, `--expect-max`, `--show`, and
   `--output-prd`.
-- Ralph runner integration: `ralph/CLAUDE.md` and `ralph/prompt.md` gained
+- ~~Ralph runner integration: `ralph/CLAUDE.md` and `ralph/prompt.md` gained
   a `Per-finding stories` section that instructs the runner to re-query
   `--show first` on every iteration and respect the story's `STOP after N`
-  bound.
+  bound.~~ Reverted — instructions are now baked into the generated PRD
+  story descriptions instead, so PRDs are consumable by any agent without
+  runner-specific prompt tweaks. See "Workflow appended by default" in
+  the spec. Opt-out via `prd.omitWorkflow: true` (per-check or top-level).
 
 Test fixtures added: `lint-show-all-basic`, `lint-show-all-empty`,
 `lint-show-all-bogus`, `lint-json-basic`, `lint-json-misuse-fix`,

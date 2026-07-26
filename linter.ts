@@ -33,6 +33,7 @@ interface CheckPrdConfig {
   prdOnly?: boolean;
   storySplitMode?: "per-file" | "per-finding";
   findingsPerStory?: number;
+  omitWorkflow?: boolean;
 }
 
 interface CheckConfigEntry {
@@ -53,6 +54,7 @@ interface PrdConfig {
   findingsPerStory?: number;
   group?: string;
   filesPerStory?: number;
+  omitWorkflow?: boolean;
 }
 
 /* global __LINTER_VERSION__, __LINTER_COMMIT__ */
@@ -846,13 +848,12 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
         const rawDescription = Array.isArray(checkPrd.userStoryDescription)
           ? checkPrd.userStoryDescription.join("\n")
           : checkPrd.userStoryDescription;
-          
-        let storyDescription = "";
-        if (rawDescription) {
-          storyDescription = applyPlaceholders(rawDescription);
-        } else {
-          storyDescription = applyPlaceholders(workflowTemplate);
-        }
+
+        const omitWorkflow = checkPrd.omitWorkflow ?? prdConfig.omitWorkflow ?? false;
+        const parts: string[] = [];
+        if (rawDescription) parts.push(applyPlaceholders(rawDescription));
+        if (!omitWorkflow) parts.push(applyPlaceholders(workflowTemplate));
+        const storyDescription = parts.join("\n\n");
 
         const mainCriteria = baseCommand + " --lint --checks " + check + " --files " + relFile + " --expect-max " + expectMax;
         const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
