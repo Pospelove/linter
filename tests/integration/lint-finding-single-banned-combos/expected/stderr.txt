@@ -1,1 +1,0 @@
---finding is mutually exclusive with --files, --checks, and --output-prd.

@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { BaseCheck, CheckFinding, CheckResult } from "./base-check.js";
+import { BaseCheck, CheckResult } from "./base-check.js";
 
 /**
  * Generic regex-based check, fully driven by options in linter-config.json.
@@ -78,46 +78,30 @@ export class RegexCheck extends BaseCheck {
     try {
       const content = await fs.readFile(file, "utf-8");
       const violations: string[] = [];
-      const findings: CheckFinding[] = [];
       const re = new RegExp(this.#pattern.source, this.#pattern.flags);
 
       if (this.#multiline) {
         const lineOffsets = [0];
         for (let i = 0; i < content.length; i++) {
-          if (content[i] === "\n") lineOffsets.push(i + 1);
+          if (content[i] === '\n') lineOffsets.push(i + 1);
         }
 
         let m: RegExpExecArray | null;
         while ((m = re.exec(content)) !== null) {
-          const lineNo = lineOffsets.filter((offset) => offset <= m!.index).length;
-          const endLineNo = lineOffsets.filter((offset) => offset <= m!.index + m![0].length - (m![0].endsWith("\n") ? 1 : 0)).length;
-          
-          findings.push({
-            message: this.#message,
-            snippet: m[0],
-            startLine: lineNo,
-            endLine: endLineNo,
-          });
-
+          const lineNo = lineOffsets.filter(offset => offset <= m!.index).length;
           const matchText = m[0].length > 80 ? m[0].slice(0, 80) + "…" : m[0];
-          violations.push(`  line ${lineNo}: ${matchText.replace(/\n/g, "\\n")}`);
+          violations.push(`  line ${lineNo}: ${matchText.replace(/\n/g, '\\n')}`);
         }
       } else {
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          if (line === undefined) continue;
+          if (!line) continue;
           if (this.#skipLineRes.some((skip: RegExp) => skip.test(line))) continue;
 
           re.lastIndex = 0;
           let m: RegExpExecArray | null;
           while ((m = re.exec(line)) !== null) {
-            findings.push({
-              message: this.#message,
-              snippet: line,
-              startLine: i + 1,
-              endLine: i + 1,
-            });
             violations.push(`  line ${i + 1}: ${m[0]}`);
             if (!re.flags.includes("g")) break;
           }
@@ -128,7 +112,6 @@ export class RegexCheck extends BaseCheck {
         return {
           status: "fail",
           output: `${this.#message} (${violations.length} hit(s)):\n${violations.join("\n")}`,
-          findings,
         };
       }
       return { status: "pass" };

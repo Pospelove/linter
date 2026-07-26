@@ -1,6 +1,6 @@
-[FAIL] src/alpha.ts [process-env-ban] (1 finding)
+[FAIL] src/alpha.ts [process-env-ban]
   Do not use process.env directly. (1 hit(s)):
   line 1: process.env
-[FAIL] src/beta.ts [process-env-ban] (1 finding)
+[FAIL] src/beta.ts [process-env-ban]
   Do not use process.env directly. (1 hit(s)):
   line 1: process.env

@@ -1,4 +1,0 @@
-[ERROR] linter-config.json [test-finding]
-  Implementation bug in check "test-finding": returned "pass" status with 1 findings for file "<TMPDIR>/linter-config.json".
-[ERROR] src/example.ts [test-finding]
-  Implementation bug in check "test-finding": returned "pass" status with 1 findings for file "<TMPDIR>/src/example.ts".

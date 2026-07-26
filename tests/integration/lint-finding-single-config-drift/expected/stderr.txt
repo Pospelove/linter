@@ -1,1 +1,0 @@
-Config drift: check "todo" is not in config or not enabled for mode "manual".

@@ -12,6 +12,10 @@ import { BaseCheck, CheckResult } from "./base-check.js";
  *   LINTER_FILE              — absolute path to the file being checked
  *   LINTER_REPO_ROOT         — absolute path to the repo root
  *   LINTER_MODE              — "lint" or "fix"
+ *   LINTER_ENTRY_ID          — entry identifier (e.g. "data.json[3]")
+ *   LINTER_ENTRY_SOURCE_FILE — real file on disk (differs from LINTER_FILE
+ *                              when a virtual entry/expander is in use)
+ *   LINTER_ENTRY_METADATA    — JSON-serialised entry.metadata object
  *
  * Exit-code protocol
  *   lint:  0 = pass  |  1 = fail  |  other = error
@@ -58,34 +62,16 @@ export class CustomCheck extends BaseCheck {
     this.name = name || `Custom (${this.#lintCommand})`;
   }
 
-  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
-    const env = this.#buildEnv(file, "lint");
-    const { code, stdout, stderr, output } = await this.#run(this.#lintCommand!, env);
+  override async lint(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+    const env = this.#buildEnv(file, "lint", entry);
+    const { code, output } = await this.#run(this.#lintCommand!, env);
 
     if (code === 0) return { status: "pass" };
-
-    // Try to parse stdout as a JSON array of findings or a CheckResult object.
-    try {
-      const parsed = JSON.parse(stdout);
-      if (Array.isArray(parsed)) {
-        const result: CheckResult = { status: "fail", findings: parsed };
-        if (stderr) {
-          result.output = stderr;
-        }
-        return result;
-      }
-      if (parsed && typeof parsed === "object" && Array.isArray(parsed.findings)) {
-        return { status: "fail", ...parsed };
-      }
-    } catch {
-      // Not JSON, fall back to legacy behavior.
-    }
-
     if (code === 1) return { status: "fail", output };
     return { status: "error", output };
   }
 
-  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
     if (!this.#fixCommand) {
       return { status: "error", output: "CustomCheck: no fixCommand configured" };
     }
@@ -98,7 +84,7 @@ export class CustomCheck extends BaseCheck {
       return { status: "error", output: `cannot read file before fix: ${message}` };
     }
 
-    const env = this.#buildEnv(file, "fix");
+    const env = this.#buildEnv(file, "fix", entry);
     const { code, output } = await this.#run(this.#fixCommand, env);
 
     if (code !== 0) return { status: "error", output };
@@ -114,20 +100,20 @@ export class CustomCheck extends BaseCheck {
     return before.equals(after) ? { status: "pass" } : { status: "fixed" };
   }
 
-  #buildEnv(file: string, mode: string): NodeJS.ProcessEnv {
+  #buildEnv(file: string, mode: string, entry: import("../entries/base-entry.js").BaseEntry | null): NodeJS.ProcessEnv {
     return {
       ...process.env,
       LINTER_FILE: file,
       LINTER_REPO_ROOT: this.repoRoot,
       LINTER_MODE: mode,
+      LINTER_ENTRY_ID: entry?.id ?? file,
+      LINTER_ENTRY_SOURCE_FILE: entry?.sourceFile ?? file,
+      LINTER_ENTRY_METADATA: JSON.stringify(entry?.metadata ?? {}),
     };
   }
 
-  /** Run a shell command, capturing stdout+stderr, resolving to { code, stdout, stderr, output }. */
-  #run(
-    command: string,
-    env: NodeJS.ProcessEnv
-  ): Promise<{ code: number; stdout: string; stderr: string; output: string }> {
+  /** Run a shell command, capturing stdout+stderr, resolving to { code, output }. */
+  #run(command: string, env: NodeJS.ProcessEnv): Promise<{ code: number; output: string }> {
     return new Promise((resolve) => {
       const proc = spawn(command, [], {
         shell: true,
@@ -135,20 +121,17 @@ export class CustomCheck extends BaseCheck {
         env,
       });
 
-      const stdoutChunks: Buffer[] = [];
-      const stderrChunks: Buffer[] = [];
-      proc.stdout.on("data", (d: Buffer) => stdoutChunks.push(d));
-      proc.stderr.on("data", (d: Buffer) => stderrChunks.push(d));
+      const chunks: Buffer[] = [];
+      proc.stdout.on("data", (d: Buffer) => chunks.push(d));
+      proc.stderr.on("data", (d: Buffer) => chunks.push(d));
 
       proc.on("close", (code: number | null) => {
-        const stdout = Buffer.concat(stdoutChunks).toString().trim();
-        const stderr = Buffer.concat(stderrChunks).toString().trim();
-        const output = [stdout, stderr].filter(Boolean).join("\n").trim();
-        resolve({ code: code ?? 1, stdout, stderr, output });
+        const output = Buffer.concat(chunks).toString().trim();
+        resolve({ code: code ?? 1, output });
       });
 
       proc.on("error", (err: Error) => {
-        resolve({ code: -1, stdout: "", stderr: err.message, output: err.message });
+        resolve({ code: -1, output: err.message });
       });
     });
   }
@@ -159,9 +142,9 @@ export class CustomCheck extends BaseCheck {
       description:
         "Delegates lint and fix to user-provided shell commands. " +
         "File details are passed via environment variables " +
-        "(LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE). " +
-        "Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error. " +
-        "On fail (exit 1), if stdout is a JSON array of findings, it is used for per-finding reporting.",
+        "(LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE, LINTER_ENTRY_ID, " +
+        "LINTER_ENTRY_SOURCE_FILE, LINTER_ENTRY_METADATA). " +
+        "Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error.",
       options:
         "command — shell command for both modes; " +
         "lintCommand — overrides command for lint; " +

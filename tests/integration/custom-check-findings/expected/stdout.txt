@@ -1,6 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: custom-findings, custom-legacy
-All tracked files: 3 file(s)
-Linting 2 check(s) across 1 file(s)...
-Summary: 2 check(s), 2 failed
-Completed in <TIME>
-PRD written to <TMPDIR>/prd.json

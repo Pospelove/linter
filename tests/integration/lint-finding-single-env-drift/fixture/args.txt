@@ -1,1 +1,0 @@
---lint --mode manual --finding eyJjaGVjayI6InRvZG8iLCJmaWxlIjoic3JjL21pc3NpbmcudHMiLCJzbmlwcGV0IjoiVE9ETzogZml4IHRoaXMifQ

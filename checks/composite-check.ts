@@ -37,12 +37,12 @@ export class CompositeCheck extends BaseCheck {
     return { ...a, ...b };
   }
 
-  override async lint(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
-    return this.#linter.lint(file, deps);
+  override async lint(file: string, deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+    return this.#linter.lint(file, deps, entry);
   }
 
-  override async fix(file: string, deps: Record<string, unknown>): Promise<CheckResult> {
-    const res = await this.lintAndFix(file, deps);
+  override async fix(file: string, deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+    const res = await this.lintAndFix(file, deps, entry);
     if (!res) {
       // Should never happen in CompositeCheck because it delegates to lint and fix which return CheckResult
       return { status: "error", output: "CompositeCheck: lintAndFix returned null" };
@@ -50,12 +50,12 @@ export class CompositeCheck extends BaseCheck {
     return res;
   }
 
-  override async lintAndFix(file: string, deps: Record<string, unknown>): Promise<CheckResult | null> {
-    const lintRes = await this.#linter.lint(file, deps);
+  override async lintAndFix(file: string, deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult | null> {
+    const lintRes = await this.#linter.lint(file, deps, entry);
     if (lintRes.status !== "fail") {
       return lintRes;
     }
-    return this.#fixer.fix(file, deps);
+    return this.#fixer.fix(file, deps, entry);
   }
 
   static override getHelp(): { name: string; description: string; options: string } {

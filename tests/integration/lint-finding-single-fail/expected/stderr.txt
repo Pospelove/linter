@@ -1,2 +1,0 @@
-src/example.ts:1: Found a TODO
-  Snippet: TODO: fix this

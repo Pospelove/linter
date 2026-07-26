@@ -1,1 +1,0 @@
-Malformed fingerprint: Unexpected token '�', "��~k�ڱ���k�x" is not valid JSON

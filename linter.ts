@@ -5,69 +5,28 @@ import { spawnSync, execSync } from "child_process";
 import pLimit from "p-limit";
 
 import { ensureCleanExit } from "./util.js";
-import { builtinRegistry, builtinChecks, builtinFileSources } from "./registry.js";
+import { builtinRegistry, builtinChecks, builtinFileSources, builtinExpanders } from "./registry.js";
 import { CompositeCheck } from "./checks/composite-check.js";
-import { BaseCheck, CheckResult, CheckFinding } from "./checks/base-check.js";
-import { deriveFingerprint, decodeFingerprint } from "./checks/finding-fingerprint.js";
+import { BaseCheck, CheckResult } from "./checks/base-check.js";
+import { BaseEntry } from "./entries/base-entry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 
 interface LinterCheckResult extends CheckResult {
+  content?: string;
   extraFiles?: string[];
 }
 
 interface ResultGroup {
   res: LinterCheckResult;
   checkName: string;
-  findings: CheckFinding[];
+  entryId: string;
 }
-
-/**
- * Normalize check findings: synthesize for legacy failures, populate snippets
- * from line ranges, and enforce the "pass with findings" invariant.
- */
-const normalizeFindings = async (file: string, checkName: string, res: LinterCheckResult): Promise<CheckFinding[]> => {
-  if (res.status === "pass") {
-    if (res.findings && res.findings.length > 0) {
-      throw new Error(`Implementation bug in check "${checkName}": returned "pass" status with ${res.findings.length} findings for file "${file}".`);
-    }
-    return [];
-  }
-
-  const findings = res.findings ? [...res.findings] : [];
-  if (findings.length === 0 && (res.status === "fail" || res.status === "error")) {
-    findings.push({ message: res.output ?? "check failed", snippet: "" });
-  }
-
-  // Snippet population rule
-  let content: string[] | null = null;
-  for (const finding of findings) {
-    if ((finding.startLine || finding.endLine) && !finding.snippet) {
-      if (content === null) {
-        try {
-          content = (await fs.promises.readFile(file, "utf-8")).split("\n");
-        } catch (err) {
-          throw new Error(`Failed to read file "${file}" to populate snippet for check "${checkName}": ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-      const start = Math.max(0, (finding.startLine ?? 1) - 1);
-      const end = finding.endLine ?? finding.startLine ?? (start + 1);
-      finding.snippet = content.slice(start, end).join("\n");
-    }
-
-    // Fingerprint injection rule
-    finding.fingerprint = deriveFingerprint(checkName, file, finding.snippet, REPO_ROOT);
-  }
-
-  return findings;
-};
 
 interface CheckPrdConfig {
   group?: string;
   groupTitle?: string;
   groupDescription?: string;
-  storySplitMode?: "per-file" | "per-finding";
-  findingsPerStory?: number;
   filesPerStory?: number;
   userStoryTitle?: string;
   userStoryDescription?: string | string[];
@@ -82,6 +41,7 @@ interface CheckConfigEntry {
   options?: Record<string, unknown>;
   fixWith?: { export: string; options?: Record<string, unknown> };
   prd?: CheckPrdConfig;
+  expander?: { export: string; options?: Record<string, unknown> };
 }
 
 interface PrdConfig {
@@ -149,17 +109,6 @@ const loadConfig = async (mode: string) => {
   const SrcClass = await resolveClass(srcEntry);
   const fileSource = new SrcClass(REPO_ROOT, srcEntry.options || {});
 
-  // Reject any check entry that still carries an "expander" block. Expanders
-  // were removed by the per-finding workflow; findings replace them.
-  for (const entry of config.checks) {
-    if (entry.expander !== undefined) {
-      throw new Error(
-        `Check "${entry.name}" has an "expander" block, but expanders have been removed. ` +
-        `Findings replace them. See docs/per-finding-workflow.md.`
-      );
-    }
-  }
-
   // --- checks ---
   const checks = [];
   for (const entry of config.checks) {
@@ -176,21 +125,11 @@ const loadConfig = async (mode: string) => {
     }
     check.name = entry.name;
     check._prdConfig = entry.prd || null;
-
-    if (entry.prd) {
-      if (entry.prd.storySplitMode === "per-finding" && entry.prd.group) {
-        throw new Error(`Check "${entry.name}" has storySplitMode: "per-finding" combined with prd.group. This is not supported. See docs/per-finding-workflow.md.`);
-      }
-
-      if (entry.prd.storySplitMode && !["per-file", "per-finding"].includes(entry.prd.storySplitMode)) {
-        throw new Error(`Check "${entry.name}" has unknown storySplitMode "${entry.prd.storySplitMode}". Valid values: per-file, per-finding.`);
-      }
-
-      if (!entry.prd.storySplitMode && entry.prd.findingsPerStory !== undefined) {
-        console.warn(`Warning: findingsPerStory is ignored when storySplitMode is not per-finding (check "${entry.name}").`);
-      }
+    if (entry.expander) {
+      const ExpanderClass = await resolveClass(entry.expander);
+      const expander = new ExpanderClass(entry.expander.options || {});
+      check.setExpander(expander);
     }
-
     checks.push(check);
   }
 
@@ -217,7 +156,7 @@ const relPath = (file: string) => {
  * If mixed pass+fixed    → single line: [OK] rel/path [passed: A, B | fixed: C]
  * Otherwise              → one line per failed/errored check with details.
  */
-const formatFileResults = (results: ResultGroup[], file: string) => {
+const formatFileResults = (results: { res: LinterCheckResult; checkName: string }[], file: string) => {
   const rel = relPath(file);
   const lines: string[] = [];
   let isFail = false;
@@ -225,10 +164,9 @@ const formatFileResults = (results: ResultGroup[], file: string) => {
 
   const passed: string[] = [];
   const fixed: string[] = [];
-  const bad: ResultGroup[] = [];
+  const bad: { res: LinterCheckResult; checkName: string }[] = [];
 
-  for (const group of results) {
-    const { res, checkName } = group;
+  for (const { res, checkName } of results) {
     switch (res.status) {
       case "pass":
         passed.push(checkName);
@@ -239,12 +177,12 @@ const formatFileResults = (results: ResultGroup[], file: string) => {
         stats.fixed++;
         break;
       case "fail":
-        bad.push(group);
+        bad.push({ res, checkName });
         stats.fail++;
         break;
       case "error":
       default:
-        bad.push(group);
+        bad.push({ res, checkName });
         stats.error++;
         break;
     }
@@ -273,16 +211,62 @@ const formatFileResults = (results: ResultGroup[], file: string) => {
     }
     for (const { res, checkName } of bad) {
       const status = res.status === "fail" ? "FAIL" : res.status === "error" ? "ERROR" : "UNKNOWN";
-      let extra = "";
-      if (res.findings && res.findings.length > 0) {
-        extra = ` (${res.findings.length} finding${res.findings.length === 1 ? "" : "s"})`;
-      }
-      lines.push(`[${status}] ${rel} [${checkName}]${extra}`);
+      lines.push(`[${status}] ${rel} [${checkName}]`);
       if (res.output) lines.push(`  ${res.output}`);
     }
   }
 
   return { lines, isFail, stats };
+};
+
+/**
+ * Refuse virtual entries against checks that don't speak the in-memory contract.
+ * A virtual entry (e.g. one element of a JSON array) cannot be processed by a
+ * check that does its own raw file I/O — that would corrupt the surrounding file.
+ */
+const assertEntrySupported = (check: BaseCheck, entry: BaseEntry) => {
+  if (entry.isVirtual && !check.supportsInMemory) {
+    throw new Error(
+      `Check "${check.name}" does not support in-memory entries (supportsInMemory === false), ` +
+      `but its expander produced a virtual entry "${entry.id}". ` +
+      `Either use a check that implements the *InMemory interface, or drop the expander for this check.`
+    );
+  }
+};
+
+/**
+ * Run a single (check, entry) pair in lint-only mode.
+ * Routes to lintInMemory when the check supports it; otherwise falls back to file-based lint.
+ */
+const runEntryLint = async (check: BaseCheck, entry: BaseEntry, fallbackFile: string, deps: Record<string, unknown>): Promise<LinterCheckResult> => {
+  assertEntrySupported(check, entry);
+  if (check.supportsInMemory) {
+    const content = await entry.readContent();
+    return check.lintInMemory(content, deps, entry);
+  }
+  return check.lint(entry.path ?? fallbackFile, deps, entry);
+};
+
+/**
+ * Run a single (check, entry) pair in fix mode.
+ * Routes to lintAndFixInMemory/fixInMemory when supported, writing the result back via entry.writeBack.
+ * Otherwise falls back to file-based lintAndFix/fix.
+ */
+const runEntryFix = async (check: BaseCheck, entry: BaseEntry, fallbackFile: string, deps: Record<string, unknown>): Promise<LinterCheckResult> => {
+  assertEntrySupported(check, entry);
+  if (check.supportsInMemory) {
+    const content = await entry.readContent();
+    const res =
+      (await check.lintAndFixInMemory(content, deps, entry)) ||
+      await check.fixInMemory(content, deps, entry);
+    if (res && res.status === "fixed" && typeof res.content === "string") {
+      await entry.writeBack(res.content);
+    }
+    return res;
+  }
+  const entryPath = entry.path ?? fallbackFile;
+  return (await check.lintAndFix(entryPath, deps, entry)) ||
+    check.fix(entryPath, deps, entry);
 };
 
 /**
@@ -292,12 +276,12 @@ const formatFileResults = (results: ResultGroup[], file: string) => {
  * Fix mode:   one file at a time (sequential) to avoid races on shared files.
  *
  * Returns { extraFiles, failed, failedPairs } instead of calling process.exit(1).
- * failedPairs: Array<{ file: string, checkName: string, finding: CheckFinding }>
+ * failedPairs: Array<{ file: string, checkName: string }>
  */
 const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = false, verbose = false, ...deps }: Record<string, unknown>) => {
 
   const extraFiles = new Set<string>();
-  const failedPairs: { file: string, checkName: string, finding: CheckFinding }[] = [];
+  const failedPairs: { file: string, checkName: string }[] = [];
 
   // Group checks by file instead of a sequential flat array
   const fileToChecks = new Map<string, BaseCheck[]>();
@@ -334,50 +318,59 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
   let fail = false;
   const counters = { pass: 0, fixed: 0, fail: 0, error: 0 };
 
-  const emitResults = (file: string, results: ResultGroup[]) => {
-    const { lines, isFail, stats } = formatFileResults(results, file);
-    counters.pass += stats.pass;
-    counters.fixed += stats.fixed;
-    counters.fail += stats.fail;
-    counters.error += stats.error;
-    if (lines.length > 0) {
-      if (isFail) {
-        console.error(lines.join("\n"));
-      } else if (verbose) {
-        console.log(lines.join("\n"));
-      }
-    }
-    if (isFail) {
-      fail = true;
-      for (const { checkName, findings } of results) {
-        for (const finding of findings) {
-          failedPairs.push({ file, checkName, finding });
-        }
-      }
-    }
-  };
-
   if (lintOnly) {
     // Parallel lint: controlled by p-limit per file
     const limit = pLimit(10); // reasonable default for lints
     await Promise.all(
       groupedWork.map(({ file, checks }) =>
         limit(async () => {
-          const results = await Promise.all(
-            checks.map(async (check): Promise<ResultGroup> => {
-              try {
-                const res = await check.lint(file, deps);
-                const findings = await normalizeFindings(file, check.name, res);
-                return { res, checkName: check.name, findings };
-              } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                const errorRes: LinterCheckResult = { status: "error", output: message };
-                const findings = await normalizeFindings(file, check.name, errorRes);
-                return { res: errorRes, checkName: check.name, findings };
-              }
+          // For each check, expand the file into entries, then lint each entry
+          const rawResults = await Promise.all(
+            checks.map(async (check) => {
+              const entries = await check.expand(file);
+              return Promise.all(entries.map(async (entry) => {
+                try {
+                  const res = await runEntryLint(check, entry, file, deps);
+                  return { res, checkName: check.name, entryId: entry.id };
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : String(err);
+                  const errorRes: LinterCheckResult = { status: "error", output: message };
+                  return { res: errorRes, checkName: check.name, entryId: entry.id };
+                }
+              }));
             })
           );
-          emitResults(file, results);
+
+          const results = rawResults.flat();
+
+          // Group results by entryId and format each group independently
+          const byEntry = new Map<string, ResultGroup[]>();
+          for (const r of results) {
+            if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
+            byEntry.get(r.entryId)!.push(r);
+          }
+          for (const [entryId, entryResults] of byEntry) {
+            const { lines, isFail, stats } = formatFileResults(entryResults, entryId);
+            counters.pass += stats.pass;
+            counters.fixed += stats.fixed;
+            counters.fail += stats.fail;
+            counters.error += stats.error;
+            if (lines.length > 0) {
+              if (isFail) {
+                console.error(lines.join("\n"));
+              } else if (verbose) {
+                console.log(lines.join("\n"));
+              }
+            }
+            if (isFail) {
+              fail = true;
+              for (const { res, checkName } of entryResults) {
+                if (res.status === "fail" || res.status === "error") {
+                  failedPairs.push({ file: entryId, checkName });
+                }
+              }
+            }
+          }
         })
       )
     );
@@ -387,20 +380,48 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
       const fileResults: ResultGroup[] = [];
 
       for (const check of checks) {
-        try {
-          const res = (await check.lintAndFix(file, deps)) || await check.fix(file, deps);
-          if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
-          const findings = await normalizeFindings(file, check.name, res);
-          fileResults.push({ res, checkName: check.name, findings });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          const errorRes: LinterCheckResult = { status: "error", output: message };
-          const findings = await normalizeFindings(file, check.name, errorRes);
-          fileResults.push({ res: errorRes, checkName: check.name, findings });
+        const entries = await check.expand(file);
+        for (const entry of entries) {
+          try {
+            const res = await runEntryFix(check, entry, file, deps);
+            if (res.extraFiles) res.extraFiles.forEach((f) => extraFiles.add(f));
+            fileResults.push({ res, checkName: check.name, entryId: entry.id });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const errorRes: LinterCheckResult = { status: "error", output: message };
+            fileResults.push({ res: errorRes, checkName: check.name, entryId: entry.id });
+          }
         }
       }
 
-      emitResults(file, fileResults);
+      // Group by entryId for display
+      const byEntry = new Map<string, ResultGroup[]>();
+      for (const r of fileResults) {
+        if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
+        byEntry.get(r.entryId)!.push(r);
+      }
+      for (const [entryId, entryResults] of byEntry) {
+        const { lines, isFail, stats } = formatFileResults(entryResults, entryId);
+        counters.pass += stats.pass;
+        counters.fixed += stats.fixed;
+        counters.fail += stats.fail;
+        counters.error += stats.error;
+        if (lines.length > 0) {
+          if (isFail) {
+            console.error(lines.join("\n"));
+          } else if (verbose) {
+            console.log(lines.join("\n"));
+          }
+        }
+        if (isFail) {
+          fail = true;
+          for (const { res, checkName } of entryResults) {
+            if (res.status === "fail" || res.status === "error") {
+              failedPairs.push({ file: entryId, checkName });
+            }
+          }
+        }
+      }
     }
   }
 
@@ -585,8 +606,6 @@ const printHelp = () => {
   lines.push("  --mode <name>         Execution mode from config (default: manual)");
   lines.push("  --checks <n1,n2,...>  Only run checks with these names (comma-separated, from config)");
   lines.push("  --files <p1,p2,...>   Use these exact files instead of the configured file source");
-  lines.push("  --finding <f1,...>    Only verify these findings (comma-separated fingerprints)");
-  lines.push("  --expect-max <N>      Maximum instances of finding allowed to remain (default: 0)");
   lines.push("  --no-download         Do not download tools if missing");
   lines.push("  --no-path             Do not search for tools in PATH");
   lines.push("  --output-prd [path]   Write a ralph-compatible PRD JSON to [path] after linting (requires --lint); defaults to prd.json");
@@ -613,6 +632,21 @@ const printHelp = () => {
       const h = Cls.getHelp();
       lines.push(`  ${exportName}`);
       lines.push(`    ${h.description}`);
+      if (h.options) lines.push(`    Options: ${h.options}`);
+    } else {
+      lines.push(`  ${exportName}`);
+    }
+  }
+  lines.push("");
+
+  // --- Built-in expanders ---
+  lines.push("BUILT-IN EXPANDERS:");
+  for (const [exportName, Cls] of Object.entries(builtinExpanders)) {
+    if (typeof Cls.getHelp === "function") {
+      const h = Cls.getHelp();
+      lines.push(`  ${exportName}`);
+      lines.push(`    ${h.description}`);
+      // @ts-expect-error - options might not exist on all expanders
       if (h.options) lines.push(`    Options: ${h.options}`);
     } else {
       lines.push(`  ${exportName}`);
@@ -671,12 +705,12 @@ interface UserStory {
 /**
  * Build a ralph-compatible PRD JSON from failed (file, check) pairs.
  *
- * @param {Array<{ file: string, checkName: string, finding: CheckFinding }>} failedPairs
+ * @param {Array<{ file: string, checkName: string }>} failedPairs
  * @param {PrdConfig} prdConfig  Top-level `prd` object from linter-config.json (may be empty).
  * @param {CheckConfigEntry[]} checkEntries  Raw check entries from linter-config.json (for per-check prd config).
  * @returns {object}  PRD object ready to JSON.stringify.
  */
-const buildPrd = (failedPairs: { file: string, checkName: string, finding: CheckFinding }[], prdConfig: PrdConfig, checkEntries: CheckConfigEntry[], baseCommand: string) => {
+const buildPrd = (failedPairs: { file: string, checkName: string }[], prdConfig: PrdConfig, checkEntries: CheckConfigEntry[], baseCommand: string) => {
   const project = prdConfig.project || "Project";
   const branchName = prdConfig.branchName || "ralph/lint-fixes";
   const description = prdConfig.description || "Fix outstanding lint issues";
@@ -692,25 +726,13 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   const userStories: UserStory[] = [];
   let counter = 1;
 
-  // Group by check name, sort files within each check alphabetically.
-  // In per-file mode (the only mode for now), we dedupe multiple findings
-  // for the same (file, check) back down to one story.
-  const byCheck = new Map<string, { file: string; findings: CheckFinding[] }[]>();
-  for (const { file, checkName, finding } of failedPairs) {
+  // Group by check name, sort files within each check alphabetically
+  const byCheck = new Map<string, string[]>();
+  for (const { file, checkName } of failedPairs) {
     if (!byCheck.has(checkName)) byCheck.set(checkName, []);
-    const entries = byCheck.get(checkName)!;
-    let entry = entries.find((e) => e.file === file);
-    if (!entry) {
-      entry = { file, findings: [] };
-      entries.push(entry);
-    }
-    entry.findings.push(finding);
+    byCheck.get(checkName)!.push(file);
   }
-
-  // Sort files within each check alphabetically
-  for (const entries of byCheck.values()) {
-    entries.sort((a, b) => a.file.localeCompare(b.file));
-  }
+  for (const files of byCheck.values()) files.sort((a: string, b: string) => a.localeCompare(b));
 
   // Sort checks alphabetically for stable output
   const sortedChecks = [...byCheck.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -725,19 +747,19 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
   }
 
   // Separate checks into prd-grouped vs ungrouped
-  const prdGroups = new Map<string, { checkName: string; entries: { file: string; findings: CheckFinding[] }[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, entries, checkPrd }]
-  const ungroupedChecks: { checkName: string; entries: { file: string; findings: CheckFinding[] }[]; checkPrd: CheckPrdConfig }[] = [];
-  for (const [checkName, entries] of sortedChecks) {
+  const prdGroups = new Map<string, { checkName: string; files: string[]; checkPrd: CheckPrdConfig }[]>(); // groupName -> [{ checkName, files, checkPrd }]
+  const ungroupedChecks: { checkName: string; files: string[]; checkPrd: CheckPrdConfig }[] = [];
+  for (const [checkName, files] of sortedChecks) {
     const checkPrd = checkPrdMap[checkName] || {};
     if (checkPrd.group) {
       if (!prdGroups.has(checkPrd.group)) prdGroups.set(checkPrd.group, []);
-      prdGroups.get(checkPrd.group)!.push({ checkName, entries, checkPrd });
+      prdGroups.get(checkPrd.group)!.push({ checkName, files, checkPrd });
     } else {
-      ungroupedChecks.push({ checkName, entries, checkPrd });
+      ungroupedChecks.push({ checkName, files, checkPrd });
     }
   }
 
-  const pushStory = (title: string, storyDescription: string | null, acceptanceCriteria: string[], notes: string = "") => {
+  const pushStory = (title: string, storyDescription: string | null, acceptanceCriteria: string[]) => {
     const idStr = `US-${String(counter).padStart(3, "0")}`;
     userStories.push({
       id: idStr,
@@ -746,7 +768,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
       acceptanceCriteria,
       priority: counter,
       passes: false,
-      notes,
+      notes: "",
     });
     counter++;
   };
@@ -771,11 +793,11 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
     // Collect any additionalAcceptanceCriteria from all members (deduplicated)
     const extraCriteria = [...new Set(members.flatMap((m) => m.checkPrd.additionalAcceptanceCriteria || []))];
 
-    const allFiles = [...new Set(members.flatMap((m) => m.entries.map((e) => e.file)))].sort((a, b) => a.localeCompare(b));
+    const allFiles = [...new Set(members.flatMap((m) => m.files))].sort((a, b) => a.localeCompare(b));
 
     for (let i = 0; i < allFiles.length; i += filesPerStory) {
-      const chunkFiles = allFiles.slice(i, i + filesPerStory);
-      const chunkRelFiles = chunkFiles.map(relPath);
+      const chunkSet = new Set(allFiles.slice(i, i + filesPerStory));
+      const chunkRelFiles = [...chunkSet].map(relPath);
       const fileCount = chunkRelFiles.length;
 
       const applyGroupPlaceholders = (str: string) =>
@@ -806,208 +828,48 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
         ? [`${baseCommand} --lint --checks ${allGroupCheckNames.join(",")} --files ${chunkRelFiles.join(",")}`]
         : [];
 
-      const fingerprints = members.flatMap((m) =>
-        m.entries
-          .filter((e) => chunkFiles.includes(e.file))
-          .flatMap((e) => e.findings.map((f) => f.fingerprint))
-      );
-      const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
-
-      pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria], notes);
+      pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria]);
     }
   }
 
   // Emit stories for ungrouped checks (original per-check, per-chunk logic).
   // prdOnly checks must belong to a group to be meaningful; skip them if ungrouped.
-  for (const { checkName, entries, checkPrd } of ungroupedChecks) {
+  for (const { checkName, files, checkPrd } of ungroupedChecks) {
     if (checkPrd.prdOnly) continue;
+    const filesPerStory = checkPrd.filesPerStory ?? 1;
 
-    if (checkPrd.storySplitMode === "per-finding") {
-      const findingsPerStory = checkPrd.findingsPerStory ?? 1;
-      const filesPerStory = checkPrd.filesPerStory ?? 1;
+    for (let i = 0; i < files.length; i += filesPerStory) {
+      const chunk = files.slice(i, i + filesPerStory);
+      const relFiles = chunk.map(relPath);
+      const filesStr = relFiles.join(",");
+      const fileCount = chunk.length;
 
-      const applyPlaceholdersFinding = (str: string, findings: CheckFinding[], relFiles: string[], instanceIndex?: number, instanceCount?: number, expectMax?: number) => {
-        const first = findings[instanceIndex != null ? instanceIndex - 1 : 0];
-        if (!first) return str;
-        const res = str
+      const applyPlaceholders = (str: string) =>
+        str
           .replace(/\{files?\}/g, relFiles.join(", "))
-          .replace(/\{fileCount\}/g, String(relFiles.length))
-          .replace(/\{check\}/g, checkName)
-          .replace(/\{findingCount\}/g, String(findings.length))
-          .replace(/\{instanceIndex\}/g, instanceIndex != null ? String(instanceIndex) : "")
-          .replace(/\{instanceCount\}/g, instanceCount != null ? String(instanceCount) : "")
-          .replace(/\{expectMax\}/g, expectMax != null ? String(expectMax) : "")
-          .replace(/\{startLine\}/g, String(first.startLine || 1))
-          .replace(/\{endLine\}/g, String(first.endLine || first.startLine || 1))
-          .replace(/\{message\}/g, first.message)
-          .replace(/\{snippet\}/g, first.snippet || "")
-          .replace(/\{fingerprint\}/g, first.fingerprint || "");
+          .replace(/\{fileCount\}/g, String(fileCount))
+          .replace(/\{check\}/g, checkName);
 
-        if (res.includes("{findings}")) {
-          const rendered = findings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
-          return res.replace(/\{findings\}/g, rendered);
-        }
-        return res;
-      };
+      const defaultTitle = fileCount === 1
+        ? `Fix ${checkName} in ${relFiles[0]}`
+        : `Fix ${checkName} in ${fileCount} files`;
+      const title = checkPrd.userStoryTitle
+        ? applyPlaceholders(checkPrd.userStoryTitle)
+        : defaultTitle;
 
-      const renderDefaultDescriptionFinding = (findings: CheckFinding[]) => {
-        return findings.map((f) => {
-          const range = f.startLine ? (f.endLine && f.endLine !== f.startLine ? `lines ${f.startLine}-${f.endLine}` : `line ${f.startLine}`) : "whole file";
-          return `${f.message}\nRange: ${range}\nSnippet:\n${f.snippet || ""}`;
-        }).join("\n\n");
-      };
+      const rawDescription = Array.isArray(checkPrd.userStoryDescription)
+        ? checkPrd.userStoryDescription.join("\n")
+        : checkPrd.userStoryDescription;
+      const defaultDescription = fileCount === 1
+        ? `As a developer, I need to fix ${checkName} issue in ${relFiles[0]} so the check passes.`
+        : `As a developer, I need to fix ${checkName} issues in ${fileCount} files so the checks pass.`;
+      const storyDescription = rawDescription
+        ? applyPlaceholders(rawDescription)
+        : defaultDescription;
 
-      const renderMultiInstanceDescription = (findings: CheckFinding[], k: number, m: number) => {
-        const lines = findings.map((f) => f.startLine || "whole file");
-        const first = findings[k - 1];
-        if (!first) return "";
-        const range = first.startLine ? (first.endLine && first.endLine !== first.startLine ? `lines ${first.startLine}-${first.endLine}` : `line ${first.startLine}`) : "whole file";
-        return `Fix ONE remaining instance matching the snippet. At PRD generation time, ${m} instances existed at lines [${lines.join(", ")}]; ${k - 1} have already been fixed by prior stories.\n\n${first.message}\nRange: ${range}\nSnippet:\n${first.snippet || ""}`;
-      };
-
-      // Group findings by fingerprint across all files to identify multi-instance
-      const globalFpFindings = new Map<string, { file: string; finding: CheckFinding }[]>();
-      for (const entry of entries) {
-        for (const finding of entry.findings) {
-          const fp = finding.fingerprint!;
-          if (!globalFpFindings.has(fp)) globalFpFindings.set(fp, []);
-          globalFpFindings.get(fp)!.push({ file: entry.file, finding });
-        }
-      }
-
-      // Track which fingerprints we've already emitted as multi-instance
-      const emittedMultiInstance = new Set<string>();
-      let uniqueQueue: { file: string; finding: CheckFinding }[] = [];
-
-      const flushUniqueQueue = () => {
-        while (uniqueQueue.length > 0) {
-          const storyFindings: CheckFinding[] = [];
-          const storyFiles = new Set<string>();
-          const storyFpList: string[] = [];
-
-          let j = 0;
-          while (j < uniqueQueue.length) {
-            const item = uniqueQueue[j];
-            if (!item) break;
-            if (storyFindings.length >= findingsPerStory) break;
-            if (!storyFiles.has(item.file) && storyFiles.size >= filesPerStory) break;
-
-            storyFindings.push(item.finding);
-            storyFiles.add(item.file);
-            storyFpList.push(item.finding.fingerprint!);
-            uniqueQueue.splice(j, 1);
-          }
-
-          if (storyFindings.length === 0) break;
-
-          const relFiles = [...storyFiles].map(relPath).sort();
-          const fileCount = relFiles.length;
-          const findingCount = storyFindings.length;
-          const first = storyFindings[0];
-
-          const title = checkPrd.userStoryTitle
-            ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles)
-            : fileCount === 1
-              ? findingCount === 1
-                ? `Fix ${checkName} in ${relFiles[0]}:${first?.startLine || 1}`
-                : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)`
-              : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
-
-          const storyDescription = checkPrd.userStoryDescription
-            ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, storyFindings, relFiles)
-            : renderDefaultDescriptionFinding(storyFindings);
-
-          const mainCriteria = `${baseCommand} --lint --finding ${storyFpList.join(",")}`;
-          const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-
-          pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], `Fingerprints: ${storyFpList.join(", ")}`);
-        }
-      };
-
-      for (const entry of entries) {
-        // Find all fingerprints that appear in this file
-        const fpsInFile = [...new Set(entry.findings.map((f) => f.fingerprint!))];
-
-        for (const fp of fpsInFile) {
-          const allInstances = globalFpFindings.get(fp)!;
-          if (allInstances.length > 1) {
-            // Multi-instance: emit all stories if this is the first file it appears in
-            if (!emittedMultiInstance.has(fp) && allInstances[0] && allInstances[0].file === entry.file) {
-              emittedMultiInstance.add(fp);
-              const m = allInstances.length;
-              const instances = allInstances.map(i => i.finding);
-              for (let k = 1; k <= m; k++) {
-                const item = allInstances[k - 1];
-                if (!item) continue;
-                const relFile = relPath(item.file);
-                const expectMax = m - k;
-
-                const title = checkPrd.userStoryTitle
-                  ? applyPlaceholdersFinding(checkPrd.userStoryTitle, instances, [relFile], k, m, expectMax)
-                  : `Fix ${checkName} in ${relFile} (instance ${k} of ${m})`;
-
-                const storyDescription = checkPrd.userStoryDescription
-                  ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, instances, [relFile], k, m, expectMax)
-                  : renderMultiInstanceDescription(instances, k, m);
-
-                const mainCriteria = `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}`;
-                pushStory(title, storyDescription, [mainCriteria, ...(checkPrd.additionalAcceptanceCriteria || [])], `Fingerprint: ${fp}`);
-              }
-            }
-          } else {
-            // Unique fingerprint
-            if (allInstances[0]) {
-              uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
-            }
-          }
-        }
-
-        // If filesPerStory is 1, we must flush after each file
-        if (filesPerStory === 1) {
-          flushUniqueQueue();
-        }
-      }
-      flushUniqueQueue();
-    } else {
-      const filesPerStory = checkPrd.filesPerStory ?? 1;
-
-      for (let i = 0; i < entries.length; i += filesPerStory) {
-        const chunk = entries.slice(i, i + filesPerStory);
-        const relFiles = chunk.map((e) => relPath(e.file));
-        const filesStr = relFiles.join(",");
-        const fileCount = chunk.length;
-
-        const applyPlaceholders = (str: string) =>
-          str
-            .replace(/\{files?\}/g, relFiles.join(", "))
-            .replace(/\{fileCount\}/g, String(fileCount))
-            .replace(/\{check\}/g, checkName);
-
-        const defaultTitle = fileCount === 1
-          ? `Fix ${checkName} in ${relFiles[0]}`
-          : `Fix ${checkName} in ${fileCount} files`;
-        const title = checkPrd.userStoryTitle
-          ? applyPlaceholders(checkPrd.userStoryTitle)
-          : defaultTitle;
-
-        const rawDescription = Array.isArray(checkPrd.userStoryDescription)
-          ? checkPrd.userStoryDescription.join("\n")
-          : checkPrd.userStoryDescription;
-        const defaultDescription = fileCount === 1
-          ? `As a developer, I need to fix ${checkName} issue in ${relFiles[0]} so the check passes.`
-          : `As a developer, I need to fix ${checkName} issues in ${fileCount} files so the checks pass.`;
-        const storyDescription = rawDescription
-          ? applyPlaceholders(rawDescription)
-          : defaultDescription;
-
-        const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
-        const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-
-        const fingerprints = chunk.flatMap((e) => e.findings.map((f) => f.fingerprint!));
-        const notes = fingerprints.length > 0 ? `Fingerprints: ${[...new Set(fingerprints)].join(", ")}` : "";
-
-        pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], notes);
-      }
+      const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
+      const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+      pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
     }
   }
 
@@ -1096,93 +958,12 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
     ? filesParam.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
 
-  const findingIndex = args.indexOf("--finding");
-  const rawFindingArg = findingIndex !== -1 ? args[findingIndex + 1] : null;
-  const findingArg = (rawFindingArg && !rawFindingArg.startsWith("--")) ? rawFindingArg : null;
-
-  const expectMaxIndex = args.indexOf("--expect-max");
-  const rawExpectMaxArg = expectMaxIndex !== -1 ? args[expectMaxIndex + 1] : null;
-  const expectMaxArg = (rawExpectMaxArg && !rawExpectMaxArg.startsWith("--")) ? rawExpectMaxArg : "0";
-  const expectMax = parseInt(expectMaxArg, 10);
-
-  if (findingArg !== null) {
-    if (filesArg !== null || checksFilter !== null || outputPrdPath !== null) {
-      console.error("--finding is mutually exclusive with --files, --checks, and --output-prd.");
-      process.exit(2);
-    }
-    if (shouldFix) {
-      console.error("--fix --finding is not implemented. Per-finding auto-fix is not yet supported. Use --lint --finding to verify a specific finding, or --fix (without --finding) to apply the check's whole-file fix path.");
-      process.exit(2);
-    }
-  }
-
   if (!shouldLint && !shouldFix) {
     console.error("Either --lint or --fix must be specified. Run --help for usage.");
     process.exit(127);
   }
   try {
     let { fileSource, checks, toolsDir, prdConfig, checkEntries } = await loadConfig(mode);
-
-    if (findingArg !== null) {
-      const fingerprints = findingArg.split(",");
-      if (fingerprints.length > 1 && expectMaxIndex !== -1) {
-        console.error("--expect-max is only valid when --finding names a single fingerprint.");
-        process.exit(2);
-      }
-
-      let aggregateFail = false;
-      const toolOptions = { shouldDownload, shouldSearchInPath, toolsDir };
-
-      for (const fp of fingerprints) {
-        let payload;
-        try {
-          payload = decodeFingerprint(fp);
-        } catch (err) {
-          console.error(err instanceof Error ? err.message : String(err));
-          process.exit(2);
-        }
-
-        const checkEntry = checkEntries.find((e: CheckConfigEntry) => e.name === payload.check);
-        if (!checkEntry || !checkEntry.modes.includes(mode)) {
-          console.error(`Config drift: check "${payload.check}" is not in config or not enabled for mode "${mode}".`);
-          process.exit(2);
-        }
-
-        const absoluteFile = path.resolve(REPO_ROOT, payload.file);
-        if (!fs.existsSync(absoluteFile)) {
-          console.error(`Env drift: file "${payload.file}" no longer exists in repo.`);
-          process.exit(2);
-        }
-
-        const CheckClass = await resolveClass(checkEntry);
-        const check = new CheckClass(REPO_ROOT, checkEntry.options || {});
-        check.name = checkEntry.name;
-
-        const deps = await check.resolveDeps(toolOptions);
-        const res = await check.lint(absoluteFile, deps);
-        const findings = await normalizeFindings(absoluteFile, check.name, res);
-
-        const matchingFindings = findings.filter((f) => f.fingerprint === fp);
-        const allowed = fingerprints.length === 1 ? expectMax : 0;
-
-        if (matchingFindings.length > allowed) {
-          aggregateFail = true;
-          for (const f of matchingFindings) {
-            const range = f.startLine
-              ? f.endLine && f.endLine !== f.startLine
-                ? `${f.startLine}-${f.endLine}`
-                : `${f.startLine}`
-              : "whole file";
-            console.error(`${payload.file}:${range}: ${f.message}`);
-            if (f.snippet) {
-              console.error(`  Snippet: ${f.snippet.replace(/\n/g, "\n  ")}`);
-            }
-          }
-        }
-      }
-
-      process.exit(aggregateFail ? 1 : 0);
-    }
 
     // Apply --checks filter
     if (checksFilter !== null) {

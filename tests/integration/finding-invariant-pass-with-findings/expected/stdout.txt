@@ -1,5 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: test-finding
-All tracked files: 2 file(s)
-Linting 2 check(s) across 2 file(s)...
-Summary: 2 check(s), 2 errored
-Completed in <TIME>

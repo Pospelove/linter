@@ -1,1 +1,0 @@
-Error during processing: Check "check1" has storySplitMode: "per-finding" combined with prd.group. This is not supported. See docs/per-finding-workflow.md.

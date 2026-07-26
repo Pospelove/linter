@@ -20,13 +20,15 @@ import { TscCheck } from "./checks/tsc-check.js";
 import { AlwaysFailCheck } from "./checks/always-fail-check.js";
 import { LocalizationKeyCheck } from "./checks/localization-key-check.js";
 import { CustomCheck } from "./checks/custom-check.js";
-import { TestFindingCheck } from "./checks/test-finding-check.js";
-import { FakeFindingCheck } from "./checks/fake-finding-check.js";
 
 // --- file sources ---
 import { AllFilesSource } from "./file-sources/all-files-source.js";
 import { StagedFilesSource } from "./file-sources/staged-files-source.js";
 import { DiffBaseSource } from "./file-sources/diff-base-source.js";
+
+// --- expanders ---
+import { FileExpander } from "./expanders/file-expander.js";
+import { JsonArrayExpander } from "./expanders/json-array-expander.js";
 
 export const builtinChecks = {
   CrlfCheck,
@@ -43,8 +45,6 @@ export const builtinChecks = {
   AlwaysFailCheck,
   LocalizationKeyCheck,
   CustomCheck,
-  TestFindingCheck,
-  FakeFindingCheck,
 };
 
 export const builtinFileSources = {
@@ -53,7 +53,13 @@ export const builtinFileSources = {
   DiffBaseSource,
 };
 
+export const builtinExpanders = {
+  FileExpander,
+  JsonArrayExpander,
+};
+
 export const builtinRegistry = {
   ...builtinChecks,
   ...builtinFileSources,
+  ...builtinExpanders,
 };

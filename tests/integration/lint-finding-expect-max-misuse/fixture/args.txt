@@ -1,1 +1,0 @@
---lint --finding eyJjaGVjayI6InJlZ2V4LXRvZG8iLCJmaWxlIjoic3JjL2EudHMiLCJzbmlwcGV0IjoiVE9ETyAxIn0,eyJjaGVjayI6InJlZ2V4LXRvZG8iLCJmaWxlIjoic3JjL2IudHMiLCJzbmlwcGV0IjoiVE9ETyAyIn0 --expect-max 1

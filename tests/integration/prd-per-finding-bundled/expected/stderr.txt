@@ -1,9 +1,0 @@
-[FAIL] src/file1.txt [todo-check] (3 findings)
-  regex violation (3 hit(s)):
-  line 1: TODO
-  line 2: TODO
-  line 3: TODO
-[FAIL] src/file2.txt [todo-check] (2 findings)
-  regex violation (2 hit(s)):
-  line 1: TODO
-  line 2: TODO
