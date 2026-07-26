@@ -119,11 +119,18 @@ They collapse to one synthetic finding per failed file — matching today's
 story-per-file granularity. To emit finer findings (e.g. one per tsc error),
 the check must be upgraded to populate `findings` itself.
 
-## CLI: `--lint --expect-max <N>`
+## CLI
 
-New flag on `--lint`. Combined with `--checks <check>` and `--files <file>`
-(each naming exactly one), it passes iff the check produces at most `N`
-findings on the file.
+Two new modes on `--lint`, both scoped to a single (check, file) pair:
+`--expect-max <N>` for count-based verification, and `--show first` to
+locate the earliest current finding without reading the whole file. They
+compose independently — one tells the agent "am I done?", the other tells
+it "where's the next one?" Not combinable in a single call; run twice.
+
+### `--lint --expect-max <N>`
+
+Combined with `--checks <check>` and `--files <file>` (each naming exactly
+one), passes iff the check produces at most `N` findings on the file.
 
 Constraints:
 
@@ -144,12 +151,54 @@ Exit codes:
 | `--expect-max` combined with `--fix`, or with zero/multiple checks or files, or a bad N | 2 | Invalid usage. |
 | `--lint --expect-max` combined with `--output-prd` | 2 | Invalid usage (per-finding verification is not a valid moment to regenerate a PRD). |
 
-### `--fix --expect-max` and per-finding fix
+### `--lint --show <mode>`
 
-Not implemented. Fixing a specific finding by identity is impossible under
-this model (findings have no identity). `--fix` continues to apply the
-check's whole-file fix path as today. Combining `--fix` with `--expect-max`
-exits 2 with an explicit message.
+Prints information about the current findings, so a fix agent can locate
+one without reading the whole file. Query-time only; no side effects, no
+writes. Only one mode is defined today: `first`. Any other value exits 2
+(reserved).
+
+Combined with `--checks <check>` and `--files <file>` (each naming exactly
+one). `--show first` output is a single line of JSON:
+
+```json
+{"startLine": 4210, "endLine": 4213, "snippet": "...", "message": "..."}
+```
+
+If the file has zero findings, prints `null` and exits 0. Presence/absence
+is data, not failure — `--show` never exits 1.
+
+**Ordering**: findings sorted by ascending `startLine`; ties broken by the
+check's original emit order. Deterministic across runs (given deterministic
+checks).
+
+**Snippet widening**: the `snippet` field in the response includes up to
+two non-blank lines of surrounding context above and below the finding
+range (clipped at file boundaries) so a follow-up
+`Edit(old_string=snippet, ...)` has a unique target in a large file.
+Widening is scoped to `--show` output — nothing else touches the on-disk
+snippet, the finding count, or `--expect-max` behavior.
+
+Exit codes:
+
+| Situation | Exit | Meaning |
+|---|---|---|
+| Prints JSON object or `null` | 0 | Query answered. |
+| `--show` combined with `--fix` | 2 | Invalid usage. |
+| `--show` combined with `--expect-max` in one call | 2 | Invalid usage — each does one thing; run twice. |
+| `--show` combined with `--output-prd` | 2 | Invalid usage. |
+| `--show` with zero or multiple `--checks` or `--files` | 2 | Invalid usage. |
+| `--show` with any value other than `first` | 2 | Reserved for future modes. |
+| `--show` referencing an unknown check, or a check not enabled for the current `--mode` | 2 | Config drift. |
+| `--show` referencing a missing file | 2 | Env drift. |
+
+### `--fix` interactions
+
+Neither `--expect-max` nor `--show` is defined for `--fix`. Fixing a
+specific finding by identity is impossible under this model (findings have
+no identity). `--fix` continues to apply the check's whole-file fix path
+as today. Combining `--fix` with either flag exits 2 with an explicit
+message.
 
 ## PRD: `prd.storySplitMode`
 
@@ -163,6 +212,7 @@ New per-check option in `linter-config.json`:
   "options": { "pattern": "\\bprocess\\.env\\b", "message": "..." },
   "prd": {
     "storySplitMode": "per-finding",
+    "findingsPerStory": 3,
     "filesPerStory": 1
   }
 }
@@ -172,24 +222,37 @@ New per-check option in `linter-config.json`:
 
 - `"per-file"` (default): current behavior. One story per (file-chunk × check).
   `filesPerStory` chunks files. Per-finding count is ignored.
-- `"per-finding"`: for each (check, file) that produces M findings, emit M
-  ordered stories. `filesPerStory` MUST be 1 in this mode (default); other
-  values are a config-load error.
+- `"per-finding"`: for each (check, file) that produces M findings, emit
+  `ceil(M / N)` ordered stories where `N = prd.findingsPerStory` (default 1;
+  must be a positive integer). Each story is budgeted for N findings; the
+  last one may be smaller if M is not divisible by N. `filesPerStory` MUST
+  be 1 in this mode (default); other values are a config-load error.
 
 ### `"per-finding"` chunking
 
-For each (check, file) pair with M ≥ 1 findings, emit M ordered stories
-K = 1..M:
+Let `N = prd.findingsPerStory` (default 1) and `S = ceil(M / N)`. For each
+(check, file) pair with M ≥ 1 findings, emit S ordered stories K = 1..S:
 
+- Story K's budget is `Nₖ = min(N, M - (K-1) * N)` findings — every story
+  is responsible for N, except the last which may be responsible for fewer
+  when M is not divisible by N.
 - Story K's acceptance criterion:
-  `<baseCommand> --lint --checks <check> --files <file> --expect-max <M-K>`
-- Story K passes iff the file currently has at most (M-K) findings for this
-  check.
+  `<baseCommand> --lint --checks <check> --files <file> --expect-max <max(0, M - K*N)>`
+- Story K passes iff at most `max(0, M - K*N)` findings remain for the check.
 
 Because execution is sequential, story K only runs after stories 1..K-1
-passed — i.e. after at least K-1 findings were already fixed. Story K then
-requires at least one more finding to be resolved. Which one doesn't
-matter: findings are fungible.
+passed — i.e. after at least `(K-1) * N` findings were already fixed.
+Story K then requires at least Nₖ more to be resolved. Which specific ones
+doesn't matter: findings are fungible.
+
+Enforcement is a soft lower bound. `--expect-max` verifies the count
+dropped by at least the expected amount, but nothing prevents an agent
+from over-fixing on story K (dropping the count further than needed).
+Over-fixing doesn't fail the story; later stories just find less work
+than budgeted and pass trivially. The workflow script in each story
+description tells the agent explicitly to stop after Nₖ iterations, which
+is enough in practice — treat rogue over-fixing as an agent-behavior
+problem, not a linter guarantee.
 
 Ordering: for a given (check, file), the M stories are contiguous and in K
 order (US-001, US-002, …, US-00M). Files are processed in alphabetical
@@ -199,18 +262,43 @@ runs concatenate per-(check, file) groups.
 Story fields in per-finding mode:
 
 - **title**:
-  - Single-finding file (M = 1): `Fix <check> in <file>:<startLine>`
-    (line from the sole finding when present; falls back to just the file).
-  - Multi-finding file (M > 1), story K of M:
-    `Fix <check> in <file> (K of M findings)`.
-- **description**: for every finding in the file at PRD-generation time,
-  includes `message`, line range, and raw `snippet` — the model gets the
-  full inventory so it can pick any one to address. For multi-finding files
-  the description notes explicitly that (a) line numbers may have shifted
-  since PRD generation, (b) any remaining finding is fair game — findings
-  are interchangeable and the story only requires the total to drop by one.
+  - M = 1: `Fix <check> in <file>:<startLine>` (line from the sole finding
+    when present; falls back to just the file).
+  - S = 1, M > 1: `Fix <check> in <file> (M findings)`.
+  - S > 1: `Fix <check> in <file> (story K of S; Nₖ findings)`.
+- **description**: an explicit fix-workflow script. Line numbers are NOT
+  baked into the story text — they go stale as soon as a prior story
+  edits the file. The agent queries them fresh at fix time via
+  `--show first`. Default body:
+  ```
+  File:  <file>
+  Check: <check>
+  Findings at PRD generation: M. Fixed by prior stories: (K-1) * N.
+  This story fixes exactly Nₖ finding(s). STOP after Nₖ iterations, even
+  if more remain — later stories cover them. Any remaining finding may be
+  addressed; findings are interchangeable.
+
+  Repeat exactly Nₖ times:
+    1. Locate the earliest remaining finding:
+         <baseCommand> --lint --checks <check> --files <file> --show first
+       Output: JSON {startLine, endLine, snippet, message}, or `null` if none.
+    2. Read only the affected range:
+         Read(<file>, offset: startLine - 2, limit: (endLine - startLine) + 5)
+    3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).
+       The snippet returned by --show includes surrounding context, so it
+       is unique inside the file — Edit will not ambiguously match.
+
+  Then verify this story is done:
+    <baseCommand> --lint --checks <check> --files <file> --expect-max <max(0, M - K*N)>
+  ```
+  Rationale: `--show first` returns fresh coordinates every time, so a
+  finding in the middle of a 1 GB file can be located and edited without
+  reading the whole file. The explicit `Nₖ` iteration count is the sole
+  mechanism keeping the agent within its per-story budget — enforcement
+  is soft (see "per-finding chunking" above). For single-story cases
+  (S = 1) the same script is emitted — one code path.
 - **acceptanceCriteria**:
-  `[<baseCommand> --lint --checks <check> --files <file> --expect-max <M-K>]`.
+  `[<baseCommand> --lint --checks <check> --files <file> --expect-max <max(0, M - K*N)>]`.
 
 ### Interaction with `prd.group`
 
@@ -225,12 +313,23 @@ mode with these placeholders (in addition to existing `{file}`, `{files}`,
 `{fileCount}`, `{check}`):
 
 - `{findingCount}` — M, total findings for the (check, file) at PRD generation.
-- `{instanceIndex}` — K in "K of M" (1-based).
+- `{storyCount}` — S = `ceil(M / N)`, total stories for this (check, file).
+- `{storyIndex}` — K in "story K of S" (1-based).
+- `{storyBudget}` — Nₖ, findings this story is responsible for (may be
+  less than the configured N for the last story when M is not divisible
+  by N).
 - `{expectMax}` — value passed to `--expect-max` in the acceptance criterion
-  (`M-K`).
-- `{startLine}`, `{endLine}` — from the first finding in the file.
-- `{message}`, `{snippet}` — from the first finding.
+  (`max(0, M - K*N)`).
+- `{startLine}`, `{endLine}` — from the first finding in the file **at PRD
+  generation time**. Snapshots only — will drift once prior stories edit
+  the file. Use `--show first` at fix time for fresh coordinates. Included
+  as placeholders for template authors who want a rough hint in the title;
+  the default description does not use them.
+- `{message}`, `{snippet}` — from the first finding at PRD generation.
 - `{findings}` — all findings rendered as `line N: <snippet>` joined by newlines.
+- `{workflow}` — the full default workflow-script body (Steps 1–4 above).
+  A custom `userStoryDescription` template can embed it verbatim so
+  overriding the description doesn't lose the fix-time query loop.
 
 If unset, the built-in defaults above apply.
 
@@ -252,17 +351,20 @@ If unset, the built-in defaults above apply.
   `--expect-max` is absent.
 - **All existing check implementations compile and run unchanged** —
   `CheckResult.findings` is optional; the runner synthesizes it when omitted.
-- **`linter-config.json` schema is purely additive**: new field
-  (`prd.storySplitMode`) has a safe default; unknown fields aren't rejected
-  today and aren't now.
+- **`linter-config.json` schema is purely additive**: new fields
+  (`prd.storySplitMode`, `prd.findingsPerStory`) have safe defaults;
+  unknown fields aren't rejected today and aren't now.
 
 ### Interaction matrix
 
 | Combination | Behavior |
 |---|---|
 | `storySplitMode` absent or `"per-file"` | Today's behavior, exactly. Per-finding count ignored for PRD purposes; `filesPerStory` chunks files. |
-| `storySplitMode: "per-finding"` + check emits real findings | For each (check, file) with M findings, emit M ordered stories with `--expect-max M-1..0`. |
+| `storySplitMode: "per-finding"` + check emits real findings | For each (check, file) with M findings, emit `ceil(M/N)` ordered stories (N = `findingsPerStory`, default 1). Story K's `--expect-max` = `max(0, M - K*N)`. |
 | `storySplitMode: "per-finding"` + check emits no findings (tsc, encoding, etc.) | Runner injects one synthetic finding per failed file → one story per failed file per check. Same granularity as today. No warning. |
+| `storySplitMode: "per-finding"` + `findingsPerStory: N` (positive integer) | Chunk each (check, file)'s findings into groups of N, last group may be smaller. Description includes explicit "fix Nₖ, then STOP" guidance. |
+| `storySplitMode: "per-finding"` + `findingsPerStory <= 0` or non-integer | **Hard error at config load.** |
+| `findingsPerStory` set with `storySplitMode: "per-file"` (or absent) | Warn at config load ("findingsPerStory is ignored when storySplitMode is not per-finding"); proceed with today's behavior. |
 | `storySplitMode: "per-finding"` + `filesPerStory != 1` | **Hard error at config load.** Per-finding stories are always single-(check, file). |
 | `storySplitMode: "per-finding"` + `prd.group` | **Hard error at config load.** Not defined; punt until needed. |
 | `storySplitMode: "per-finding"` + `userStoryTitle` / `userStoryDescription` | Templates applied with per-finding placeholders (see PRD section). |
@@ -275,6 +377,12 @@ If unset, the built-in defaults above apply.
 | `--lint --expect-max` + `--output-prd` | Exit 2. |
 | `--lint --expect-max` referencing an unknown check, or a check not enabled for `--mode` | Exit 2 (config drift). |
 | `--lint --expect-max` referencing a missing file | Exit 2 (env drift). |
+| `--lint --show first` in per-file mode | Works. Not tied to per-finding stories — anyone can query the earliest finding for a (check, file). |
+| `--lint --show first` on a file with zero findings | Prints `null`, exit 0. |
+| `--show` combined with `--fix`, `--expect-max`, or `--output-prd` | Exit 2. |
+| `--show` with zero or multiple `--checks` or `--files` | Exit 2. |
+| `--show` with any value other than `first` | Exit 2 (reserved for future modes). |
+| `--show` referencing an unknown check, check-not-enabled-for-mode, or missing file | Exit 2. |
 
 ### Downstream PRD consumers
 
@@ -322,6 +430,19 @@ requires zero. If ralph tries to run US-003 before US-001, its criterion
 `--expect-max 2` fails against 5 remaining findings and exits 1.
 Sequential order enforces itself.
 
+Same M = 5 with `findingsPerStory: 2` produces `ceil(5/2) = 3` stories:
+
+- US-001: budget 2, `--expect-max 3`. Description: "fix exactly 2, STOP".
+- US-002: budget 2, `--expect-max 1`. Description: "fix exactly 2, STOP".
+- US-003: budget 1 (remainder), `--expect-max 0`. Description: "fix exactly 1, STOP".
+
+If the agent respects the STOP guidance, each story does its budgeted
+work. If the agent over-fixes on US-001 (removes 3 instead of 2), count
+drops to 2 → `--expect-max 3` still passes; US-002 then sees 2 remaining
+and only needs to remove 1 for `--expect-max 1` to pass; US-003 sees 1
+remaining and removes it. Same total work, uneven distribution. No
+correctness issue.
+
 ## Test coverage
 
 Integration tests that must exist by end of phase 1:
@@ -334,12 +455,20 @@ Integration tests that must exist by end of phase 1:
     `prd-no-failures` — PRD output for the default (per-file) mode.
 - **Per-finding, single-finding file**: `storySplitMode: "per-finding"`, file
   with one finding → PRD has one story with `--expect-max 0`.
-- **Per-finding, multi-finding file**: file with three findings → PRD has
-  three stories with acceptance criteria `--expect-max 2, 1, 0`.
+- **Per-finding, multi-finding file (N=1)**: file with three findings and
+  default `findingsPerStory: 1` → PRD has three stories with acceptance
+  criteria `--expect-max 2, 1, 0`. Descriptions instruct "fix 1, STOP".
+- **Per-finding with `findingsPerStory: N > 1`, remainder**: file with 7
+  findings and `findingsPerStory: 3` → PRD has 3 stories with
+  `--expect-max 4, 1, 0`. Story 3's description indicates budget 1
+  (remainder), not 3.
+- **Per-finding with `findingsPerStory: N > 1`, divisible**: file with 6
+  findings and `findingsPerStory: 3` → PRD has 2 stories, each budget 3,
+  with `--expect-max 3, 0`.
 - **Per-finding fallback**: check that never emits real findings (use an
   `AlwaysFailCheck` fixture) with `storySplitMode: "per-finding"`. Runner
   synthesizes one whole-file finding per failed file → one story per file
-  with `--expect-max 0`.
+  with `--expect-max 0`. Unaffected by `findingsPerStory`.
 - **Sequential enforcement**: running a multi-finding story's criterion out
   of order (story 3 before story 1) fails loudly (exit 1) with the expected
   "N > expect-max" style message.
@@ -347,8 +476,13 @@ Integration tests that must exist by end of phase 1:
   exit code and stderr message):
   - `storySplitMode: "per-finding"` + `prd.group` set.
   - `storySplitMode: "per-finding"` + `filesPerStory: 2`.
+  - `storySplitMode: "per-finding"` + `findingsPerStory: 0` (or negative,
+    or non-integer).
   - `storySplitMode: "per-finding"` + `expander` set.
   - Unknown `storySplitMode` value.
+- **Config validation warnings** (assert stderr warning, exit 0, behavior
+  unchanged):
+  - `findingsPerStory` set with `storySplitMode: "per-file"` (or absent).
 - **`--lint --expect-max N`**:
   - Exit 0 when findings.length ≤ N.
   - Exit 1 when findings.length > N (assert message/range/snippet for
@@ -356,6 +490,20 @@ Integration tests that must exist by end of phase 1:
   - Exit 2 for: `--fix` combination, zero or multiple `--checks`, zero or
     multiple `--files`, negative N, non-integer N, unknown check,
     check-not-enabled-for-mode, missing file, combination with `--output-prd`.
+- **`--lint --show first`**:
+  - Prints correct JSON for a file with multiple findings — first by
+    ascending `startLine`, ties by emit order.
+  - Prints `null` and exits 0 for a file with no findings.
+  - `snippet` field includes 1–2 non-blank lines of surrounding context
+    above/below the finding range, clipped at file boundaries. Assert
+    uniqueness within the file.
+  - Ordering deterministic across two runs on identical input.
+  - Widening does not affect `--expect-max` count on the same input
+    (independence test).
+  - Exit 2 for: `--fix` combination, `--expect-max` combination in one
+    call, `--output-prd` combination, zero or multiple `--checks`, zero
+    or multiple `--files`, `--show <bogus>`, unknown check,
+    check-not-enabled-for-mode, missing file.
 
 ## Non-goals (for now)
 
