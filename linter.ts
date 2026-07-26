@@ -908,7 +908,9 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             ? "Fix that occurrence."
             : `Fix ${fixCount} of the remaining occurrences.`;
 
-          const actionBlock = [
+          const defaultDescription = [
+            `${first.message} (${relFile})`,
+            "",
             "View the earliest remaining occurrence:",
             `  ${viewCmd}`,
             "",
@@ -918,7 +920,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
             `  ${verifyCmd}`,
           ].join("\n");
 
-          const contextText = checkPrd.userStoryDescription
+          const storyDescription = checkPrd.userStoryDescription
             ? applyPlaceholders(
                 Array.isArray(checkPrd.userStoryDescription)
                   ? checkPrd.userStoryDescription.join("\n")
@@ -932,9 +934,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
                 fixCount,
                 fp,
               )
-            : `${first.message} (${relFile})`;
-
-          const storyDescription = `${contextText}\n\n${actionBlock}`;
+            : defaultDescription;
 
           const mainCriteria = expectMax > 0
             ? `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}`
