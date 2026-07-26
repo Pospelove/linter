@@ -654,23 +654,12 @@ old "singleton unique fingerprint" specialization is gone. The only
 difference from a multi-instance story is that M=1, so K=1 is also
 M-K=0 for `--expect-max`.
 
-### Default: one story per fingerprint
+### Bundled stories (X > 1)
 
-When `findingsPerStory` is not set, each fingerprint produces exactly
-one story regardless of how many instances share it. The description
-says "Fix all N remaining occurrences" (or "Fix that occurrence" for
-N=1); the acceptance criterion is `--lint --finding <fp>` (implicit
-`--expect-max 0`). This is the sensible default under count-only
-semantics — the agent uses `--show first` in a loop until the count
-reaches zero, and there is nothing to be gained from pre-splitting the
-story into K identical sub-stories.
-
-### Chunking with `findingsPerStory` (opt-in)
-
-Set `findingsPerStory: X` to chunk a large fingerprint into
-`ceil(M / X)` stories of X instances each. Rare — useful when a
-fingerprint has hundreds of instances and per-story progress tracking
-matters more than story count.
+When `findingsPerStory: X` with X > 1, stories still target one
+fingerprint each (bundling across distinct fingerprints in one story is
+dropped along with the identity-based bundling path). The X value only
+increases how many instances each story is responsible for:
 
 - M findings of the same fingerprint → `ceil(M / X)` stories.
 - Story K's acceptance: `--expect-max max(M - K*X, 0)`.
@@ -678,10 +667,6 @@ matters more than story count.
   occurrence." The `--show first` command is unchanged; the agent runs
   it, fixes one, runs it again for the next, until the acceptance
   criterion passes.
-- The final story in the sequence may be responsible for fewer than X
-  instances (the remainder). Its `--expect-max 0` acceptance still holds.
 
-Legacy configs that set `findingsPerStory: 1` under the old "one story
-per finding" reading now produce M stories per duplicate-instance
-fingerprint. Drop the setting (or raise it) to fall back on the
-one-story-per-fingerprint default.
+The final story in the sequence may be responsible for fewer than X
+instances (the remainder). Its `--expect-max 0` acceptance still holds.

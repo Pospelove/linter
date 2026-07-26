@@ -17,7 +17,7 @@
     {
       "id": "US-002",
       "title": "Fix todo-check in src/mixed.txt",
-      "description": "regex violation (src/mixed.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --show first\n\nFix all 3 remaining occurrences.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ",
+      "description": "regex violation (src/mixed.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --show first\n\nFix 3 of the remaining occurrences.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL21peGVkLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
       ],
