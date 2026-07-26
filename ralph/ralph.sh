@@ -72,7 +72,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     
     # --yolo: Auto-accepts all actions
     # --prompt: Runs in non-interactive mode using the file content
-    OUTPUT=$(gemini --model gemini-3-flash-preview --yolo --prompt "$(cat "$PROMPT_FILE")" 2>&1 | tee /dev/stderr) || true
+    OUTPUT=$(gemini --model gemini-3-pro-preview --yolo --prompt "$(cat "$PROMPT_FILE")" 2>&1 | tee /dev/stderr) || true
   fi
   
   # Check for completion signal
