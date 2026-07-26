@@ -7,7 +7,7 @@ export class CrlfCheck extends BaseCheck {
     this.name = "CRLF";
   }
 
-  override async lint(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const content = await fs.readFile(file);
       if (content.includes("\r\n")) {
@@ -20,7 +20,7 @@ export class CrlfCheck extends BaseCheck {
     }
   }
 
-  override async fix(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const before = await fs.readFile(file);
       if (before.includes("\r\n")) {
