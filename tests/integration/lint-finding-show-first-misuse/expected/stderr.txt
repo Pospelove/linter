@@ -1,1 +1,0 @@
---show first cannot be combined with --expect-max (viewing is not verification).

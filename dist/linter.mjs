@@ -19089,7 +19089,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "1742ff7" : "unknown";
+var LINTER_COMMIT = true ? "8bef756" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19464,7 +19464,6 @@ var printHelp = () => {
   lines.push("  --files <p1,p2,...>   Use these exact files instead of the configured file source");
   lines.push("  --finding <f1,...>    Only verify these findings (comma-separated fingerprints)");
   lines.push("  --expect-max <N>      Maximum instances of finding allowed to remain (default: 0)");
-  lines.push("  --show first          With --finding <fp>: print the earliest remaining occurrence and exit 0");
   lines.push("  --no-download         Do not download tools if missing");
   lines.push("  --no-path             Do not search for tools in PATH");
   lines.push("  --output-prd [path]   Write a ralph-compatible PRD JSON to [path] after linting (requires --lint); defaults to prd.json");
@@ -19612,79 +19611,107 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     if (checkPrd.prdOnly) continue;
     if (checkPrd.storySplitMode === "per-finding") {
       const findingsPerStory = checkPrd.findingsPerStory ?? 1;
-      const byFingerprint = /* @__PURE__ */ new Map();
-      for (const entry of entries) {
-        for (const finding of entry.findings) {
-          const fp = finding.fingerprint;
-          let group = byFingerprint.get(fp);
-          if (!group) {
-            group = { file: entry.file, findings: [] };
-            byFingerprint.set(fp, group);
-          }
-          group.findings.push(finding);
-        }
-      }
-      const fingerprintOrder = [...byFingerprint.entries()].sort(([, a], [, b]) => {
-        const fileCmp = a.file.localeCompare(b.file);
-        if (fileCmp !== 0) return fileCmp;
-        const la = a.findings[0]?.startLine ?? 0;
-        const lb = b.findings[0]?.startLine ?? 0;
-        return la - lb;
-      });
-      const applyPlaceholders = (str2, first2, allFindings, relFile, k, totalStories, expectMax, fixCount, fp) => {
-        const res = str2.replace(/\{files?\}/g, relFile).replace(/\{fileCount\}/g, "1").replace(/\{check\}/g, checkName).replace(/\{findingCount\}/g, String(fixCount)).replace(/\{instanceIndex\}/g, String(k)).replace(/\{instanceCount\}/g, String(totalStories)).replace(/\{expectMax\}/g, String(expectMax)).replace(/\{startLine\}/g, String(first2.startLine || 1)).replace(/\{endLine\}/g, String(first2.endLine || first2.startLine || 1)).replace(/\{message\}/g, first2.message).replace(/\{snippet\}/g, first2.snippet || "").replace(/\{fingerprint\}/g, fp);
+      const filesPerStory = checkPrd.filesPerStory ?? 1;
+      const applyPlaceholdersFinding = (str2, findings, relFiles, instanceIndex, instanceCount, expectMax) => {
+        const first2 = findings[instanceIndex != null ? instanceIndex - 1 : 0];
+        if (!first2) return str2;
+        const res = str2.replace(/\{files?\}/g, relFiles.join(", ")).replace(/\{fileCount\}/g, String(relFiles.length)).replace(/\{check\}/g, checkName).replace(/\{findingCount\}/g, String(findings.length)).replace(/\{instanceIndex\}/g, instanceIndex != null ? String(instanceIndex) : "").replace(/\{instanceCount\}/g, instanceCount != null ? String(instanceCount) : "").replace(/\{expectMax\}/g, expectMax != null ? String(expectMax) : "").replace(/\{startLine\}/g, String(first2.startLine || 1)).replace(/\{endLine\}/g, String(first2.endLine || first2.startLine || 1)).replace(/\{message\}/g, first2.message).replace(/\{snippet\}/g, first2.snippet || "").replace(/\{fingerprint\}/g, first2.fingerprint || "");
         if (res.includes("{findings}")) {
-          const rendered = allFindings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
+          const rendered = findings.map((f) => `line ${f.startLine || "whole file"}: ${f.snippet || ""}`).join("\n");
           return res.replace(/\{findings\}/g, rendered);
         }
         return res;
       };
-      for (const [fp, group] of fingerprintOrder) {
-        const m = group.findings.length;
-        const totalStories = Math.ceil(m / findingsPerStory);
-        const relFile = relPath(group.file);
-        const first2 = group.findings[0];
-        for (let k = 1; k <= totalStories; k++) {
-          const remaining = m - (k - 1) * findingsPerStory;
-          const fixCount = Math.min(findingsPerStory, remaining);
-          const expectMax = Math.max(m - k * findingsPerStory, 0);
-          const defaultTitle = totalStories === 1 ? `Fix ${checkName} in ${relFile}` : `Fix ${checkName} in ${relFile} (${k} of ${totalStories})`;
-          const title = checkPrd.userStoryTitle ? applyPlaceholders(checkPrd.userStoryTitle, first2, group.findings, relFile, k, totalStories, expectMax, fixCount, fp) : defaultTitle;
-          const viewCmd = `${baseCommand} --lint --finding ${fp} --show first`;
-          const verifyCmd = `${baseCommand} --lint --finding ${fp}${expectMax > 0 ? ` --expect-max ${expectMax}` : ""}`;
-          const fixInstruction = fixCount === 1 ? "Fix that occurrence." : `Fix ${fixCount} of the remaining occurrences.`;
-          const defaultDescription = [
-            `${first2.message} (${relFile})`,
-            "",
-            "View the earliest remaining occurrence:",
-            `  ${viewCmd}`,
-            "",
-            fixInstruction,
-            "",
-            "Then verify:",
-            `  ${verifyCmd}`
-          ].join("\n");
-          const storyDescription = checkPrd.userStoryDescription ? applyPlaceholders(
-            Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription,
-            first2,
-            group.findings,
-            relFile,
-            k,
-            totalStories,
-            expectMax,
-            fixCount,
-            fp
-          ) : defaultDescription;
-          const mainCriteria = expectMax > 0 ? `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}` : `${baseCommand} --lint --finding ${fp}`;
-          const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-          pushStory(
-            title,
-            storyDescription,
-            [mainCriteria, ...additionalCriteria],
-            `Fingerprint: ${fp}`
-          );
+      const renderDefaultDescriptionFinding = (findings) => {
+        return findings.map((f) => {
+          const range = f.startLine ? f.endLine && f.endLine !== f.startLine ? `lines ${f.startLine}-${f.endLine}` : `line ${f.startLine}` : "whole file";
+          return `${f.message}
+Range: ${range}
+Snippet:
+${f.snippet || ""}`;
+        }).join("\n\n");
+      };
+      const renderMultiInstanceDescription = (findings, k, m) => {
+        const lines = findings.map((f) => f.startLine || "whole file");
+        const first2 = findings[k - 1];
+        if (!first2) return "";
+        const range = first2.startLine ? first2.endLine && first2.endLine !== first2.startLine ? `lines ${first2.startLine}-${first2.endLine}` : `line ${first2.startLine}` : "whole file";
+        return `Fix ONE remaining instance matching the snippet. At PRD generation time, ${m} instances existed at lines [${lines.join(", ")}]; ${k - 1} have already been fixed by prior stories.
+
+${first2.message}
+Range: ${range}
+Snippet:
+${first2.snippet || ""}`;
+      };
+      const globalFpFindings = /* @__PURE__ */ new Map();
+      for (const entry of entries) {
+        for (const finding of entry.findings) {
+          const fp = finding.fingerprint;
+          if (!globalFpFindings.has(fp)) globalFpFindings.set(fp, []);
+          globalFpFindings.get(fp).push({ file: entry.file, finding });
         }
       }
+      const emittedMultiInstance = /* @__PURE__ */ new Set();
+      let uniqueQueue = [];
+      const flushUniqueQueue = () => {
+        while (uniqueQueue.length > 0) {
+          const storyFindings = [];
+          const storyFiles = /* @__PURE__ */ new Set();
+          const storyFpList = [];
+          let j = 0;
+          while (j < uniqueQueue.length) {
+            const item = uniqueQueue[j];
+            if (!item) break;
+            if (storyFindings.length >= findingsPerStory) break;
+            if (!storyFiles.has(item.file) && storyFiles.size >= filesPerStory) break;
+            storyFindings.push(item.finding);
+            storyFiles.add(item.file);
+            storyFpList.push(item.finding.fingerprint);
+            uniqueQueue.splice(j, 1);
+          }
+          if (storyFindings.length === 0) break;
+          const relFiles = [...storyFiles].map(relPath).sort();
+          const fileCount = relFiles.length;
+          const findingCount = storyFindings.length;
+          const first2 = storyFindings[0];
+          const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, storyFindings, relFiles) : fileCount === 1 ? findingCount === 1 ? `Fix ${checkName} in ${relFiles[0]}:${first2?.startLine || 1}` : `Fix ${checkName} in ${relFiles[0]} (${findingCount} findings)` : `Fix ${checkName} in ${fileCount} files (${findingCount} findings)`;
+          const storyDescription = checkPrd.userStoryDescription ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, storyFindings, relFiles) : renderDefaultDescriptionFinding(storyFindings);
+          const mainCriteria = `${baseCommand} --lint --finding ${storyFpList.join(",")}`;
+          const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+          pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria], `Fingerprints: ${storyFpList.join(", ")}`);
+        }
+      };
+      for (const entry of entries) {
+        const fpsInFile = [...new Set(entry.findings.map((f) => f.fingerprint))];
+        for (const fp of fpsInFile) {
+          const allInstances = globalFpFindings.get(fp);
+          if (allInstances.length > 1) {
+            if (!emittedMultiInstance.has(fp) && allInstances[0] && allInstances[0].file === entry.file) {
+              emittedMultiInstance.add(fp);
+              const m = allInstances.length;
+              const instances = allInstances.map((i) => i.finding);
+              for (let k = 1; k <= m; k++) {
+                const item = allInstances[k - 1];
+                if (!item) continue;
+                const relFile = relPath(item.file);
+                const expectMax = m - k;
+                const title = checkPrd.userStoryTitle ? applyPlaceholdersFinding(checkPrd.userStoryTitle, instances, [relFile], k, m, expectMax) : `Fix ${checkName} in ${relFile} (instance ${k} of ${m})`;
+                const storyDescription = checkPrd.userStoryDescription ? applyPlaceholdersFinding(Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription, instances, [relFile], k, m, expectMax) : renderMultiInstanceDescription(instances, k, m);
+                const mainCriteria = `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}`;
+                pushStory(title, storyDescription, [mainCriteria, ...checkPrd.additionalAcceptanceCriteria || []], `Fingerprint: ${fp}`);
+              }
+            }
+          } else {
+            if (allInstances[0]) {
+              uniqueQueue.push({ file: entry.file, finding: allInstances[0].finding });
+            }
+          }
+        }
+        if (filesPerStory === 1) {
+          flushUniqueQueue();
+        }
+      }
+      flushUniqueQueue();
     } else {
       const filesPerStory = checkPrd.filesPerStory ?? 1;
       for (let i = 0; i < entries.length; i += filesPerStory) {
@@ -19761,19 +19788,6 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   const rawExpectMaxArg = expectMaxIndex !== -1 ? args[expectMaxIndex + 1] : null;
   const expectMaxArg = rawExpectMaxArg && !rawExpectMaxArg.startsWith("--") ? rawExpectMaxArg : "0";
   const expectMax = parseInt(expectMaxArg, 10);
-  const showIndex = args.indexOf("--show");
-  const rawShowArg = showIndex !== -1 ? args[showIndex + 1] : null;
-  const showArg = rawShowArg && !rawShowArg.startsWith("--") ? rawShowArg : null;
-  if (showIndex !== -1) {
-    if (showArg !== "first") {
-      console.error(`--show only supports "first" (got "${showArg ?? ""}").`);
-      process.exit(2);
-    }
-    if (findingArg === null) {
-      console.error("--show first requires --finding.");
-      process.exit(2);
-    }
-  }
   if (findingArg !== null) {
     if (filesArg !== null || checksFilter !== null || outputPrdPath !== null) {
       console.error("--finding is mutually exclusive with --files, --checks, and --output-prd.");
@@ -19795,16 +19809,6 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       if (fingerprints.length > 1 && expectMaxIndex !== -1) {
         console.error("--expect-max is only valid when --finding names a single fingerprint.");
         process.exit(2);
-      }
-      if (showArg === "first") {
-        if (fingerprints.length > 1) {
-          console.error("--show first requires --finding to name a single fingerprint.");
-          process.exit(2);
-        }
-        if (expectMaxIndex !== -1) {
-          console.error("--show first cannot be combined with --expect-max (viewing is not verification).");
-          process.exit(2);
-        }
       }
       let aggregateFail = false;
       const toolOptions2 = { shouldDownload, shouldSearchInPath, toolsDir };
@@ -19833,28 +19837,6 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
         const res = await check.lint(absoluteFile, deps2);
         const findings = await normalizeFindings(absoluteFile, check.name, res);
         const matchingFindings = findings.filter((f) => f.fingerprint === fp);
-        if (showArg === "first") {
-          const sorted2 = [...matchingFindings].sort((a, b) => {
-            const la = a.startLine ?? 0;
-            const lb = b.startLine ?? 0;
-            if (la !== lb) return la - lb;
-            return (a.snippet || "").localeCompare(b.snippet || "");
-          });
-          const first2 = sorted2[0];
-          if (first2) {
-            const range = first2.startLine ? first2.endLine && first2.endLine !== first2.startLine ? `${first2.startLine}-${first2.endLine}` : `${first2.startLine}` : "whole file";
-            const snippet = first2.snippet ?? "";
-            if (snippet.includes("\n")) {
-              console.log(`line ${range}:`);
-              console.log("```");
-              console.log(snippet);
-              console.log("```");
-            } else {
-              console.log(`line ${range}: ${snippet}`);
-            }
-          }
-          continue;
-        }
         const allowed = fingerprints.length === 1 ? expectMax : 0;
         if (matchingFindings.length > allowed) {
           aggregateFail = true;

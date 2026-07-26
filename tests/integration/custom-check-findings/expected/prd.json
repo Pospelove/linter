@@ -5,25 +5,25 @@
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix custom-findings in src/test.txt",
-      "description": "Custom finding 1 (src/test.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAxIn0 --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAxIn0",
+      "title": "Fix custom-findings in src/test.txt:1",
+      "description": "Custom finding 1\nRange: line 1\nSnippet:\nline 1",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAxIn0"
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Fingerprint: eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAxIn0"
+      "notes": "Fingerprints: eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAxIn0"
     },
     {
       "id": "US-002",
-      "title": "Fix custom-findings in src/test.txt",
-      "description": "Custom finding 2 (src/test.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAyIn0 --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAyIn0",
+      "title": "Fix custom-findings in src/test.txt:2",
+      "description": "Custom finding 2\nRange: line 2\nSnippet:\nline 2",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAyIn0"
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Fingerprint: eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAyIn0"
+      "notes": "Fingerprints: eyJjaGVjayI6ImN1c3RvbS1maW5kaW5ncyIsImZpbGUiOiJzcmMvdGVzdC50eHQiLCJzbmlwcGV0IjoibGluZSAyIn0"
     },
     {
       "id": "US-003",

@@ -5,8 +5,8 @@
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix todo-check in src/file1.txt (1 of 2)",
-      "description": "regex violation (src/file1.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --expect-max 1",
+      "title": "Fix todo-check in src/file1.txt (instance 1 of 2)",
+      "description": "Fix ONE remaining instance matching the snippet. At PRD generation time, 2 instances existed at lines [1, 2]; 0 have already been fixed by prior stories.\n\nregex violation\nRange: line 1\nSnippet:\nTODO SAME",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --expect-max 1"
       ],
@@ -16,10 +16,10 @@
     },
     {
       "id": "US-002",
-      "title": "Fix todo-check in src/file1.txt (2 of 2)",
-      "description": "regex violation (src/file1.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ",
+      "title": "Fix todo-check in src/file1.txt (instance 2 of 2)",
+      "description": "Fix ONE remaining instance matching the snippet. At PRD generation time, 2 instances existed at lines [1, 2]; 1 have already been fixed by prior stories.\n\nregex violation\nRange: line 2\nSnippet:\nTODO SAME",
       "acceptanceCriteria": [
-        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+        "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --expect-max 0"
       ],
       "priority": 2,
       "passes": false,
@@ -27,14 +27,14 @@
     },
     {
       "id": "US-003",
-      "title": "Fix todo-check in src/file2.txt",
-      "description": "regex violation (src/file2.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ",
+      "title": "Fix todo-check in src/file2.txt:1",
+      "description": "regex violation\nRange: line 1\nSnippet:\nTODO SAME",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Fingerprint: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
+      "notes": "Fingerprints: eyJjaGVjayI6InRvZG8tY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiJUT0RPIFNBTUUifQ"
     }
   ]
 }

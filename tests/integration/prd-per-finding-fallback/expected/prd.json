@@ -5,25 +5,25 @@
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix fail-check in src/file1.txt",
-      "description": "always-fail: this check always fails (src/file1.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiIifQ --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiIifQ",
+      "title": "Fix fail-check in src/file1.txt:1",
+      "description": "always-fail: this check always fails\nRange: whole file\nSnippet:\n",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiIifQ"
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Fingerprint: eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiIifQ"
+      "notes": "Fingerprints: eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUxLnR4dCIsInNuaXBwZXQiOiIifQ"
     },
     {
       "id": "US-002",
-      "title": "Fix fail-check in src/file2.txt",
-      "description": "always-fail: this check always fails (src/file2.txt)\n\nView the earliest remaining occurrence:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiIifQ --show first\n\nFix that occurrence.\n\nThen verify:\n  node <LINTER> --lint --finding eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiIifQ",
+      "title": "Fix fail-check in src/file2.txt:1",
+      "description": "always-fail: this check always fails\nRange: whole file\nSnippet:\n",
       "acceptanceCriteria": [
         "node <LINTER> --lint --finding eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiIifQ"
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Fingerprint: eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiIifQ"
+      "notes": "Fingerprints: eyJjaGVjayI6ImZhaWwtY2hlY2siLCJmaWxlIjoic3JjL2ZpbGUyLnR4dCIsInNuaXBwZXQiOiIifQ"
     }
   ]
 }
