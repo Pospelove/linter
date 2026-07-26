@@ -19001,7 +19001,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "f3f1209" : "unknown";
+var LINTER_COMMIT = true ? "b8a9b03" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19884,6 +19884,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const findings = res.findings || [];
       if (expectMax !== null) {
         if (findings.length <= expectMax) {
+          console.log(`Expected at most ${expectMax} finding(s), found ${findings.length}. If you're an AI agent fixing this step by step, you are OK to proceed.`);
           process.exit(0);
         } else {
           const PREVIEW_CAP = 3;

@@ -1264,6 +1264,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
 
       if (expectMax !== null) {
         if (findings.length <= expectMax) {
+          console.log(`Expected at most ${expectMax} finding(s), found ${findings.length}. If you're an AI agent fixing this step by step, you are OK to proceed.`);
           process.exit(0);
         } else {
           const PREVIEW_CAP = 3;
