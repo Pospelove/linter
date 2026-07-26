@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { BaseCheck, CheckResult } from "./base-check.js";
+import { BaseCheck, CheckResult, CheckFinding } from "./base-check.js";
 
 /**
  * Generic regex-based check, fully driven by options in linter-config.json.

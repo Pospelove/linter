@@ -19001,7 +19001,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "8412cda" : "unknown";
+var LINTER_COMMIT = true ? "c348941" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19304,7 +19304,8 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
         fail = true;
         for (const { res, checkName } of fileResults) {
           if (res.status === "fail" || res.status === "error") {
-            failedPairs.push({ file, checkName });
+            const finding = res.findings?.[0] ?? { message: res.output ?? "check failed", snippet: "" };
+            failedPairs.push({ file, checkName, finding });
           }
         }
       }
@@ -19547,69 +19548,82 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   if (perFindingPairs.length > 0) {
     const pushStory = pushStoryShared;
     const checkOrder = (checkEntries || []).map((e) => e.name);
-    const fileCheckMap = /* @__PURE__ */ new Map();
+    const perFileGroups = /* @__PURE__ */ new Map();
     for (const pair of perFindingPairs) {
-      const key = pair.file + "::" + pair.checkName;
-      if (!fileCheckMap.has(key)) fileCheckMap.set(key, []);
-      if (pair.finding) fileCheckMap.get(key).push(pair.finding);
+      let byCheck = perFileGroups.get(pair.file);
+      if (!byCheck) {
+        byCheck = /* @__PURE__ */ new Map();
+        perFileGroups.set(pair.file, byCheck);
+      }
+      let arr = byCheck.get(pair.checkName);
+      if (!arr) {
+        arr = [];
+        byCheck.set(pair.checkName, arr);
+      }
+      if (pair.finding) arr.push(pair.finding);
     }
-    const sortedKeys = Array.from(fileCheckMap.keys()).sort((a, b) => {
-      const [fileA, checkA] = a.split("::");
-      const [fileB, checkB] = b.split("::");
-      if (fileA !== fileB) return fileA.localeCompare(fileB);
-      let idxA = checkOrder.indexOf(checkA);
-      let idxB = checkOrder.indexOf(checkB);
-      if (idxA === -1) idxA = 9999;
-      if (idxB === -1) idxB = 9999;
-      return idxA - idxB;
-    });
-    for (const key of sortedKeys) {
-      const [file, check] = key.split("::");
-      const findings = fileCheckMap.get(key);
-      const M = findings.length;
-      const N = effectiveFindingsPerStory(check);
-      const S = Math.ceil(M / N);
-      const checkPrd = checkPrdMap[check] || {};
-      const relFile = relPath(file);
-      for (let K = 1; K <= S; K++) {
-        const Nk = Math.min(N, M - (K - 1) * N);
-        const expectMax = Math.max(0, M - K * N);
-        const startLine = findings[0]?.startLine;
-        const endLine = findings[0]?.endLine;
-        const snippet = findings[0]?.snippet || "";
-        const message = findings[0]?.message || "";
-        let title = "";
-        if (M === 1) {
-          title = startLine !== void 0 ? "Fix " + check + " in " + relFile + ":" + startLine : "Fix " + check + " in " + relFile;
-        } else if (S === 1 && M > 1) {
-          title = "Fix " + check + " in " + relFile + " (" + M + " findings)";
-        } else {
-          title = "Fix " + check + " in " + relFile + " (story " + K + " of " + S + "; " + Nk + " findings)";
+    const sortedFiles = Array.from(perFileGroups.keys()).sort((a, b) => a.localeCompare(b));
+    const checkOrderIdx = (name) => {
+      const i = checkOrder.indexOf(name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    for (const file of sortedFiles) {
+      const byCheck = perFileGroups.get(file);
+      const sortedChecks = Array.from(byCheck.keys()).sort((a, b) => checkOrderIdx(a) - checkOrderIdx(b));
+      for (const check of sortedChecks) {
+        const findings = byCheck.get(check);
+        const M = findings.length;
+        const N = effectiveFindingsPerStory(check);
+        const S = Math.ceil(M / N);
+        const checkPrd = checkPrdMap[check] || {};
+        const relFile = relPath(file);
+        for (let K = 1; K <= S; K++) {
+          const Nk = Math.min(N, M - (K - 1) * N);
+          const expectMax = Math.max(0, M - K * N);
+          const startLine = findings[0]?.startLine;
+          const endLine = findings[0]?.endLine;
+          const snippet = findings[0]?.snippet || "";
+          const message = findings[0]?.message || "";
+          let title = "";
+          if (M === 1) {
+            title = startLine !== void 0 ? "Fix " + check + " in " + relFile + ":" + startLine : "Fix " + check + " in " + relFile;
+          } else if (S === 1 && M > 1) {
+            title = "Fix " + check + " in " + relFile + " (" + M + " findings)";
+          } else {
+            title = "Fix " + check + " in " + relFile + " (story " + K + " of " + S + "; " + Nk + " findings)";
+          }
+          const workflowTemplate = "File:  {file}\nCheck: {check}\nFindings at PRD generation: {findingCount}. Fixed by prior stories: " + (K - 1) * N + ".\nThis story fixes exactly {storyBudget} finding(s). STOP after {storyBudget} iterations, even\nif more remain \u2014 later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly {storyBudget} times:\n  1. Locate the earliest remaining finding:\n       " + baseCommand + " --lint --checks {check} --files {file} --show first\n  2. Read only the affected range:\n       Read({file}, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nThen verify:\n  " + baseCommand + " --lint --checks {check} --files {file} --expect-max {expectMax}";
+          const applyPlaceholders = (str2) => {
+            return str2.replace(/\{file\}/g, relFile).replace(/\{files\}/g, relFile).replace(/\{fileCount\}/g, "1").replace(/\{check\}/g, check).replace(/\{findingCount\}/g, String(M)).replace(/\{storyCount\}/g, String(S)).replace(/\{storyIndex\}/g, String(K)).replace(/\{storyBudget\}/g, String(Nk)).replace(/\{expectMax\}/g, String(expectMax)).replace(/\{startLine\}/g, startLine !== void 0 ? String(startLine) : "").replace(/\{endLine\}/g, endLine !== void 0 ? String(endLine) : "").replace(/\{message\}/g, message).replace(/\{snippet\}/g, snippet).replace(/\{findings\}/g, JSON.stringify(findings)).replace(/\{workflow\}/g, workflowTemplate.replace(/\{file\}/g, relFile).replace(/\{check\}/g, check).replace(/\{findingCount\}/g, String(M)).replace(/\{storyBudget\}/g, String(Nk)).replace(/\{startLine\}/g, startLine !== void 0 ? String(startLine) : "").replace(/\{endLine\}/g, endLine !== void 0 ? String(endLine) : "").replace(/\{expectMax\}/g, String(expectMax)));
+          };
+          const rawDescription = Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription;
+          let storyDescription = "";
+          if (rawDescription) {
+            storyDescription = applyPlaceholders(rawDescription);
+          } else {
+            storyDescription = applyPlaceholders(workflowTemplate);
+          }
+          const mainCriteria = baseCommand + " --lint --checks " + check + " --files " + relFile + " --expect-max " + expectMax;
+          const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
+          pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
         }
-        const workflowTemplate = "File:  {file}\nCheck: {check}\nFindings at PRD generation: {findingCount}. Fixed by prior stories: " + (K - 1) * N + ".\nThis story fixes exactly {storyBudget} finding(s). STOP after {storyBudget} iterations, even\nif more remain \u2014 later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly {storyBudget} times:\n  1. Locate the earliest remaining finding:\n       " + baseCommand + " --lint --checks {check} --files {file} --show first\n  2. Read only the affected range:\n       Read({file}, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nThen verify:\n  " + baseCommand + " --lint --checks {check} --files {file} --expect-max {expectMax}";
-        const applyPlaceholders = (str2) => {
-          return str2.replace(/\{file\}/g, relFile).replace(/\{files\}/g, relFile).replace(/\{fileCount\}/g, "1").replace(/\{check\}/g, check).replace(/\{findingCount\}/g, String(M)).replace(/\{storyCount\}/g, String(S)).replace(/\{storyIndex\}/g, String(K)).replace(/\{storyBudget\}/g, String(Nk)).replace(/\{expectMax\}/g, String(expectMax)).replace(/\{startLine\}/g, startLine !== void 0 ? String(startLine) : "").replace(/\{endLine\}/g, endLine !== void 0 ? String(endLine) : "").replace(/\{message\}/g, message).replace(/\{snippet\}/g, snippet).replace(/\{findings\}/g, JSON.stringify(findings)).replace(/\{workflow\}/g, workflowTemplate.replace(/\{file\}/g, relFile).replace(/\{check\}/g, check).replace(/\{findingCount\}/g, String(M)).replace(/\{storyBudget\}/g, String(Nk)).replace(/\{startLine\}/g, startLine !== void 0 ? String(startLine) : "").replace(/\{endLine\}/g, endLine !== void 0 ? String(endLine) : "").replace(/\{expectMax\}/g, String(expectMax)));
-        };
-        const rawDescription = Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription;
-        let storyDescription = "";
-        if (rawDescription) {
-          storyDescription = applyPlaceholders(rawDescription);
-        } else {
-          storyDescription = applyPlaceholders(workflowTemplate);
-        }
-        const mainCriteria = baseCommand + " --lint --checks " + check + " --files " + relFile + " --expect-max " + expectMax;
-        const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
-        pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
       }
     }
   }
   if (perFilePairs.length > 0) {
-    const dedupedMap = /* @__PURE__ */ new Map();
+    const dedupedByCheck = /* @__PURE__ */ new Map();
     for (const pair of perFilePairs) {
-      const key = pair.checkName + "::" + pair.file;
-      if (!dedupedMap.has(key)) dedupedMap.set(key, pair);
+      let byFile = dedupedByCheck.get(pair.checkName);
+      if (!byFile) {
+        byFile = /* @__PURE__ */ new Map();
+        dedupedByCheck.set(pair.checkName, byFile);
+      }
+      if (!byFile.has(pair.file)) byFile.set(pair.file, pair);
     }
-    let failedPairs2 = Array.from(dedupedMap.values());
+    const failedPairs2 = [];
+    for (const byFile of dedupedByCheck.values()) {
+      for (const pair of byFile.values()) failedPairs2.push(pair);
+    }
     const byCheck = /* @__PURE__ */ new Map();
     for (const { file, checkName } of failedPairs2) {
       if (!byCheck.has(checkName)) byCheck.set(checkName, []);

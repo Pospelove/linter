@@ -49,6 +49,10 @@ interface PrdConfig {
   project?: string;
   branchName?: string;
   description?: string;
+  storySplitMode?: "per-file" | "per-finding";
+  findingsPerStory?: number;
+  group?: string;
+  filesPerStory?: number;
 }
 
 /* global __LINTER_VERSION__, __LINTER_COMMIT__ */
@@ -433,7 +437,8 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
         fail = true;
         for (const { res, checkName } of fileResults) {
           if (res.status === "fail" || res.status === "error") {
-            failedPairs.push({ file, checkName });
+            const finding = res.findings?.[0] ?? { message: res.output ?? "check failed", snippet: "" };
+            failedPairs.push({ file, checkName, finding });
           }
         }
       }
@@ -760,26 +765,34 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
   if (perFindingPairs.length > 0) {
     const pushStory = pushStoryShared;
     const checkOrder = (checkEntries || []).map((e) => e.name);
-    const fileCheckMap = new Map();
+    // Nested map: file -> check -> findings[]. Avoids string-key collisions when
+    // file paths or check names contain any delimiter.
+    const perFileGroups = new Map<string, Map<string, import("./checks/base-check.js").CheckFinding[]>>();
     for (const pair of perFindingPairs) {
-      const key = pair.file + "::" + pair.checkName;
-      if (!fileCheckMap.has(key)) fileCheckMap.set(key, []);
-      if (pair.finding) fileCheckMap.get(key).push(pair.finding);
+      let byCheck = perFileGroups.get(pair.file);
+      if (!byCheck) {
+        byCheck = new Map();
+        perFileGroups.set(pair.file, byCheck);
+      }
+      let arr = byCheck.get(pair.checkName);
+      if (!arr) {
+        arr = [];
+        byCheck.set(pair.checkName, arr);
+      }
+      if (pair.finding) arr.push(pair.finding);
     }
-    const sortedKeys = Array.from(fileCheckMap.keys()).sort((a, b) => {
-      const [fileA, checkA] = a.split("::");
-      const [fileB, checkB] = b.split("::");
-      if (fileA !== fileB) return fileA.localeCompare(fileB);
-      let idxA = checkOrder.indexOf(checkA);
-      let idxB = checkOrder.indexOf(checkB);
-      if (idxA === -1) idxA = 9999;
-      if (idxB === -1) idxB = 9999;
-      return idxA - idxB;
-    });
 
-    for (const key of sortedKeys) {
-      const [file, check] = key.split("::");
-      const findings = fileCheckMap.get(key);
+    const sortedFiles = Array.from(perFileGroups.keys()).sort((a, b) => a.localeCompare(b));
+    const checkOrderIdx = (name: string) => {
+      const i = checkOrder.indexOf(name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+
+    for (const file of sortedFiles) {
+      const byCheck = perFileGroups.get(file)!;
+      const sortedChecks = Array.from(byCheck.keys()).sort((a, b) => checkOrderIdx(a) - checkOrderIdx(b));
+      for (const check of sortedChecks) {
+      const findings = byCheck.get(check)!;
       const M = findings.length;
       const N = effectiveFindingsPerStory(check);
       const S = Math.ceil(M / N);
@@ -805,7 +818,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
         
         const workflowTemplate = "File:  {file}\nCheck: {check}\nFindings at PRD generation: {findingCount}. Fixed by prior stories: " + ((K - 1) * N) + ".\nThis story fixes exactly {storyBudget} finding(s). STOP after {storyBudget} iterations, even\nif more remain — later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly {storyBudget} times:\n  1. Locate the earliest remaining finding:\n       " + baseCommand + " --lint --checks {check} --files {file} --show first\n  2. Read only the affected range:\n       Read({file}, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nThen verify:\n  " + baseCommand + " --lint --checks {check} --files {file} --expect-max {expectMax}";
 
-        const applyPlaceholders = (str) => {
+        const applyPlaceholders = (str: string) => {
           return str
             .replace(/\{file\}/g, relFile)
             .replace(/\{files\}/g, relFile)
@@ -845,17 +858,26 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
         const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
         pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
       }
+      }
     }
   }
 
   if (perFilePairs.length > 0) {
-    // Legacy per-file mode
-    const dedupedMap = new Map();
+    // Legacy per-file mode. Nested map (check -> file -> pair) keeps the dedupe
+    // safe regardless of what characters appear in file paths or check names.
+    const dedupedByCheck = new Map<string, Map<string, typeof perFilePairs[number]>>();
     for (const pair of perFilePairs) {
-      const key = pair.checkName + "::" + pair.file;
-      if (!dedupedMap.has(key)) dedupedMap.set(key, pair);
+      let byFile = dedupedByCheck.get(pair.checkName);
+      if (!byFile) {
+        byFile = new Map();
+        dedupedByCheck.set(pair.checkName, byFile);
+      }
+      if (!byFile.has(pair.file)) byFile.set(pair.file, pair);
     }
-    let failedPairs = Array.from(dedupedMap.values());
+    const failedPairs: (typeof perFilePairs[number])[] = [];
+    for (const byFile of dedupedByCheck.values()) {
+      for (const pair of byFile.values()) failedPairs.push(pair);
+    }
 
   // Group by check name, sort files within each check alphabetically
   const byCheck = new Map<string, string[]>();
@@ -1256,7 +1278,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
           process.exit(0);
         }
 
-        findings.sort((a, b) => (a.startLine ?? 0) - (b.startLine ?? 0));
+        findings.sort((a: CheckFinding, b: CheckFinding) => (a.startLine ?? 0) - (b.startLine ?? 0));
 
         let fileLines: string[] = [];
         try {
