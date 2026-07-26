@@ -1,0 +1,30 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": {
+        "export": "AllFilesSource"
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "my-check",
+      "export": "RegexCheck",
+      "modes": [
+        "manual"
+      ],
+      "options": {
+        "extensions": [
+          ".ts"
+        ],
+        "pattern": "FAIL",
+        "patternFlags": "g",
+        "message": "Found FAIL"
+      }
+    }
+  ],
+  "prd": {
+    "storySplitMode": "per-finding",
+    "findingsPerStory": 1
+  }
+}

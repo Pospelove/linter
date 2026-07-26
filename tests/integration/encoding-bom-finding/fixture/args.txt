@@ -1,0 +1,1 @@
+--lint --mode manual --show first --checks encoding --files src/a.txt

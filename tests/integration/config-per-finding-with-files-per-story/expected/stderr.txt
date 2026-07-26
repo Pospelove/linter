@@ -1,0 +1,1 @@
+per-finding + filesPerStory != 1 is not allowed

@@ -286,15 +286,48 @@ RegexCheck:
 
 ---
 
-## Phase 3 — Follow-ups (open list)
+## Phase 3 — Follow-ups (shipped)
 
-Not planned in advance. Likely candidates once phase 2 is in use:
+Landed after Phase 2:
 
-- Migrate `tsc-check` to emit one finding per compiler diagnostic.
-- Migrate `encoding-check` / `crlf-check` to emit one finding per offending
-  line.
-- Ralph runner integration: fold the workflow script into ralph's per-story
-  loop so `--show first` is invoked automatically.
-- `--show all` mode for debugging (prints every finding as a JSON array).
-- `--json` output for `--lint` (not just `--show`).
+- `tsc-check` emits one `CheckFinding` per compiler diagnostic; the
+  human-readable `output` string is byte-identical to before, so no
+  existing snapshot moves.
+- `crlf-check` emits one finding per line that ends in `\r`; `output`
+  remains the static string `contains CRLF line endings`.
+- `encoding-check` emits an explicit finding at line 1 for BOMs, and one
+  finding per offending line in ASCII-only mode. Whole-file classifiers
+  (invalid UTF-8, wrong encoding) still rely on the runner's invariant to
+  synthesize a single finding from `output`.
+- `--show all` mode: prints a JSON array of every finding, each entry the
+  same shape as `--show first` (with per-finding widening). Prints `[]`
+  when the file has zero findings.
+- `--json` for `--lint`: emits one structured JSON blob to stdout with
+  `files[]` (per-file per-check results including `findings[]`) and
+  `summary` counts. Informational logs are diverted to stderr so stdout
+  stays parseable. Rejects `--fix`, `--expect-max`, `--show`, and
+  `--output-prd`.
+- Ralph runner integration: `ralph/CLAUDE.md` and `ralph/prompt.md` gained
+  a `Per-finding stories` section that instructs the runner to re-query
+  `--show first` on every iteration and respect the story's `STOP after N`
+  bound.
+
+Test fixtures added: `lint-show-all-basic`, `lint-show-all-empty`,
+`lint-show-all-bogus`, `lint-json-basic`, `lint-json-misuse-fix`,
+`lint-json-misuse-show`, `crlf-per-finding-show-all`,
+`encoding-bom-finding`.
+
+## Phase 4 — Follow-ups (open list)
+
+Not planned in advance. Likely candidates once Phase 3 is in use:
+
+- Migrate remaining whole-file encoding-check failure modes (invalid
+  UTF-8, wrong-encoding classifiers) to include byte-offset -> line-number
+  info so they emit precise findings instead of relying on the invariant
+  synthesizer.
+- `--json` schema versioning: freeze the shape and bump a `schemaVersion`
+  field.
+- `--expect-max` on multiple `--checks` / `--files` pairs (currently
+  restricted to one pair).
+- `--show <mode>` on multi-file input (currently one pair).
 

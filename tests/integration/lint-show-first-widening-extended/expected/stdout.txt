@@ -1,0 +1,3 @@
+Mode: manual | Source: All tracked files | Checks: test-regex
+All tracked files: 1 file(s)
+{"startLine":1,"endLine":1,"snippet":"L1\\nL2\\nFAIL\\nL4\\nL5\\n\\nL1\\nL2\\nFAIL\\nL4\\nL5\\nL6","message":"Found FAIL"}

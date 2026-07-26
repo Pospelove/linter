@@ -12,10 +12,6 @@ import { BaseCheck, CheckResult } from "./base-check.js";
  *   LINTER_FILE              — absolute path to the file being checked
  *   LINTER_REPO_ROOT         — absolute path to the repo root
  *   LINTER_MODE              — "lint" or "fix"
- *   LINTER_ENTRY_ID          — entry identifier (e.g. "data.json[3]")
- *   LINTER_ENTRY_SOURCE_FILE — real file on disk (differs from LINTER_FILE
- *                              when a virtual entry/expander is in use)
- *   LINTER_ENTRY_METADATA    — JSON-serialised entry.metadata object
  *
  * Exit-code protocol
  *   lint:  0 = pass  |  1 = fail  |  other = error
@@ -62,8 +58,8 @@ export class CustomCheck extends BaseCheck {
     this.name = name || `Custom (${this.#lintCommand})`;
   }
 
-  override async lint(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
-    const env = this.#buildEnv(file, "lint", entry);
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
+    const env = this.#buildEnv(file, "lint");
     const { code, output } = await this.#run(this.#lintCommand!, env);
 
     if (code === 0) return { status: "pass" };
@@ -71,7 +67,7 @@ export class CustomCheck extends BaseCheck {
     return { status: "error", output };
   }
 
-  override async fix(file: string, _deps: Record<string, unknown>, entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     if (!this.#fixCommand) {
       return { status: "error", output: "CustomCheck: no fixCommand configured" };
     }
@@ -84,7 +80,7 @@ export class CustomCheck extends BaseCheck {
       return { status: "error", output: `cannot read file before fix: ${message}` };
     }
 
-    const env = this.#buildEnv(file, "fix", entry);
+    const env = this.#buildEnv(file, "fix");
     const { code, output } = await this.#run(this.#fixCommand, env);
 
     if (code !== 0) return { status: "error", output };
@@ -100,15 +96,12 @@ export class CustomCheck extends BaseCheck {
     return before.equals(after) ? { status: "pass" } : { status: "fixed" };
   }
 
-  #buildEnv(file: string, mode: string, entry: import("../entries/base-entry.js").BaseEntry | null): NodeJS.ProcessEnv {
+  #buildEnv(file: string, mode: string): NodeJS.ProcessEnv {
     return {
       ...process.env,
       LINTER_FILE: file,
       LINTER_REPO_ROOT: this.repoRoot,
       LINTER_MODE: mode,
-      LINTER_ENTRY_ID: entry?.id ?? file,
-      LINTER_ENTRY_SOURCE_FILE: entry?.sourceFile ?? file,
-      LINTER_ENTRY_METADATA: JSON.stringify(entry?.metadata ?? {}),
     };
   }
 
@@ -142,8 +135,7 @@ export class CustomCheck extends BaseCheck {
       description:
         "Delegates lint and fix to user-provided shell commands. " +
         "File details are passed via environment variables " +
-        "(LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE, LINTER_ENTRY_ID, " +
-        "LINTER_ENTRY_SOURCE_FILE, LINTER_ENTRY_METADATA). " +
+        "(LINTER_FILE, LINTER_REPO_ROOT, LINTER_MODE). " +
         "Exit codes: lint 0=pass, 1=fail, other=error; fix 0=pass/fixed (auto-detected), other=error.",
       options:
         "command — shell command for both modes; " +

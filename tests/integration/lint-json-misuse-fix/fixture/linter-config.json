@@ -1,0 +1,8 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": { "export": "AllFilesSource" }
+    }
+  },
+  "checks": []
+}

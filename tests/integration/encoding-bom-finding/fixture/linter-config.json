@@ -1,0 +1,18 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": { "export": "AllFilesSource" }
+    }
+  },
+  "checks": [
+    {
+      "name": "encoding",
+      "export": "EncodingCheck",
+      "modes": ["manual"],
+      "options": {
+        "extensions": [".txt"],
+        "encoding": "utf-8"
+      }
+    }
+  ]
+}

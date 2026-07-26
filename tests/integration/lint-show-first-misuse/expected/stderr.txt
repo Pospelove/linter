@@ -1,0 +1,1 @@
+--show requires exactly one --checks and exactly one --files

@@ -26,10 +26,6 @@ import { AllFilesSource } from "./file-sources/all-files-source.js";
 import { StagedFilesSource } from "./file-sources/staged-files-source.js";
 import { DiffBaseSource } from "./file-sources/diff-base-source.js";
 
-// --- expanders ---
-import { FileExpander } from "./expanders/file-expander.js";
-import { JsonArrayExpander } from "./expanders/json-array-expander.js";
-
 export const builtinChecks = {
   CrlfCheck,
   EncodingCheck,
@@ -53,13 +49,7 @@ export const builtinFileSources = {
   DiffBaseSource,
 };
 
-export const builtinExpanders = {
-  FileExpander,
-  JsonArrayExpander,
-};
-
 export const builtinRegistry = {
   ...builtinChecks,
   ...builtinFileSources,
-  ...builtinExpanders,
 };

@@ -1,0 +1,8 @@
+Mode: manual | Source: All tracked files | Checks: test-regex
+All tracked files: 1 file(s)
+Found FAIL
+line 1
+FAIL\nFAIL
+Found FAIL
+line 1
+FAIL\nFAIL

@@ -1,0 +1,3 @@
+[FAIL] src/a.ts [my-check]
+  Found FAIL (1 hit(s)):
+  line 1: FAIL

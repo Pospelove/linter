@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { BaseCheck, CheckResult } from "./base-check.js";
+import { BaseCheck, CheckResult, CheckFinding } from "./base-check.js";
 
 export class CrlfCheck extends BaseCheck {
   constructor(repoRoot: string, options: Record<string, unknown> = {}) {
@@ -7,11 +7,25 @@ export class CrlfCheck extends BaseCheck {
     this.name = "CRLF";
   }
 
-  override async lint(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+  override async lint(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const content = await fs.readFile(file);
       if (content.includes("\r\n")) {
-        return { status: "fail", output: "contains CRLF line endings" };
+        const findings: CheckFinding[] = [];
+        const text = content.toString("utf-8");
+        const lines = text.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]!;
+          if (line.endsWith("\r")) {
+            findings.push({
+              message: "contains CRLF line ending",
+              snippet: line.slice(0, -1),
+              startLine: i + 1,
+              endLine: i + 1,
+            });
+          }
+        }
+        return { status: "fail", output: "contains CRLF line endings", findings };
       }
       return { status: "pass" };
     } catch (err: unknown) {
@@ -20,7 +34,7 @@ export class CrlfCheck extends BaseCheck {
     }
   }
 
-  override async fix(file: string, _deps: Record<string, unknown>, _entry: import("../entries/base-entry.js").BaseEntry | null = null): Promise<CheckResult> {
+  override async fix(file: string, _deps: Record<string, unknown>): Promise<CheckResult> {
     try {
       const before = await fs.readFile(file);
       if (before.includes("\r\n")) {

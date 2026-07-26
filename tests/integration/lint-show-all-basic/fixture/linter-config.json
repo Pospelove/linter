@@ -1,0 +1,20 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": { "export": "AllFilesSource" }
+    }
+  },
+  "checks": [
+    {
+      "name": "test-regex",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": {
+        "extensions": [".ts"],
+        "pattern": "FAIL",
+        "patternFlags": "g",
+        "message": "Found FAIL"
+      }
+    }
+  ]
+}
