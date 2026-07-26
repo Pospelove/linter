@@ -1,137 +1,66 @@
 {
-  "project": "Project",
-  "branchName": "ralph/lint-fixes",
-  "description": "Fix outstanding lint issues",
+  "project": "Per-finding workflow",
+  "branchName": "ralph/per-finding-workflow",
+  "description": "Implement the per-finding workflow spec described in docs/per-finding-workflow.md, following the two-phase plan in docs/per-finding-workflow-plan.md.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/ai-prompt-check.ts, checks/always-fail-check.ts, checks/base-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
+      "title": "Phase 1 — Delete virtual entries and expanders",
+      "description": "As a maintainer, I need to remove the entries/expanders abstraction from the linter so subsequent per-finding runtime work lands on a smaller surface.\nThis is a standalone commit with no new features. Every existing integration test must pass unchanged; this isolates a large deletion diff from the per-finding runtime that follows.\n\nScope:\n- Delete entries/base-entry.ts, entries/file-entry.ts, entries/json-array-entry.ts.\n- Delete expanders/base-expander.ts, expanders/file-expander.ts, expanders/json-array-expander.ts.\n- checks/base-check.ts: remove the expander field, remove expand() and setExpander(), remove supportsInMemory / lintInMemory / fixInMemory / lintAndFixInMemory.\n- registry.ts: remove builtinExpanders export and the expander section from --help.\n- linter.ts: replace runEntryLint / runEntryFix helpers with direct check.lint(file, ...) / check.fix(file, ...) calls; remove entry expansion loops so every check receives whole file paths.\n- Config loader: reject any 'expander' block in linter-config.json at load with message '<check>: \\'expander\\' is no longer supported. See docs/per-finding-workflow.md.' and exit 2.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/ai-prompt-check.ts,checks/always-fail-check.ts,checks/base-check.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
+        "yarn test — all existing integration tests pass unchanged (no snapshot updates).",
+        "grep -rn 'expander\\|Entry\\|Expander' --include='*.ts' returns only test-fixture matches and the config-load error string.",
+        "yarn build succeeds and dist/linter.mjs is committed alongside the source change.",
+        "No files remain under entries/ or expanders/.",
+        "checks/base-check.ts no longer references expander, expand, setExpander, supportsInMemory, lintInMemory, fixInMemory, or lintAndFixInMemory.",
+        "registry.ts no longer exports builtinExpanders and --help output no longer mentions expanders.",
+        "linter.ts no longer references runEntryLint or runEntryFix; checks are invoked directly with whole file paths.",
+        "Loading a linter-config.json that declares an 'expander' block exits 2 with the spec's error message on stderr.",
+        "Commit is standalone: no per-finding runtime, no new CLI flags, no new config keys, no new fixtures."
       ],
       "priority": 1,
-      "passes": true,
-      "notes": ""
+      "passes": false,
+      "notes": "Companion spec: docs/per-finding-workflow.md. Detailed checklist: docs/per-finding-workflow-plan.md#phase-1--delete-virtual-entries--expanders. If any behaviour disagrees with the spec, the spec wins — update the plan md, not the spec."
     },
     {
       "id": "US-002",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/check-utils.ts, checks/clang-format-check.ts, checks/codegen-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
+      "title": "Phase 2 — Per-finding runtime (types, runner, CLI, config, PRD gen, RegexCheck, tests)",
+      "description": "As a maintainer, I need to implement the per-finding runtime end-to-end in one cohesive commit: findings type, runner invariant, --expect-max and --show CLI modes, config keys, PRD generation for per-finding mode, RegexCheck migration, and every integration test the spec's Test Coverage section names.\n\nScope (see docs/per-finding-workflow-plan.md#phase-2--per-finding-runtime for the full checklist):\n- Types: declare interface CheckFinding { message: string; snippet: string; startLine?: number; endLine?: number; } in checks/base-check.ts; extend CheckResult with optional findings?: CheckFinding[].\n- Runner: preflight-grep for existing checks that return pass with an output shape; enforce universal invariant (status pass ⇔ findings.length == 0); synthesize a single finding on fail/error when the check omits one; populate empty snippet from startLine/endLine (display only); widen failedPairs to Array<{ file, checkName, finding }>.\n- CLI --expect-max <N>: --lint only; exactly one --checks and one --files; reject combos with --fix, --output-prd, --show; reject negative or non-integer N; exit 0 when findings ≤ N, exit 1 when >, exit 2 for unknown check / check-not-in-mode / missing file; exit-1 output lists remaining findings (message + line range + snippet).\n- CLI --show <mode>: --lint only; only accepted mode is 'first' (others exit 2, reserved); exactly one --checks and one --files; reject combos with --fix, --expect-max, --output-prd; output one line of JSON { startLine, endLine, snippet, message } or the literal null when zero findings, exit 0 in both cases; deterministic ordering (ascending startLine, then check's original emit order); implement the snippet widening algorithm exactly (2+2 baseline, extend by 1+1 until unique, cap at 20+20, include \"unique\": false at cap); widening is scoped to --show output only and never affects count or --expect-max.\n- Config loader: add prd.storySplitMode ('per-file' | 'per-finding', default 'per-file') and prd.findingsPerStory (positive integer, default 1); hard errors (exit 2) for unknown storySplitMode value, per-finding + prd.group, per-finding + filesPerStory != 1, per-finding + findingsPerStory <= 0 or non-integer; load-time warning (stderr, exit 0) when findingsPerStory is set with storySplitMode absent or per-file.\n- PRD generation: per-file mode dedupes multiple findings per (file, check) back to one story before applying filesPerStory (byte-identical output to today for every current fixture); per-finding mode groups findings by (check, file), for each group with M findings emits S = ceil(M/N) ordered stories K = 1..S with budget Nₖ = min(N, M - (K-1)*N) and acceptance criterion <baseCommand> --lint --checks <check> --files <file> --expect-max <max(0, M - K*N)>; PRD ordering: files alphabetical, checks in config order, stories in K order.\n- Title generator: M == 1 → 'Fix <check> in <file>:<startLine>' (fall back to 'Fix <check> in <file>' if no line info); S == 1 && M > 1 → 'Fix <check> in <file> (M findings)'; S > 1 → 'Fix <check> in <file> (story K of S; Nₖ findings)'.\n- Description generator: emit the spec's default workflow body verbatim with substituted <file>, <check>, M, K, N, Nₖ, and <max(0, M - K*N)>.\n- Template placeholders: keep {file}, {files}, {fileCount}, {check}; add {findingCount}, {storyCount}, {storyIndex}, {storyBudget}, {expectMax}, {startLine}, {endLine}, {message}, {snippet}, {findings}, {workflow}.\n- RegexCheck migration: emit one CheckFinding per regex hit (message = configured message, snippet = matched line, startLine = endLine = hit's line number); keep the existing output string ('N hit(s):\\n  line 1: ...') byte-identical; run a byte-identity gate (yarn test --grep regex-process-env-ban with zero diff) immediately after the change.",
       "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/check-utils.ts,checks/clang-format-check.ts,checks/codegen-check.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
+        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/base-check.ts,checks/regex-check.ts,linter.ts",
+        "checks/base-check.ts declares interface CheckFinding { message: string; snippet: string; startLine?: number; endLine?: number; } and CheckResult has an optional findings?: CheckFinding[] field.",
+        "Runner enforces the universal invariant: any check that returns status pass with a non-empty findings array is treated as a runner error; any fail/error without findings gets a synthesized [{ message: res.output ?? 'check failed', snippet: '' }].",
+        "Runner populates empty snippet from startLine/endLine by reading the file range for display; count semantics never depend on the snippet.",
+        "failedPairs is Array<{ file, checkName, finding }> with finding always populated.",
+        "--expect-max <N> is accepted only with --lint, requires exactly one --checks and exactly one --files, rejects negative or non-integer N, and rejects combinations with --fix, --output-prd, and --show (each misuse → exit 2).",
+        "--expect-max <N> exits 0 when findings.length ≤ N, exit 1 when >, exit 2 for unknown check / check-not-in-mode / missing file. Exit-1 output lists remaining findings (message + line range + snippet).",
+        "--show <mode> is accepted only with --lint, requires exactly one --checks and one --files, and rejects combinations with --fix, --expect-max, and --output-prd (each misuse → exit 2). Only accepted value is 'first'; any other value → exit 2.",
+        "--show first prints one line of JSON { startLine, endLine, snippet, message } for the earliest finding, or the literal null when zero findings; exit 0 in both cases. Findings are ordered by ascending startLine with ties broken by the check's original emit order; two runs of the same input produce byte-identical output.",
+        "Snippet widening: starts at 2 lines above and 2 below clipped at file boundaries; extends by 1+1 until unique with cap at 20+20; when uniqueness is not reached at the cap the JSON includes \"unique\": false and the snippet is the maximally widened window. Widening never affects on-disk snippet, count, or --expect-max.",
+        "Config loader accepts prd.storySplitMode ('per-file' | 'per-finding', default 'per-file') and prd.findingsPerStory (positive integer, default 1).",
+        "Config loader exits 2 for: unknown storySplitMode value (stderr lists valid values); per-finding + prd.group; per-finding + filesPerStory != 1; per-finding + findingsPerStory <= 0 or non-integer.",
+        "Config loader emits stderr warning (exit 0) 'findingsPerStory is ignored when storySplitMode is not per-finding' when findingsPerStory is set with storySplitMode absent or 'per-file'.",
+        "PRD per-file mode dedupes multiple findings per (file, check) back to one story before applying filesPerStory; all existing PRD fixture snapshots (prd-single-file-multi-hit, prd-two-files-two-stories, prd-no-failures, …) remain byte-identical.",
+        "PRD per-finding mode groups findings by (check, file) and, for M findings with N = findingsPerStory, emits S = ceil(M/N) ordered stories K = 1..S with budget Nₖ = min(N, M - (K-1)*N) and acceptance criterion '<baseCommand> --lint --checks <check> --files <file> --expect-max <max(0, M - K*N)>'.",
+        "PRD ordering: files alphabetical; within a file, checks in config order; within (check, file), stories in K order.",
+        "Title generator: M == 1 → 'Fix <check> in <file>:<startLine>' (fallback 'Fix <check> in <file>' without line info); S == 1 && M > 1 → 'Fix <check> in <file> (M findings)'; S > 1 → 'Fix <check> in <file> (story K of S; Nₖ findings)'.",
+        "Description generator emits the spec's default workflow body verbatim with substituted <file>, <check>, M, K, N, Nₖ, and <max(0, M - K*N)>.",
+        "Template placeholders {findingCount}, {storyCount}, {storyIndex}, {storyBudget}, {expectMax}, {startLine}, {endLine}, {message}, {snippet}, {findings}, {workflow} are supported alongside the existing {file}, {files}, {fileCount}, {check}.",
+        "RegexCheck emits one CheckFinding per regex hit with message = configured message, snippet = matched line, startLine = endLine = hit's line number; the existing 'N hit(s):\\n  line 1: ...' output string is byte-identical.",
+        "Byte-identity gate: yarn test --grep regex-process-env-ban passes with zero snapshot diff immediately after the RegexCheck change.",
+        "New integration fixtures exist and pass: per-finding-single, per-finding-multi-n1, per-finding-multi-nk-remainder, per-finding-multi-nk-divisible, per-finding-fallback, per-finding-sequential-drift.",
+        "New config-validation fixtures exist and pass: config-storysplit-unknown, config-per-finding-with-group, config-per-finding-with-files-per-story, config-findings-per-story-invalid, config-findings-per-story-warning.",
+        "New --expect-max fixtures exist and pass: lint-expect-max-pass, lint-expect-max-fail, lint-expect-max-misuse (one fixture per: --fix combo, 0 or 2 --checks, 0 or 2 --files, negative N, non-integer N, combo with --output-prd, combo with --show, unknown check, check-not-in-mode, missing file).",
+        "New --show first fixtures exist and pass: lint-show-first-json, lint-show-first-null, lint-show-first-widening-initial, lint-show-first-widening-extended, lint-show-first-widening-capped, lint-show-first-determinism, lint-show-first-misuse (one fixture per: --fix combo, --expect-max combo, --output-prd combo, 0 or 2 --checks, 0 or 2 --files, --show bogus, unknown check, check-not-in-mode, missing file).",
+        "New RegexCheck fixture exists and passes: regex-emits-findings (asserts CheckFinding[] is populated on a failing file).",
+        "yarn test — every existing integration test still passes without snapshot updates. Every existing check (tsc, encoding, always-fail, ai-prompt, firecrawl, composite, custom, crlf) runs unchanged; only RegexCheck source is touched among the checks.",
+        "yarn build succeeds and dist/linter.mjs is committed alongside the source change.",
+        "The TypeScript 'as' operator remains banned; use proper typing or type guards, and use @ts-expect-error only where idiomatic typing is infeasible.",
+        "The TypeScript 'any' type remains banned; prefer 'unknown' plus type guards when the type is genuinely open."
       ],
       "priority": 2,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-003",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/composite-check.ts, checks/crlf-check.ts, checks/custom-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/composite-check.ts,checks/crlf-check.ts,checks/custom-check.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
-      ],
-      "priority": 3,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-004",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/encoding-check.ts, checks/firecrawl-check.ts, checks/linelint-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/encoding-check.ts,checks/firecrawl-check.ts,checks/linelint-check.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
-      ],
-      "priority": 4,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-005",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/localization-key-check.ts, checks/paired-files-check.ts, checks/regex-check.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/localization-key-check.ts,checks/paired-files-check.ts,checks/regex-check.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
-      ],
-      "priority": 5,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-006",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in checks/tsc-check.ts, entries/json-array-entry.ts, expanders/base-expander.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files checks/tsc-check.ts,entries/json-array-entry.ts,expanders/base-expander.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-007",
-      "title": "Fix TypeScript errors and ban 'any' type in 3 file(s)",
-      "description": "As a developer, I need to resolve TypeScript compiler errors in file-sources/all-files-source.ts, file-sources/base-file-source.ts, linter.ts while strictly avoiding the 'any' type.\nThis is required to successfully complete the JavaScript to TypeScript migration with strict type-safety rules.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks no-ts-as-operator,no-ts-any-type,tsc --files file-sources/all-files-source.ts,file-sources/base-file-source.ts,linter.ts",
-        "Code compiles without any strict TypeScript errors",
-        "No functional changes are made to the code; the runtime behavior remains identical",
-        "Be smart and utilize TypeScript's type system effectively (e.g., use interfaces, generics, and strict types where applicable)",
-        "It is acceptable to update not only the specified target files but also their dependencies (other files they import) if necessary to make the TypeScript compiler pass for the current target file.",
-        "The TypeScript 'as' operator is strictly banned. Use proper typing or type guards. If you absolutely cannot resolve a type error idiomatically, use a @ts-expect-error comment instead of 'as'.",
-        "The TypeScript 'any' type is strictly banned. You must properly type everything. If you genuinely cannot determine the type, consider using 'unknown' and applying type guards."
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-008",
-      "title": "Fix codegen in linter.ts",
-      "description": "As a developer, I need to fix codegen issue in linter.ts so the check passes.",
-      "acceptanceCriteria": [
-        "node .linter/linter.mjs --lint --checks codegen --files linter.ts"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": ""
+      "passes": false,
+      "notes": "Depends on US-001 (virtual entries/expanders removal). Companion spec: docs/per-finding-workflow.md. Detailed checklist: docs/per-finding-workflow-plan.md#phase-2--per-finding-runtime. If any behaviour disagrees with the spec, the spec wins — update the plan md, not the spec. Phase 3 items (tsc/encoding/crlf migrations, ralph runner integration, --show all, --json) are explicitly out of scope here."
     }
   ]
 }
