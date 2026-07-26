@@ -165,6 +165,14 @@ one). `--show first` output is a single line of JSON:
 {"startLine": 4210, "endLine": 4213, "snippet": "...", "message": "..."}
 ```
 
+Fields:
+
+- `startLine`, `endLine`, `message`: from the finding, unmodified.
+- `snippet`: widened to be unique in the file — see algorithm below.
+- `unique`: **optional**. Emitted as `false` only in the rare case that
+  widening hit its cap without producing a unique snippet. Omitted (i.e.
+  implicit `true`) in the common case.
+
 If the file has zero findings, prints `null` and exits 0. Presence/absence
 is data, not failure — `--show` never exits 1.
 
@@ -172,12 +180,26 @@ is data, not failure — `--show` never exits 1.
 check's original emit order. Deterministic across runs (given deterministic
 checks).
 
-**Snippet widening**: the `snippet` field in the response includes up to
-two non-blank lines of surrounding context above and below the finding
-range (clipped at file boundaries) so a follow-up
-`Edit(old_string=snippet, ...)` has a unique target in a large file.
+**Snippet widening algorithm**: expand `snippet` until it occurs exactly
+once in the file, so a follow-up `Edit(old_string=snippet, ...)` matches
+unambiguously.
+
+1. Start with 2 lines of surrounding context above and 2 below the finding
+   range, clipped at file boundaries.
+2. If the resulting substring occurs exactly once in the file, emit it.
+3. Otherwise, extend by 1 line above and 1 line below and retry. Cap: at
+   most 20 added lines above and 20 below (the underlying finding range is
+   always included in full).
+4. If uniqueness is still not reached at the cap, emit the maximally
+   widened snippet and add `"unique": false` to the JSON response. The
+   agent's fallback: use `startLine` to `Read` a wider range around the
+   finding and construct a longer `old_string` from that read.
+
 Widening is scoped to `--show` output — nothing else touches the on-disk
-snippet, the finding count, or `--expect-max` behavior.
+snippet, the finding count, or `--expect-max` behavior. Performance: worst
+case scans the file once per widening step; on multi-hundred-MB inputs
+this may take a few seconds per call. Acceptable — `--show first` is a
+per-story query, not a hot path.
 
 Exit codes:
 
@@ -494,9 +516,15 @@ Integration tests that must exist by end of phase 1:
   - Prints correct JSON for a file with multiple findings — first by
     ascending `startLine`, ties by emit order.
   - Prints `null` and exits 0 for a file with no findings.
-  - `snippet` field includes 1–2 non-blank lines of surrounding context
-    above/below the finding range, clipped at file boundaries. Assert
-    uniqueness within the file.
+  - Widening starts at 2 lines above/below and produces a unique `snippet`
+    in the common case; JSON omits the `unique` field.
+  - Widening extends up to the 20+20 line cap when needed for uniqueness
+    (fixture: file where the initial 2+2 window is not unique, a wider
+    one is; assert the emitted snippet is exactly the smallest unique
+    widening).
+  - Widening cap reached without uniqueness (fixture: file with a
+    deliberately repetitive block larger than the cap): assert the JSON
+    contains `"unique": false` and emits the maximally widened snippet.
   - Ordering deterministic across two runs on identical input.
   - Widening does not affect `--expect-max` count on the same input
     (independence test).
