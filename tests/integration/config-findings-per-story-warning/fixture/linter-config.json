@@ -1,0 +1,24 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": {
+        "export": "AllFilesSource"
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "my-check",
+      "export": "RegexCheck",
+      "modes": [
+        "manual"
+      ],
+      "options": {
+        "pattern": "FAIL"
+      }
+    }
+  ],
+  "prd": {
+    "findingsPerStory": 2
+  }
+}

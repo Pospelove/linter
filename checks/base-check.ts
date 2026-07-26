@@ -7,15 +7,24 @@ import fs from "fs/promises";
 
 export type CheckStatus = "pass" | "fail" | "fixed" | "error";
 
+export interface CheckFinding {
+  message: string;
+  snippet: string;
+  startLine?: number;
+  endLine?: number;
+}
+
 /**
  * @typedef {Object} CheckResult
  * @property {CheckStatus} status  - Outcome of the check.
  * @property {string}      [output] - Optional diagnostic text (diff, error message, etc.).
+ * @property {CheckFinding[]} [findings] - Optional list of per-finding results.
  */
 
 export interface CheckResult {
   status: CheckStatus;
   output?: string;
+  findings?: CheckFinding[];
   extraFiles?: string[];
 }
 

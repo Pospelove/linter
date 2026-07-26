@@ -1,0 +1,21 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": {
+        "export": "AllFilesSource"
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "always-fail",
+      "export": "AlwaysFailCheck",
+      "modes": [
+        "manual"
+      ]
+    }
+  ],
+  "prd": {
+    "storySplitMode": "per-finding"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": {
+        "export": "AllFilesSource"
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "my-check",
+      "export": "RegexCheck",
+      "modes": [
+        "manual"
+      ],
+      "options": {
+        "pattern": "FAIL"
+      }
+    }
+  ],
+  "prd": {
+    "storySplitMode": "per-finding",
+    "filesPerStory": 2
+  }
+}

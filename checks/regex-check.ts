@@ -78,6 +78,7 @@ export class RegexCheck extends BaseCheck {
     try {
       const content = await fs.readFile(file, "utf-8");
       const violations: string[] = [];
+      const findings: CheckFinding[] = [];
       const re = new RegExp(this.#pattern.source, this.#pattern.flags);
 
       if (this.#multiline) {
@@ -91,6 +92,18 @@ export class RegexCheck extends BaseCheck {
           const lineNo = lineOffsets.filter(offset => offset <= m!.index).length;
           const matchText = m[0].length > 80 ? m[0].slice(0, 80) + "…" : m[0];
           violations.push(`  line ${lineNo}: ${matchText.replace(/\n/g, '\\n')}`);
+          
+          const lineStart = lineOffsets[lineNo - 1] ?? 0;
+          const nextOffset = lineOffsets[lineNo];
+          const lineEnd = nextOffset !== undefined ? nextOffset - 1 : content.length;
+          const matchedLine = content.slice(lineStart, lineEnd);
+          
+          findings.push({
+            message: this.#message,
+            snippet: matchedLine,
+            startLine: lineNo,
+            endLine: lineNo,
+          });
         }
       } else {
         const lines = content.split("\n");
@@ -103,6 +116,12 @@ export class RegexCheck extends BaseCheck {
           let m: RegExpExecArray | null;
           while ((m = re.exec(line)) !== null) {
             violations.push(`  line ${i + 1}: ${m[0]}`);
+            findings.push({
+              message: this.#message,
+              snippet: line,
+              startLine: i + 1,
+              endLine: i + 1,
+            });
             if (!re.flags.includes("g")) break;
           }
         }
@@ -112,6 +131,7 @@ export class RegexCheck extends BaseCheck {
         return {
           status: "fail",
           output: `${this.#message} (${violations.length} hit(s)):\n${violations.join("\n")}`,
+          findings,
         };
       }
       return { status: "pass" };

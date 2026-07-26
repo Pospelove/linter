@@ -1,0 +1,40 @@
+{
+  "project": "Project",
+  "branchName": "ralph/lint-fixes",
+  "description": "Fix outstanding lint issues",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix my-check in src/a.ts (story 1 of 3; 3 findings)",
+      "description": "File:  src/a.ts\nCheck: my-check\nFindings at PRD generation: 7. Fixed by prior stories: 0.\nThis story fixes exactly 3 finding(s). STOP after 3 iterations, even\nif more remain — later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly 3 times:\n  1. Locate the earliest remaining finding:\n       node <LINTER> --lint --checks my-check --files src/a.ts --show first\n  2. Read only the affected range:\n       Read(src/a.ts, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nThen verify:\n  node <LINTER> --lint --checks my-check --files src/a.ts --expect-max 4",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks my-check --files src/a.ts --expect-max 4"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Fix my-check in src/a.ts (story 2 of 3; 3 findings)",
+      "description": "File:  src/a.ts\nCheck: my-check\nFindings at PRD generation: 7. Fixed by prior stories: 3.\nThis story fixes exactly 3 finding(s). STOP after 3 iterations, even\nif more remain — later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly 3 times:\n  1. Locate the earliest remaining finding:\n       node <LINTER> --lint --checks my-check --files src/a.ts --show first\n  2. Read only the affected range:\n       Read(src/a.ts, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nThen verify:\n  node <LINTER> --lint --checks my-check --files src/a.ts --expect-max 1",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks my-check --files src/a.ts --expect-max 1"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Fix my-check in src/a.ts (story 3 of 3; 1 findings)",
+      "description": "File:  src/a.ts\nCheck: my-check\nFindings at PRD generation: 7. Fixed by prior stories: 6.\nThis story fixes exactly 1 finding(s). STOP after 1 iterations, even\nif more remain — later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly 1 times:\n  1. Locate the earliest remaining finding:\n       node <LINTER> --lint --checks my-check --files src/a.ts --show first\n  2. Read only the affected range:\n       Read(src/a.ts, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nThen verify:\n  node <LINTER> --lint --checks my-check --files src/a.ts --expect-max 0",
+      "acceptanceCriteria": [
+        "node <LINTER> --lint --checks my-check --files src/a.ts --expect-max 0"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

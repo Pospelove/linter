@@ -19,7 +19,7 @@
         "Commit is standalone: no per-finding runtime, no new CLI flags, no new config keys, no new fixtures."
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Companion spec: docs/per-finding-workflow.md. Detailed checklist: docs/per-finding-workflow-plan.md#phase-1--delete-virtual-entries--expanders. If any behaviour disagrees with the spec, the spec wins — update the plan md, not the spec."
     },
     {
@@ -59,7 +59,7 @@
         "The TypeScript 'any' type remains banned; prefer 'unknown' plus type guards when the type is genuinely open."
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-001 (virtual entries/expanders removal). Companion spec: docs/per-finding-workflow.md. Detailed checklist: docs/per-finding-workflow-plan.md#phase-2--per-finding-runtime. If any behaviour disagrees with the spec, the spec wins — update the plan md, not the spec. Phase 3 items (tsc/encoding/crlf migrations, ralph runner integration, --show all, --json) are explicitly out of scope here."
     }
   ]

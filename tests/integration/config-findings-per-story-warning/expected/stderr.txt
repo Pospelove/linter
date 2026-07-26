@@ -1,0 +1,4 @@
+findingsPerStory is ignored when storySplitMode is not per-finding
+[FAIL] linter-config.json [my-check]
+  regex violation (1 hit(s)):
+  line 17: FAIL
