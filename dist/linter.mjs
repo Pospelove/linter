@@ -5013,7 +5013,21 @@ var CrlfCheck = class extends BaseCheck {
     try {
       const content = await fs2.readFile(file);
       if (content.includes("\r\n")) {
-        return { status: "fail", output: "contains CRLF line endings" };
+        const findings = [];
+        const text = content.toString("utf-8");
+        const lines = text.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.endsWith("\r")) {
+            findings.push({
+              message: "contains CRLF line ending",
+              snippet: line.slice(0, -1),
+              startLine: i + 1,
+              endLine: i + 1
+            });
+          }
+        }
+        return { status: "fail", output: "contains CRLF line endings", findings };
       }
       return { status: "pass" };
     } catch (err) {
@@ -5100,13 +5114,38 @@ var EncodingCheck = class extends BaseCheck {
       const buf = await fs3.readFile(file);
       const bom = hasBom(buf);
       if (bom) {
-        return { status: "fail", output: `file starts with a ${bom} BOM; BOMs are not allowed` };
+        const msg = `file starts with a ${bom} BOM; BOMs are not allowed`;
+        return {
+          status: "fail",
+          output: msg,
+          findings: [{ message: msg, snippet: "", startLine: 1, endLine: 1 }]
+        };
       }
       if (isAsciiOnly(buf)) {
         return { status: "pass" };
       }
       if (this.#encoding === "ascii") {
-        return { status: "fail", output: "file contains non-ASCII bytes (>= 0x80)" };
+        const findings = [];
+        const offendingLines = /* @__PURE__ */ new Set();
+        let lineNo = 1;
+        for (let i = 0; i < buf.length; i++) {
+          const b = buf[i];
+          if (b === 10) {
+            lineNo++;
+            continue;
+          }
+          if (b !== void 0 && b >= 128) offendingLines.add(lineNo);
+        }
+        const decoded = buf.toString("latin1").split("\n");
+        for (const n of Array.from(offendingLines).sort((a, b) => a - b)) {
+          findings.push({
+            message: "line contains non-ASCII bytes (>= 0x80)",
+            snippet: decoded[n - 1] ?? "",
+            startLine: n,
+            endLine: n
+          });
+        }
+        return { status: "fail", output: "file contains non-ASCII bytes (>= 0x80)", findings };
       }
       const valid = isValidUtf8(buf);
       if (this.#encoding === "utf-8") {
@@ -13931,7 +13970,22 @@ var TscCheck = class extends BaseCheck {
     const abs = path12.resolve(file);
     const fileErrors = errors.get(abs);
     if (fileErrors && fileErrors.length > 0) {
-      return { status: "fail", output: fileErrors.join("\n") };
+      const findings = [];
+      for (const entry of fileErrors) {
+        const firstLine = entry.split("\n")[0] ?? entry;
+        const m = firstLine.match(/^.+?\((\d+),\d+\):\s*(.*)$/);
+        if (m) {
+          findings.push({
+            message: m[2] ?? firstLine,
+            snippet: "",
+            startLine: Number(m[1]),
+            endLine: Number(m[1])
+          });
+        } else {
+          findings.push({ message: entry, snippet: "" });
+        }
+      }
+      return { status: "fail", output: fileErrors.join("\n"), findings };
     }
     return { status: "pass" };
   }
@@ -18947,7 +19001,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "c00ed66" : "unknown";
+var LINTER_COMMIT = true ? "064763a" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19372,6 +19426,9 @@ var printHelp = () => {
   lines.push("  --no-download         Do not download tools if missing");
   lines.push("  --no-path             Do not search for tools in PATH");
   lines.push("  --output-prd [path]   Write a ralph-compatible PRD JSON to [path] after linting (requires --lint); defaults to prd.json");
+  lines.push("  --expect-max <N>      Exit 0 if the (single) --checks/--files pair has <= N findings, exit 1 otherwise (requires --lint)");
+  lines.push("  --show <mode>         first | all \u2014 print JSON of earliest / all findings for the single --checks/--files pair (requires --lint)");
+  lines.push("  --json                Emit one structured JSON blob to stdout with all per-file findings (requires --lint)");
   lines.push("");
   lines.push("BUILT-IN CHECKS:");
   for (const [exportName, Cls] of Object.entries(builtinChecks)) {
@@ -19643,11 +19700,12 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   let showMode = null;
   if (showIndex !== -1) {
     showMode = args[showIndex + 1] ?? null;
-    if (showMode !== "first") {
-      console.error("--show only accepts 'first'");
+    if (showMode !== "first" && showMode !== "all") {
+      console.error("--show only accepts 'first' or 'all'");
       process.exit(2);
     }
   }
+  const jsonMode = args.includes("--json");
   const outputPrdIndex = args.indexOf("--output-prd");
   let outputPrdPath = null;
   if (outputPrdIndex !== -1) {
@@ -19699,6 +19757,24 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     console.error("--output-prd requires --lint to be specified.");
     process.exit(1);
   }
+  if (jsonMode) {
+    if (!shouldLint || shouldFix) {
+      console.error("--json requires --lint and rejects --fix");
+      process.exit(2);
+    }
+    if (outputPrdPath !== null) {
+      console.error("--json rejects --output-prd");
+      process.exit(2);
+    }
+    if (expectMax !== null) {
+      console.error("--json rejects --expect-max");
+      process.exit(2);
+    }
+    if (showMode !== null) {
+      console.error("--json rejects --show");
+      process.exit(2);
+    }
+  }
   if (!shouldLint && !shouldFix) {
     console.error("Either --lint or --fix must be specified. Run --help for usage.");
     process.exit(127);
@@ -19724,7 +19800,8 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       console.log(`No checks enabled for mode "${mode}".`);
       process.exit(0);
     }
-    console.log(`Mode: ${mode} | Source: ${fileSource.name} | Checks: ${checks.map((c) => c.name).join(", ")}`);
+    const info = jsonMode ? console.error : console.log;
+    info(`Mode: ${mode} | Source: ${fileSource.name} | Checks: ${checks.map((c) => c.name).join(", ")}`);
     const toolOptions = { shouldDownload, shouldSearchInPath, toolsDir };
     const deps = {};
     for (const check of checks) {
@@ -19736,7 +19813,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
     } else {
       files = await fileSource.resolve();
     }
-    console.log(`${fileSource.name}: ${files.length} file(s)`);
+    info(`${fileSource.name}: ${files.length} file(s)`);
     if (expectMax !== null || showMode !== null) {
       if (checks.length === 0) {
         console.error("Check not found or not enabled in this mode.");
@@ -19766,21 +19843,18 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
           }
           process.exit(1);
         }
-      } else if (showMode === "first") {
+      } else if (showMode === "first" || showMode === "all") {
         if (findings.length === 0) {
-          console.log("null");
+          console.log(showMode === "first" ? "null" : "[]");
           process.exit(0);
         }
         findings.sort((a, b) => (a.startLine ?? 0) - (b.startLine ?? 0));
-        const first2 = findings[0];
         let fileLines = [];
         try {
           fileLines = fs20.readFileSync(file, "utf-8").split("\n");
         } catch {
           fileLines = [];
         }
-        const startL = first2.startLine ?? 1;
-        const endL = first2.endLine ?? 1;
         const checkUnique = (lines) => {
           if (lines.length === 0) return true;
           const str2 = lines.join("\n");
@@ -19794,33 +19868,75 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
           }
           return count === 1;
         };
-        let up = 2;
-        let down = 2;
-        let snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
-        let unique = checkUnique(snippetLines);
-        if (!unique) {
-          for (let step = 1; step <= 20; step++) {
-            up++;
-            down++;
-            snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
-            if (checkUnique(snippetLines)) {
-              unique = true;
-              break;
+        const widen = (finding) => {
+          const startL = finding.startLine ?? 1;
+          const endL = finding.endLine ?? 1;
+          let up = 2;
+          let down = 2;
+          let snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
+          let unique = checkUnique(snippetLines);
+          if (!unique) {
+            for (let step = 1; step <= 20; step++) {
+              up++;
+              down++;
+              snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
+              if (checkUnique(snippetLines)) {
+                unique = true;
+                break;
+              }
             }
           }
-        }
-        const out = {
-          startLine: first2.startLine,
-          endLine: first2.endLine,
-          snippet: snippetLines.join("\n"),
-          message: first2.message
+          const out = {
+            startLine: finding.startLine,
+            endLine: finding.endLine,
+            snippet: snippetLines.join("\n"),
+            message: finding.message
+          };
+          if (!unique) out["unique"] = false;
+          return out;
         };
-        if (!unique) {
-          out.unique = false;
+        if (showMode === "first") {
+          console.log(JSON.stringify(widen(findings[0])));
+        } else {
+          console.log(JSON.stringify(findings.map(widen)));
         }
-        console.log(JSON.stringify(out));
         process.exit(0);
       }
+    }
+    if (jsonMode) {
+      const jsonOut = {
+        files: [],
+        summary: { pass: 0, fail: 0, fixed: 0, error: 0 }
+      };
+      let anyFail = false;
+      for (const file of files) {
+        const rel = relPath(file);
+        const fileEntry = { path: rel, results: [] };
+        for (const check of checks) {
+          if (!check.checkDeps(deps)) continue;
+          if (!await check.appliesTo(file)) continue;
+          let res;
+          try {
+            res = await check.lint(file, deps);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            res = { status: "error", output: msg };
+          }
+          res = await enforceInvariant(res, file);
+          const entry = {
+            check: check.name,
+            status: res.status,
+            findings: res.findings ?? []
+          };
+          if (res.output !== void 0) entry.output = res.output;
+          fileEntry.results.push(entry);
+          if (res.status === "fail" || res.status === "error") anyFail = true;
+          jsonOut.summary[res.status]++;
+        }
+        if (fileEntry.results.length > 0) jsonOut.files.push(fileEntry);
+      }
+      console.log(JSON.stringify(jsonOut));
+      process.exit(anyFail ? 1 : 0);
     }
     const startTime = Date.now();
     const runResult = await runChecks(files, checks, { lintOnly: shouldLint, verbose, ...deps });

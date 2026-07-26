@@ -1,7 +1,7 @@
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { BaseCheck, CheckResult } from "./base-check.js";
+import { BaseCheck, CheckResult, CheckFinding } from "./base-check.js";
 import { checkInPath } from "../tool-resolve/tool-utils.js";
 
 const execFileAsync = promisify(execFile);
@@ -146,7 +146,22 @@ export class TscCheck extends BaseCheck {
     const abs = path.resolve(file);
     const fileErrors = errors.get(abs);
     if (fileErrors && fileErrors.length > 0) {
-      return { status: "fail", output: fileErrors.join("\n") };
+      const findings: CheckFinding[] = [];
+      for (const entry of fileErrors) {
+        const firstLine = entry.split("\n")[0] ?? entry;
+        const m = firstLine.match(/^.+?\((\d+),\d+\):\s*(.*)$/);
+        if (m) {
+          findings.push({
+            message: m[2] ?? firstLine,
+            snippet: "",
+            startLine: Number(m[1]),
+            endLine: Number(m[1]),
+          });
+        } else {
+          findings.push({ message: entry, snippet: "" });
+        }
+      }
+      return { status: "fail", output: fileErrors.join("\n"), findings };
     }
     return { status: "pass" };
   }

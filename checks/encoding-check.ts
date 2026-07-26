@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import iconv from "iconv-lite";
-import { BaseCheck, CheckResult } from "./base-check.js";
+import { BaseCheck, CheckResult, CheckFinding } from "./base-check.js";
 
 const SUPPORTED = new Set(["utf-8", "cp1251", "ascii"]);
 
@@ -64,13 +64,38 @@ export class EncodingCheck extends BaseCheck {
       const buf = await fs.readFile(file);
       const bom = hasBom(buf);
       if (bom) {
-        return { status: "fail", output: `file starts with a ${bom} BOM; BOMs are not allowed` };
+        const msg = `file starts with a ${bom} BOM; BOMs are not allowed`;
+        return {
+          status: "fail",
+          output: msg,
+          findings: [{ message: msg, snippet: "", startLine: 1, endLine: 1 }],
+        };
       }
       if (isAsciiOnly(buf)) {
         return { status: "pass" };
       }
       if (this.#encoding === "ascii") {
-        return { status: "fail", output: "file contains non-ASCII bytes (>= 0x80)" };
+        const findings: CheckFinding[] = [];
+        const offendingLines = new Set<number>();
+        let lineNo = 1;
+        for (let i = 0; i < buf.length; i++) {
+          const b = buf[i];
+          if (b === 0x0a) {
+            lineNo++;
+            continue;
+          }
+          if (b !== undefined && b >= 0x80) offendingLines.add(lineNo);
+        }
+        const decoded = buf.toString("latin1").split("\n");
+        for (const n of Array.from(offendingLines).sort((a, b) => a - b)) {
+          findings.push({
+            message: "line contains non-ASCII bytes (>= 0x80)",
+            snippet: decoded[n - 1] ?? "",
+            startLine: n,
+            endLine: n,
+          });
+        }
+        return { status: "fail", output: "file contains non-ASCII bytes (>= 0x80)", findings };
       }
       const valid = isValidUtf8(buf);
       if (this.#encoding === "utf-8") {

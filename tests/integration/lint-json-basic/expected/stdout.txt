@@ -1,0 +1,1 @@
+{"files":[{"path":"src/a.ts","results":[{"check":"test-regex","status":"fail","findings":[{"message":"Found FAIL","snippet":"FAIL","startLine":1,"endLine":1}],"output":"Found FAIL (1 hit(s)):\n  line 1: FAIL"}]},{"path":"src/b.ts","results":[{"check":"test-regex","status":"pass","findings":[]}]}],"summary":{"pass":1,"fail":1,"fixed":0,"error":0}}

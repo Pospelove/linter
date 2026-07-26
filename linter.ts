@@ -596,6 +596,9 @@ const printHelp = () => {
   lines.push("  --no-download         Do not download tools if missing");
   lines.push("  --no-path             Do not search for tools in PATH");
   lines.push("  --output-prd [path]   Write a ralph-compatible PRD JSON to [path] after linting (requires --lint); defaults to prd.json");
+  lines.push("  --expect-max <N>      Exit 0 if the (single) --checks/--files pair has <= N findings, exit 1 otherwise (requires --lint)");
+  lines.push("  --show <mode>         first | all — print JSON of earliest / all findings for the single --checks/--files pair (requires --lint)");
+  lines.push("  --json                Emit one structured JSON blob to stdout with all per-file findings (requires --lint)");
   lines.push("");
 
   // --- Built-in checks ---
@@ -1034,11 +1037,13 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
   let showMode: string | null = null;
   if (showIndex !== -1) {
     showMode = args[showIndex + 1] ?? null;
-    if (showMode !== "first") {
-      console.error("--show only accepts 'first'");
+    if (showMode !== "first" && showMode !== "all") {
+      console.error("--show only accepts 'first' or 'all'");
       process.exit(2);
     }
   }
+
+  const jsonMode = args.includes("--json");
 
   const outputPrdIndex = args.indexOf("--output-prd");
   let outputPrdPath: string | null = null;
@@ -1104,6 +1109,26 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
     process.exit(1);
   }
 
+  // Validations for --json
+  if (jsonMode) {
+    if (!shouldLint || shouldFix) {
+      console.error("--json requires --lint and rejects --fix");
+      process.exit(2);
+    }
+    if (outputPrdPath !== null) {
+      console.error("--json rejects --output-prd");
+      process.exit(2);
+    }
+    if (expectMax !== null) {
+      console.error("--json rejects --expect-max");
+      process.exit(2);
+    }
+    if (showMode !== null) {
+      console.error("--json rejects --show");
+      process.exit(2);
+    }
+  }
+
 
   if (!shouldLint && !shouldFix) {
     console.error("Either --lint or --fix must be specified. Run --help for usage.");
@@ -1134,7 +1159,8 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
       process.exit(0);
     }
 
-    console.log(`Mode: ${mode} | Source: ${fileSource.name} | Checks: ${checks.map((c) => c.name).join(", ")}`);
+    const info = jsonMode ? console.error : console.log;
+    info(`Mode: ${mode} | Source: ${fileSource.name} | Checks: ${checks.map((c) => c.name).join(", ")}`);
 
     const toolOptions = { shouldDownload, shouldSearchInPath, toolsDir };
     const deps = {};
@@ -1149,7 +1175,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
     } else {
       files = await fileSource.resolve();
     }
-    console.log(`${fileSource.name}: ${files.length} file(s)`);
+    info(`${fileSource.name}: ${files.length} file(s)`);
 
     
     if (expectMax !== null || showMode !== null) {
@@ -1183,16 +1209,14 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
           }
           process.exit(1);
         }
-      } else if (showMode === "first") {
+      } else if (showMode === "first" || showMode === "all") {
         if (findings.length === 0) {
-          console.log("null");
+          console.log(showMode === "first" ? "null" : "[]");
           process.exit(0);
         }
-        
-        // Findings are sorted by ascending startLine, ties broken by original emit order (which they already are)
+
         findings.sort((a, b) => (a.startLine ?? 0) - (b.startLine ?? 0));
-        const first = findings[0];
-        
+
         let fileLines: string[] = [];
         try {
           fileLines = fs.readFileSync(file, "utf-8").split("\n");
@@ -1200,16 +1224,13 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
           fileLines = [];
         }
 
-        const startL = first.startLine ?? 1;
-        const endL = first.endLine ?? 1;
-        
         const checkUnique = (lines: string[]) => {
           if (lines.length === 0) return true;
           const str = lines.join("\n");
           const fullStr = fileLines.join("\n");
           let count = 0;
           let idx = fullStr.indexOf(str);
-          while(idx !== -1) {
+          while (idx !== -1) {
             count++;
             if (count > 1) return false;
             idx = fullStr.indexOf(str, idx + 1);
@@ -1217,36 +1238,77 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
           return count === 1;
         };
 
-        let up = 2;
-        let down = 2;
-        let snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
-        let unique = checkUnique(snippetLines);
-        
-        if (!unique) {
-          for (let step = 1; step <= 20; step++) {
-            up++;
-            down++;
-            snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
-            if (checkUnique(snippetLines)) {
-              unique = true;
-              break;
+        const widen = (finding: CheckFinding) => {
+          const startL = finding.startLine ?? 1;
+          const endL = finding.endLine ?? 1;
+          let up = 2;
+          let down = 2;
+          let snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
+          let unique = checkUnique(snippetLines);
+          if (!unique) {
+            for (let step = 1; step <= 20; step++) {
+              up++;
+              down++;
+              snippetLines = fileLines.slice(Math.max(0, startL - 1 - up), Math.min(fileLines.length, endL + down));
+              if (checkUnique(snippetLines)) {
+                unique = true;
+                break;
+              }
             }
           }
-        }
-        
-        const out: any = {
-          startLine: first.startLine,
-          endLine: first.endLine,
-          snippet: snippetLines.join("\n"),
-          message: first.message
+          const out: Record<string, unknown> = {
+            startLine: finding.startLine,
+            endLine: finding.endLine,
+            snippet: snippetLines.join("\n"),
+            message: finding.message,
+          };
+          if (!unique) out["unique"] = false;
+          return out;
         };
-        
-        if (!unique) {
-          out.unique = false;
+
+        if (showMode === "first") {
+          console.log(JSON.stringify(widen(findings[0]!)));
+        } else {
+          console.log(JSON.stringify(findings.map(widen)));
         }
-        console.log(JSON.stringify(out));
         process.exit(0);
       }
+    }
+
+    if (jsonMode) {
+      const jsonOut: { files: { path: string; results: { check: string; status: string; output?: string; findings: CheckFinding[] }[] }[]; summary: { pass: number; fail: number; fixed: number; error: number } } = {
+        files: [],
+        summary: { pass: 0, fail: 0, fixed: 0, error: 0 },
+      };
+      let anyFail = false;
+      for (const file of files) {
+        const rel = relPath(file);
+        const fileEntry: { path: string; results: { check: string; status: string; output?: string; findings: CheckFinding[] }[] } = { path: rel, results: [] };
+        for (const check of checks) {
+          if (!check.checkDeps(deps)) continue;
+          if (!(await check.appliesTo(file))) continue;
+          let res: LinterCheckResult;
+          try {
+            res = await check.lint(file, deps);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            res = { status: "error", output: msg };
+          }
+          res = await enforceInvariant(res, file);
+          const entry: { check: string; status: string; output?: string; findings: CheckFinding[] } = {
+            check: check.name,
+            status: res.status,
+            findings: res.findings ?? [],
+          };
+          if (res.output !== undefined) entry.output = res.output;
+          fileEntry.results.push(entry);
+          if (res.status === "fail" || res.status === "error") anyFail = true;
+          jsonOut.summary[res.status]++;
+        }
+        if (fileEntry.results.length > 0) jsonOut.files.push(fileEntry);
+      }
+      console.log(JSON.stringify(jsonOut));
+      process.exit(anyFail ? 1 : 0);
     }
 
     const startTime = Date.now();
