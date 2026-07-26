@@ -1266,10 +1266,17 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
         if (findings.length <= expectMax) {
           process.exit(0);
         } else {
-          for (const f of findings) {
+          const PREVIEW_CAP = 3;
+          const preview = findings.slice(0, PREVIEW_CAP);
+          console.log(`${findings.length} finding(s) remaining, expected at most ${expectMax}. Showing first ${preview.length}:`);
+          for (const f of preview) {
             console.log(f.message);
             if (f.startLine !== undefined) console.log(`line ${f.startLine}${f.endLine && f.endLine !== f.startLine ? `-${f.endLine}` : ''}`);
             if (f.snippet) console.log(f.snippet);
+          }
+          const remaining = findings.length - preview.length;
+          if (remaining > 0) {
+            console.log(`(and ${remaining} more — use --show first for the earliest finding with fresh coordinates)`);
           }
           process.exit(1);
         }
