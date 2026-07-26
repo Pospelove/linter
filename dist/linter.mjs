@@ -19001,7 +19001,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "1e24fde" : "unknown";
+var LINTER_COMMIT = true ? "8412cda" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19082,6 +19082,31 @@ var loadConfig = async (mode) => {
   }
   prdConfig.storySplitMode = storySplitMode;
   prdConfig.findingsPerStory = findingsPerStory;
+  for (const entry of config.checks || []) {
+    const cp = entry.prd;
+    if (!cp || cp.storySplitMode === void 0) continue;
+    if (cp.storySplitMode !== "per-file" && cp.storySplitMode !== "per-finding") {
+      console.error(`Invalid prd.storySplitMode on check "${entry.name}": ${cp.storySplitMode}. Valid values are: per-file, per-finding`);
+      process.exit(2);
+    }
+    if (cp.storySplitMode === "per-finding") {
+      if (cp.group) {
+        console.error(`per-finding + prd.group is not allowed on check "${entry.name}"`);
+        process.exit(2);
+      }
+      if (cp.filesPerStory !== void 0 && cp.filesPerStory !== 1) {
+        console.error(`per-finding + filesPerStory != 1 is not allowed on check "${entry.name}"`);
+        process.exit(2);
+      }
+      const n = cp.findingsPerStory !== void 0 ? cp.findingsPerStory : 1;
+      if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
+        console.error(`per-finding + findingsPerStory <= 0 or non-integer is not allowed on check "${entry.name}"`);
+        process.exit(2);
+      }
+    } else if (cp.findingsPerStory !== void 0) {
+      console.warn(`findingsPerStory is ignored on check "${entry.name}" when storySplitMode is not per-finding`);
+    }
+  }
   return { fileSource, checks, toolsDir, prdConfig, checkEntries: config.checks };
 };
 var relPath = (file) => {
@@ -19494,23 +19519,36 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   }
   const userStories = [];
   let counter = 1;
-  if (prdConfig.storySplitMode === "per-finding") {
-    const pushStory = (title, storyDescription, acceptanceCriteria) => {
-      const idStr = "US-" + String(counter).padStart(3, "0");
-      userStories.push({
-        id: idStr,
-        title,
-        description: storyDescription,
-        acceptanceCriteria,
-        priority: counter,
-        passes: false,
-        notes: ""
-      });
-      counter++;
-    };
+  const pushStoryShared = (title, storyDescription, acceptanceCriteria) => {
+    const idStr = "US-" + String(counter).padStart(3, "0");
+    userStories.push({
+      id: idStr,
+      title,
+      description: storyDescription,
+      acceptanceCriteria,
+      priority: counter,
+      passes: false,
+      notes: ""
+    });
+    counter++;
+  };
+  const effectiveMode = (checkName) => {
+    const cp = checkPrdMap[checkName];
+    if (cp && cp.storySplitMode) return cp.storySplitMode;
+    return prdConfig.storySplitMode === "per-finding" ? "per-finding" : "per-file";
+  };
+  const effectiveFindingsPerStory = (checkName) => {
+    const cp = checkPrdMap[checkName];
+    if (cp && cp.findingsPerStory !== void 0) return cp.findingsPerStory;
+    return prdConfig.findingsPerStory || 1;
+  };
+  const perFindingPairs = failedPairs.filter((p) => effectiveMode(p.checkName) === "per-finding");
+  const perFilePairs = failedPairs.filter((p) => effectiveMode(p.checkName) === "per-file");
+  if (perFindingPairs.length > 0) {
+    const pushStory = pushStoryShared;
     const checkOrder = (checkEntries || []).map((e) => e.name);
     const fileCheckMap = /* @__PURE__ */ new Map();
-    for (const pair of failedPairs) {
+    for (const pair of perFindingPairs) {
       const key = pair.file + "::" + pair.checkName;
       if (!fileCheckMap.has(key)) fileCheckMap.set(key, []);
       if (pair.finding) fileCheckMap.get(key).push(pair.finding);
@@ -19529,7 +19567,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       const [file, check] = key.split("::");
       const findings = fileCheckMap.get(key);
       const M = findings.length;
-      const N = prdConfig.findingsPerStory || 1;
+      const N = effectiveFindingsPerStory(check);
       const S = Math.ceil(M / N);
       const checkPrd = checkPrdMap[check] || {};
       const relFile = relPath(file);
@@ -19564,17 +19602,16 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
         pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
       }
     }
-  } else {
+  }
+  if (perFilePairs.length > 0) {
     const dedupedMap = /* @__PURE__ */ new Map();
-    let originalFailedPairs = failedPairs;
-    for (const pair of failedPairs) {
+    for (const pair of perFilePairs) {
       const key = pair.checkName + "::" + pair.file;
       if (!dedupedMap.has(key)) dedupedMap.set(key, pair);
     }
-    const failedPairsDeduped = Array.from(dedupedMap.values());
-    failedPairs = failedPairsDeduped;
+    let failedPairs2 = Array.from(dedupedMap.values());
     const byCheck = /* @__PURE__ */ new Map();
-    for (const { file, checkName } of failedPairs) {
+    for (const { file, checkName } of failedPairs2) {
       if (!byCheck.has(checkName)) byCheck.set(checkName, []);
       byCheck.get(checkName).push(file);
     }

@@ -290,6 +290,17 @@ RegexCheck:
 
 Landed after Phase 2:
 
+- **Phase 2 gap fix**: `prd.storySplitMode` / `prd.findingsPerStory` on a
+  **per-check** basis (as the spec always intended). Phase 2 only wired
+  the top-level `prd` block; a check-level `prd.storySplitMode:
+  "per-finding"` was silently ignored, so users with mixed-mode PRDs got
+  a single deduped per-file story instead of per-finding stories. The
+  effective mode for each check is now `checkPrd.storySplitMode ??
+  topLevelPrd.storySplitMode ?? "per-file"`; same fallback for
+  `findingsPerStory`. Per-check config is validated at load with the same
+  hard-error rules as top-level (per-finding + group / filesPerStory != 1
+  / findingsPerStory <= 0). New fixture: `prd-per-check-mode`.
+
 - `tsc-check` emits one `CheckFinding` per compiler diagnostic; the
   human-readable `output` string is byte-identical to before, so no
   existing snapshot moves.

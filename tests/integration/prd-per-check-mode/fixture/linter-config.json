@@ -1,0 +1,35 @@
+{
+  "modes": {
+    "manual": {
+      "fileSource": { "export": "AllFilesSource" }
+    }
+  },
+  "checks": [
+    {
+      "name": "fail-per-finding",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": {
+        "extensions": [".ts"],
+        "pattern": "FAIL",
+        "patternFlags": "g",
+        "message": "Found FAIL"
+      },
+      "prd": {
+        "storySplitMode": "per-finding",
+        "findingsPerStory": 1
+      }
+    },
+    {
+      "name": "bad-per-file",
+      "export": "RegexCheck",
+      "modes": ["manual"],
+      "options": {
+        "extensions": [".ts"],
+        "pattern": "BAD",
+        "patternFlags": "g",
+        "message": "Found BAD"
+      }
+    }
+  ]
+}
