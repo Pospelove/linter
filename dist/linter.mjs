@@ -19089,7 +19089,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "5dd84d7" : "unknown";
+var LINTER_COMMIT = true ? "00ec536" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19611,7 +19611,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
   for (const { checkName, entries, checkPrd } of ungroupedChecks) {
     if (checkPrd.prdOnly) continue;
     if (checkPrd.storySplitMode === "per-finding") {
-      const findingsPerStory = checkPrd.findingsPerStory ?? 1;
+      const findingsPerStory = checkPrd.findingsPerStory ?? Number.POSITIVE_INFINITY;
       const byFingerprint = /* @__PURE__ */ new Map();
       for (const entry of entries) {
         for (const finding of entry.findings) {
@@ -19641,18 +19641,19 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
       };
       for (const [fp, group] of fingerprintOrder) {
         const m = group.findings.length;
-        const totalStories = Math.ceil(m / findingsPerStory);
+        const effectiveX = Math.min(findingsPerStory, m);
+        const totalStories = Math.ceil(m / effectiveX);
         const relFile = relPath(group.file);
         const first2 = group.findings[0];
         for (let k = 1; k <= totalStories; k++) {
-          const remaining = m - (k - 1) * findingsPerStory;
-          const fixCount = Math.min(findingsPerStory, remaining);
-          const expectMax = Math.max(m - k * findingsPerStory, 0);
+          const remaining = m - (k - 1) * effectiveX;
+          const fixCount = Math.min(effectiveX, remaining);
+          const expectMax = Math.max(m - k * effectiveX, 0);
           const defaultTitle = totalStories === 1 ? `Fix ${checkName} in ${relFile}` : `Fix ${checkName} in ${relFile} (${k} of ${totalStories})`;
           const title = checkPrd.userStoryTitle ? applyPlaceholders(checkPrd.userStoryTitle, first2, group.findings, relFile, k, totalStories, expectMax, fixCount, fp) : defaultTitle;
           const viewCmd = `${baseCommand} --lint --finding ${fp} --show first`;
           const verifyCmd = `${baseCommand} --lint --finding ${fp}${expectMax > 0 ? ` --expect-max ${expectMax}` : ""}`;
-          const fixInstruction = fixCount === 1 ? "Fix that occurrence." : `Fix ${fixCount} of the remaining occurrences.`;
+          const fixInstruction = fixCount === 1 ? "Fix that occurrence." : fixCount === remaining ? `Fix all ${fixCount} remaining occurrences.` : `Fix ${fixCount} of the remaining occurrences.`;
           const actionBlock = [
             "View the earliest remaining occurrence:",
             `  ${viewCmd}`,

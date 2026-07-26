@@ -824,7 +824,10 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
     if (checkPrd.prdOnly) continue;
 
     if (checkPrd.storySplitMode === "per-finding") {
-      const findingsPerStory = checkPrd.findingsPerStory ?? 1;
+      // Default: one story per fingerprint (all M instances handled by one
+      // story). Set findingsPerStory to chunk large fingerprints into
+      // ceil(M/N) stories of N instances each.
+      const findingsPerStory = checkPrd.findingsPerStory ?? Number.POSITIVE_INFINITY;
 
       // Group findings by fingerprint. Since fingerprint includes file,
       // every fingerprint's instances live in a single file.
@@ -884,14 +887,15 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
 
       for (const [fp, group] of fingerprintOrder) {
         const m = group.findings.length;
-        const totalStories = Math.ceil(m / findingsPerStory);
+        const effectiveX = Math.min(findingsPerStory, m);
+        const totalStories = Math.ceil(m / effectiveX);
         const relFile = relPath(group.file);
         const first = group.findings[0]!;
 
         for (let k = 1; k <= totalStories; k++) {
-          const remaining = m - (k - 1) * findingsPerStory;
-          const fixCount = Math.min(findingsPerStory, remaining);
-          const expectMax = Math.max(m - k * findingsPerStory, 0);
+          const remaining = m - (k - 1) * effectiveX;
+          const fixCount = Math.min(effectiveX, remaining);
+          const expectMax = Math.max(m - k * effectiveX, 0);
 
           const defaultTitle = totalStories === 1
             ? `Fix ${checkName} in ${relFile}`
@@ -906,7 +910,9 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding: Check
 
           const fixInstruction = fixCount === 1
             ? "Fix that occurrence."
-            : `Fix ${fixCount} of the remaining occurrences.`;
+            : fixCount === remaining
+              ? `Fix all ${fixCount} remaining occurrences.`
+              : `Fix ${fixCount} of the remaining occurrences.`;
 
           const actionBlock = [
             "View the earliest remaining occurrence:",
