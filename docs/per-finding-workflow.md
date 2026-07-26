@@ -585,19 +585,23 @@ Story body template:
   number of findings sharing this story's fingerprint(s) at PRD-generation
   time, and K is this story's index within that sequence. For X-per-story
   bundles (X > 1), K counts stories, not individual findings.
-- **description**:
-  1. One-line restatement of the check's `message`.
-  2. **"View the earliest remaining occurrence:"** followed by the exact
-     command the agent should run to see what to fix, e.g.
-     `<baseCommand> --lint --finding <fp> --show first`. This command
-     prints `line <N>: <snippet>` for the first still-matching instance in
-     the file (or the first instance across the story's fingerprints, in
-     bundle order). If nothing matches, it exits 0 with empty output —
-     the story is already satisfied.
-  3. **"Fix that occurrence"** (or "Fix X of the remaining occurrences"
-     for X > 1 bundles). No positional identity is claimed: any matching
-     instance will do.
-  4. **"Then verify:"** followed by the acceptance-criterion command.
+- **description**: two sections joined by a blank line.
+  1. **Context** — either the default (`<check.message> (<file>)`) or
+     the check's `userStoryDescription` template rendered with per-finding
+     placeholders. Whatever the template says goes here verbatim.
+  2. **Action block** — always appended by the runner, regardless of
+     template. This block is not configurable because it is the entire
+     mechanical contract of the story: without it the agent has no
+     addressable "what to fix" or "how to check it's done". It contains:
+     - **"View the earliest remaining occurrence:"** followed by
+       `<baseCommand> --lint --finding <fp> --show first`. Prints
+       `line <N>: <snippet>` for the first still-matching instance; if
+       nothing matches, exits 0 with empty output — the story is already
+       satisfied.
+     - **"Fix that occurrence"** (or "Fix X of the remaining occurrences"
+       for X > 1 bundles). No positional identity is claimed: any matching
+       instance will do.
+     - **"Then verify:"** followed by the acceptance-criterion command.
 - **acceptanceCriteria**: `[<baseCommand> --lint --finding <fp> --expect-max <M-K*X>]`
   where `X` is this story's findings-per-story (usually 1) and K is the
   story's 1-based index in the sequence. Passes iff at least `K*X`

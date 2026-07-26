@@ -19089,7 +19089,7 @@ var normalizeFindings = async (file, checkName, res) => {
   return findings;
 };
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "fbea54a" : "unknown";
+var LINTER_COMMIT = true ? "5dd84d7" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19653,9 +19653,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
           const viewCmd = `${baseCommand} --lint --finding ${fp} --show first`;
           const verifyCmd = `${baseCommand} --lint --finding ${fp}${expectMax > 0 ? ` --expect-max ${expectMax}` : ""}`;
           const fixInstruction = fixCount === 1 ? "Fix that occurrence." : `Fix ${fixCount} of the remaining occurrences.`;
-          const defaultDescription = [
-            `${first2.message} (${relFile})`,
-            "",
+          const actionBlock = [
             "View the earliest remaining occurrence:",
             `  ${viewCmd}`,
             "",
@@ -19664,7 +19662,7 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
             "Then verify:",
             `  ${verifyCmd}`
           ].join("\n");
-          const storyDescription = checkPrd.userStoryDescription ? applyPlaceholders(
+          const contextText = checkPrd.userStoryDescription ? applyPlaceholders(
             Array.isArray(checkPrd.userStoryDescription) ? checkPrd.userStoryDescription.join("\n") : checkPrd.userStoryDescription,
             first2,
             group.findings,
@@ -19674,7 +19672,10 @@ var buildPrd = (failedPairs, prdConfig, checkEntries, baseCommand) => {
             expectMax,
             fixCount,
             fp
-          ) : defaultDescription;
+          ) : `${first2.message} (${relFile})`;
+          const storyDescription = `${contextText}
+
+${actionBlock}`;
           const mainCriteria = expectMax > 0 ? `${baseCommand} --lint --finding ${fp} --expect-max ${expectMax}` : `${baseCommand} --lint --finding ${fp}`;
           const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
           pushStory(
