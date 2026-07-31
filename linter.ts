@@ -74,7 +74,10 @@ const getRepoRoot = () => {
     console.warn("Warning: not a git repository, using cwd for repo root");
     return process.cwd();
   }
-  return result.stdout.trim();
+  // git always reports forward slashes, even on Windows, while Node builds
+  // paths with path.sep. Without normalizing, every REPO_ROOT comparison
+  // (relPath, path.relative) silently fails and absolute paths leak out.
+  return path.resolve(result.stdout.trim());
 };
 
 const REPO_ROOT = getRepoRoot();
@@ -201,11 +204,26 @@ const loadConfig = async (mode: string) => {
 };
 
 /**
+ * Quote a command-line argument if it contains anything a shell would split
+ * on. Check names like "Raw Float Angles (C++)" are legal in the config but
+ * produce an unrunnable acceptance criterion when pasted in bare.
+ */
+const shellQuote = (arg: string) => {
+  if (arg !== "" && !/[^A-Za-z0-9_\-.,/=:+@]/.test(arg)) {
+    return arg;
+  }
+  return `"${arg.split("\\").join("\\\\").split('"').join('\\"')}"`;
+};
+
+/**
  * Make path relative to REPO_ROOT for compact output.
  */
 const relPath = (file: string) => {
   if (file.startsWith(REPO_ROOT + path.sep)) {
-    return file.slice(REPO_ROOT.length + 1);
+    // Repo-relative paths are reported with forward slashes on every
+    // platform, matching git, so output and PRDs stay identical between
+    // Windows and CI.
+    return file.slice(REPO_ROOT.length + 1).split(path.sep).join("/");
   }
   return file;
 };
@@ -818,13 +836,15 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
           title = "Fix " + check + " in " + relFile + " (story " + K + " of " + S + "; " + Nk + " findings)";
         }
         
-        const workflowTemplate = "File:  {file}\nCheck: {check}\nFindings at PRD generation: {findingCount}. Fixed by prior stories: " + ((K - 1) * N) + ".\nThis story fixes exactly {storyBudget} finding(s). STOP after {storyBudget} iterations, even\nif more remain — later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly {storyBudget} times:\n  1. Locate the earliest remaining finding:\n       " + baseCommand + " --lint --checks {check} --files {file} --show first\n  2. Read only the affected range:\n       Read({file}, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nTool names above (Read, Edit) are Claude Code's; if you're a different\nagent, use your equivalents (e.g. read_file / str_replace, view / create,\nfs.readFile / applyPatch — whatever your host exposes). The semantics are\nwhat matter: read a small range around the finding, then replace the\nreturned snippet exactly.\n\nThen verify:\n  " + baseCommand + " --lint --checks {check} --files {file} --expect-max {expectMax}";
+        const workflowTemplate = "File:  {file}\nCheck: {check}\nFindings at PRD generation: {findingCount}. Fixed by prior stories: " + ((K - 1) * N) + ".\nThis story fixes exactly {storyBudget} finding(s). STOP after {storyBudget} iterations, even\nif more remain — later stories cover them. Any remaining finding may be\naddressed; findings are interchangeable.\n\nRepeat exactly {storyBudget} times:\n  1. Locate the earliest remaining finding:\n       " + baseCommand + " --lint --checks {checkArg} --files {fileArg} --show first\n  2. Read only the affected range:\n       Read({file}, offset: startLine - 2, limit: (endLine - startLine) + 5)\n  3. Apply the fix with Edit(old_string=snippet, new_string=<your fix>).\n\nTool names above (Read, Edit) are Claude Code's; if you're a different\nagent, use your equivalents (e.g. read_file / str_replace, view / create,\nfs.readFile / applyPatch — whatever your host exposes). The semantics are\nwhat matter: read a small range around the finding, then replace the\nreturned snippet exactly.\n\nThen verify:\n  " + baseCommand + " --lint --checks {checkArg} --files {fileArg} --expect-max {expectMax}";
 
         const applyPlaceholders = (str: string) => {
           return str
+            .replace(/\{fileArg\}/g, shellQuote(relFile))
             .replace(/\{file\}/g, relFile)
             .replace(/\{files\}/g, relFile)
             .replace(/\{fileCount\}/g, "1")
+            .replace(/\{checkArg\}/g, shellQuote(check))
             .replace(/\{check\}/g, check)
             .replace(/\{findingCount\}/g, String(M))
             .replace(/\{storyCount\}/g, String(S))
@@ -836,7 +856,10 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
             .replace(/\{message\}/g, message)
             .replace(/\{snippet\}/g, snippet)
             .replace(/\{findings\}/g, JSON.stringify(findings))
-            .replace(/\{workflow\}/g, workflowTemplate.replace(/\{file\}/g, relFile)
+            .replace(/\{workflow\}/g, workflowTemplate
+                .replace(/\{fileArg\}/g, shellQuote(relFile))
+                .replace(/\{file\}/g, relFile)
+                .replace(/\{checkArg\}/g, shellQuote(check))
                 .replace(/\{check\}/g, check)
                 .replace(/\{findingCount\}/g, String(M))
                 .replace(/\{storyBudget\}/g, String(Nk))
@@ -855,7 +878,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
         if (!omitWorkflow) parts.push(applyPlaceholders(workflowTemplate));
         const storyDescription = parts.join("\n\n");
 
-        const mainCriteria = baseCommand + " --lint --checks " + check + " --files " + relFile + " --expect-max " + expectMax;
+        const mainCriteria = baseCommand + " --lint --checks " + shellQuote(check) + " --files " + shellQuote(relFile) + " --expect-max " + expectMax;
         const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
         pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
       }
@@ -979,7 +1002,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
           return !entry?.prd?.prdOnly;
         });
       const mainCriteria = allGroupCheckNames.length > 0
-        ? [`${baseCommand} --lint --checks ${allGroupCheckNames.join(",")} --files ${chunkRelFiles.join(",")}`]
+        ? [`${baseCommand} --lint --checks ${shellQuote(allGroupCheckNames.join(","))} --files ${shellQuote(chunkRelFiles.join(","))}`]
         : [];
 
       pushStory(title, storyDescription, [...mainCriteria, ...extraCriteria]);
@@ -1021,7 +1044,7 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
         ? applyPlaceholders(rawDescription)
         : defaultDescription;
 
-      const mainCriteria = `${baseCommand} --lint --checks ${checkName} --files ${filesStr}`;
+      const mainCriteria = `${baseCommand} --lint --checks ${shellQuote(checkName)} --files ${shellQuote(filesStr)}`;
       const additionalCriteria = checkPrd.additionalAcceptanceCriteria || [];
       pushStory(title, storyDescription, [mainCriteria, ...additionalCriteria]);
     }
@@ -1398,7 +1421,15 @@ const buildPrd = (failedPairs: { file: string, checkName: string, finding?: impo
     if (outputPrdPath !== null) {
       const scriptPath = process.argv[1] ?? "";
       const relScript = path.relative(REPO_ROOT, scriptPath);
-      const baseCommand = relScript.startsWith("..") ? `node ${scriptPath}` : `node ${relScript}`;
+      // A PRD gets committed and handed to other machines, so an absolute
+      // path to whoever generated it is useless. In-repo copies stay
+      // relative; a globally installed linter is referenced by its bin name.
+      const insideRepo =
+        scriptPath !== "" && relScript !== "" &&
+        !relScript.startsWith("..") && !path.isAbsolute(relScript);
+      const baseCommand = insideRepo
+        ? `node ${relScript.split(path.sep).join("/")}`
+        : "skymp-linter";
       const prd = buildPrd(runResult.failedPairs || [], prdConfig, checkEntries, baseCommand);
       const absOutputPrdPath = path.isAbsolute(outputPrdPath) ? outputPrdPath : path.resolve(process.cwd(), outputPrdPath);
       fs.writeFileSync(absOutputPrdPath, JSON.stringify(prd, null, 2) + "\n");
