@@ -4280,6 +4280,121 @@ var require_browser = __commonJS({
   }
 });
 
+// node_modules/has-flag/index.js
+var require_has_flag = __commonJS({
+  "node_modules/has-flag/index.js"(exports, module) {
+    "use strict";
+    module.exports = (flag, argv = process.argv) => {
+      const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
+      const position = argv.indexOf(prefix + flag);
+      const terminatorPosition = argv.indexOf("--");
+      return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+    };
+  }
+});
+
+// node_modules/supports-color/index.js
+var require_supports_color = __commonJS({
+  "node_modules/supports-color/index.js"(exports, module) {
+    "use strict";
+    var os4 = __require("os");
+    var tty = __require("tty");
+    var hasFlag = require_has_flag();
+    var { env } = process;
+    var forceColor;
+    if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never")) {
+      forceColor = 0;
+    } else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always")) {
+      forceColor = 1;
+    }
+    if ("FORCE_COLOR" in env) {
+      if (env.FORCE_COLOR === "true") {
+        forceColor = 1;
+      } else if (env.FORCE_COLOR === "false") {
+        forceColor = 0;
+      } else {
+        forceColor = env.FORCE_COLOR.length === 0 ? 1 : Math.min(parseInt(env.FORCE_COLOR, 10), 3);
+      }
+    }
+    function translateLevel(level) {
+      if (level === 0) {
+        return false;
+      }
+      return {
+        level,
+        hasBasic: true,
+        has256: level >= 2,
+        has16m: level >= 3
+      };
+    }
+    function supportsColor(haveStream, streamIsTTY) {
+      if (forceColor === 0) {
+        return 0;
+      }
+      if (hasFlag("color=16m") || hasFlag("color=full") || hasFlag("color=truecolor")) {
+        return 3;
+      }
+      if (hasFlag("color=256")) {
+        return 2;
+      }
+      if (haveStream && !streamIsTTY && forceColor === void 0) {
+        return 0;
+      }
+      const min = forceColor || 0;
+      if (env.TERM === "dumb") {
+        return min;
+      }
+      if (process.platform === "win32") {
+        const osRelease = os4.release().split(".");
+        if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
+          return Number(osRelease[2]) >= 14931 ? 3 : 2;
+        }
+        return 1;
+      }
+      if ("CI" in env) {
+        if (["TRAVIS", "CIRCLECI", "APPVEYOR", "GITLAB_CI", "GITHUB_ACTIONS", "BUILDKITE"].some((sign) => sign in env) || env.CI_NAME === "codeship") {
+          return 1;
+        }
+        return min;
+      }
+      if ("TEAMCITY_VERSION" in env) {
+        return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
+      }
+      if (env.COLORTERM === "truecolor") {
+        return 3;
+      }
+      if ("TERM_PROGRAM" in env) {
+        const version = parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+        switch (env.TERM_PROGRAM) {
+          case "iTerm.app":
+            return version >= 3 ? 3 : 2;
+          case "Apple_Terminal":
+            return 2;
+        }
+      }
+      if (/-256(color)?$/i.test(env.TERM)) {
+        return 2;
+      }
+      if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) {
+        return 1;
+      }
+      if ("COLORTERM" in env) {
+        return 1;
+      }
+      return min;
+    }
+    function getSupportLevel(stream) {
+      const level = supportsColor(stream, stream && stream.isTTY);
+      return translateLevel(level);
+    }
+    module.exports = {
+      supportsColor: getSupportLevel,
+      stdout: translateLevel(supportsColor(true, tty.isatty(1))),
+      stderr: translateLevel(supportsColor(true, tty.isatty(2)))
+    };
+  }
+});
+
 // node_modules/debug/src/node.js
 var require_node = __commonJS({
   "node_modules/debug/src/node.js"(exports, module) {
@@ -4298,7 +4413,7 @@ var require_node = __commonJS({
     );
     exports.colors = [6, 2, 3, 4, 5, 1];
     try {
-      const supportsColor = __require("supports-color");
+      const supportsColor = require_supports_color();
       if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
         exports.colors = [
           20,
@@ -18886,7 +19001,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "dda0242" : "unknown";
+var LINTER_COMMIT = true ? "addb178" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
@@ -19119,7 +19234,7 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
   const counters = { pass: 0, fixed: 0, fail: 0, error: 0 };
   if (lintOnly) {
     const limit2 = pLimit(10);
-    await Promise.all(
+    const completed = await Promise.all(
       groupedWork.map(
         ({ file, checks: checks2 }) => limit2(async () => {
           const results = await Promise.all(
@@ -19136,33 +19251,36 @@ var runChecks = async (files, checks, { lintOnly = false, verbose = false, ...de
               }
             })
           );
-          const { lines, isFail, stats } = formatFileResults(results, file);
-          counters.pass += stats.pass;
-          counters.fixed += stats.fixed;
-          counters.fail += stats.fail;
-          counters.error += stats.error;
-          if (lines.length > 0) {
-            if (isFail) {
-              console.error(lines.join("\n"));
-            } else if (verbose) {
-              console.log(lines.join("\n"));
-            }
-          }
-          if (isFail) {
-            fail = true;
-            for (const { res, checkName } of results) {
-              if (res.status === "fail" || res.status === "error") {
-                if (res.findings) {
-                  for (const finding of res.findings) {
-                    failedPairs.push({ file, checkName, finding });
-                  }
-                }
-              }
-            }
-          }
+          return { file, results };
         })
       )
     );
+    for (const { file, results } of completed) {
+      const { lines, isFail, stats } = formatFileResults(results, file);
+      counters.pass += stats.pass;
+      counters.fixed += stats.fixed;
+      counters.fail += stats.fail;
+      counters.error += stats.error;
+      if (lines.length > 0) {
+        if (isFail) {
+          console.error(lines.join("\n"));
+        } else if (verbose) {
+          console.log(lines.join("\n"));
+        }
+      }
+      if (isFail) {
+        fail = true;
+        for (const { res, checkName } of results) {
+          if (res.status === "fail" || res.status === "error") {
+            if (res.findings) {
+              for (const finding of res.findings) {
+                failedPairs.push({ file, checkName, finding });
+              }
+            }
+          }
+        }
+      }
+    }
   } else {
     for (const { file, checks: checks2 } of groupedWork) {
       const fileResults = [];

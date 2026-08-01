@@ -1,6 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: fail-per-finding, bad-per-file
-All tracked files: 2 file(s)
-Linting 2 check(s) across 1 file(s)...
-Summary: 2 check(s), 2 failed
-Completed in <TIME>
-PRD written to <TMPDIR>/prd.json

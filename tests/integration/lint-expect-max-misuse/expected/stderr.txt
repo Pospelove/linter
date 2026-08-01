@@ -1,1 +1,0 @@
---expect-max requires --lint and rejects --fix

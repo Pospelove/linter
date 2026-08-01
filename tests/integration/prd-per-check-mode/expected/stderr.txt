@@ -1,8 +1,0 @@
-[FAIL] src/a.ts [fail-per-finding]
-  Found FAIL (2 hit(s)):
-  line 1: FAIL
-  line 3: FAIL
-[FAIL] src/a.ts [bad-per-file]
-  Found BAD (2 hit(s)):
-  line 2: BAD
-  line 4: BAD

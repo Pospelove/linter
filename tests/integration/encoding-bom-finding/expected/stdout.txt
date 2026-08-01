@@ -1,3 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: encoding
-All tracked files: 1 file(s)
-{"startLine":1,"endLine":1,"snippet":"﻿hello world\n","message":"file starts with a UTF-8 BOM; BOMs are not allowed"}

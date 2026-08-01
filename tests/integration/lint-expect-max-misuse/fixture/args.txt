@@ -1,1 +1,0 @@
---lint --mode manual --expect-max 1 --fix --checks test-regex --files src/a.ts

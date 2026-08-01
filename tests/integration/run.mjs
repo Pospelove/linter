@@ -1,49 +1,32 @@
 #!/usr/bin/env node
-// Integration test runner with snapshot semantics.
+// Integration runner for code-defined tests (`*.test.mjs`). Each module exports
+// a definition created with defineIntegrationTest() from ./test-api.mjs.
 //
-// For each subdirectory of tests/integration/ that contains a `fixture/` folder,
-// the runner:
-//   1. Copies the fixture into a fresh temp directory.
-//   2. Initializes a throwaway git repo there (so file sources like
-//      AllFilesSource can call `git ls-files`).
-//   3. Invokes `node dist/linter.mjs <args>` with the temp dir as cwd.
-//      Args come from `fixture/args.txt` (whitespace-separated); default is
-//      `--lint --mode manual`.
-//   4. Normalizes the captured stdout/stderr (temp paths, timing) and compares
-//      with the snapshots in `expected/`.
-//
-// Re-baseline snapshots: UPDATE_SNAPSHOTS=1 node tests/integration/run.mjs
+// Definitions express only the project files and the observable CLI contract.
+// Keeping process execution here ensures every test still gets a fresh Git repo,
+// matching the environment the linter expects. The former fixture-directory
+// format is intentionally unsupported: one test representation avoids a split
+// suite with subtly different semantics.
 //
 // A single test name can be passed in argv to filter:
-//   node tests/integration/run.mjs regex-process-env-ban
+//   node tests/integration/run.mjs config-findings-per-story-invalid
 
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const LINTER = path.join(REPO_ROOT, "dist", "linter.mjs");
-const UPDATE = process.env["UPDATE_SNAPSHOTS"] === "1";
 const FILTER = process.argv[2] || null;
 
 if (!fs.existsSync(LINTER)) {
   console.error(`Linter bundle not found at ${LINTER}. Run \`yarn build\` first.`);
   process.exit(1);
 }
-
-const copyRecursive = (src, dest) => {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const s = path.join(src, entry.name);
-    const d = path.join(dest, entry.name);
-    if (entry.isDirectory()) copyRecursive(s, d);
-    else fs.copyFileSync(s, d);
-  }
-};
 
 const runGit = (cwd, args) => {
   const res = spawnSync("git", args, { cwd, encoding: "utf-8" });
@@ -75,29 +58,18 @@ const normalize = (text, tmpDir) => {
   ];
   let out = text;
   for (const [re, sub] of replacements) out = out.replace(re, sub);
-  return out;
+  // Snapshots are source-controlled text, so compare platform-neutral output.
+  // Fixture contents themselves are left untouched; checks can still exercise
+  // CRLF input deliberately.
+  return out
+    .replaceAll("\r\n", "\n")
+    .replaceAll("<TMPDIR>\\", "<TMPDIR>/")
+    // A temp Git repo makes the bundled linter look globally installed. Its
+    // generated PRD command is equivalent to the runner's normalized command.
+    .replaceAll("skymp-linter", "node <LINTER>");
 };
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const readArgs = (fixtureDir) => {
-  const argsFile = path.join(fixtureDir, "args.txt");
-  if (!fs.existsSync(argsFile)) return ["--lint", "--mode", "manual"];
-  return fs.readFileSync(argsFile, "utf-8")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-};
-
-const readSnapshot = (dir, name) => {
-  const p = path.join(dir, name);
-  return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "<MISSING>";
-};
-
-const writeSnapshot = (dir, name, content) => {
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, name), content);
-};
 
 const printDiff = (label, expected, actual) => {
   console.error(`--- ${label}: expected ---`);
@@ -107,31 +79,38 @@ const printDiff = (label, expected, actual) => {
   console.error(`--- end ${label} ---`);
 };
 
-const findTestCases = () => {
-  const all = fs.readdirSync(__dirname, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => path.join(__dirname, d.name))
-    .filter((p) => fs.existsSync(path.join(p, "fixture")))
+const findTestCases = async () => {
+  const modules = fs.readdirSync(__dirname, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".test.mjs"))
+    .map((entry) => path.join(__dirname, entry.name))
     .sort();
-  if (FILTER) return all.filter((p) => path.basename(p) === FILTER);
-  return all;
+  const cases = await Promise.all(modules.map(async (modulePath) => {
+    // Convert the Windows path explicitly: import() expects a URL, not a native path.
+    const module = await import(pathToFileURL(modulePath).href);
+    if (!module.default || typeof module.default.name !== "string") {
+      throw new Error(`${path.basename(modulePath)} must default-export defineIntegrationTest(...)`);
+    }
+    return module.default;
+  }));
+  return FILTER ? cases.filter((test) => test.name === FILTER) : cases;
 };
 
-const runOne = (testDir) => {
-  const name = path.basename(testDir);
-  const fixtureDir = path.join(testDir, "fixture");
-  const expectedDir = path.join(testDir, "expected");
-  const args = readArgs(fixtureDir);
+const writeFixtureFiles = (tmpDir, files) => {
+  for (const [relativePath, content] of files) {
+    const destination = path.join(tmpDir, relativePath);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, content);
+  }
+};
+
+const runOne = (test) => {
+  const {
+    name, files, args, expectedStdout, expectedStderr, expectedExitCode, expectedFiles,
+  } = test;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `linter-it-${name}-`));
   try {
-    copyRecursive(fixtureDir, tmpDir);
-    // args.txt and extra-snapshots.txt are runner directives, not fixture files
-    const argsCopy = path.join(tmpDir, "args.txt");
-    if (fs.existsSync(argsCopy)) fs.unlinkSync(argsCopy);
-    const extraSnapshotsCopy = path.join(tmpDir, "extra-snapshots.txt");
-    if (fs.existsSync(extraSnapshotsCopy)) fs.unlinkSync(extraSnapshotsCopy);
-
+    writeFixtureFiles(tmpDir, files);
     initGitRepo(tmpDir);
 
     const res = spawnSync("node", [LINTER, ...args], {
@@ -141,42 +120,26 @@ const runOne = (testDir) => {
     });
     const stdout = normalize(res.stdout || "", tmpDir);
     const stderr = normalize(res.stderr || "", tmpDir);
-    const exitCode = String(res.status ?? "null") + "\n";
-
-    // Artifact snapshots: files produced by the linter (e.g. prd.json)
-    const extraSnapshotsFile = path.join(fixtureDir, "extra-snapshots.txt");
-    const artifactNames = fs.existsSync(extraSnapshotsFile)
-      ? fs.readFileSync(extraSnapshotsFile, "utf-8").trim().split("\n").filter(Boolean)
-      : [];
-    const artifacts = new Map();
-    for (const aName of artifactNames) {
-      const actualPath = path.join(tmpDir, aName);
-      artifacts.set(aName, fs.existsSync(actualPath)
-        ? normalize(fs.readFileSync(actualPath, "utf-8"), tmpDir)
+    // Apply the same portability rules to declared expectations. This keeps
+    // snapshots stable across Git line-ending settings without changing a
+    // fixture file's deliberate byte-level contents.
+    const normalizedExpectedStdout = normalize(expectedStdout, tmpDir);
+    const normalizedExpectedStderr = normalize(expectedStderr, tmpDir);
+    const generatedFiles = new Map();
+    const normalizedExpectedFiles = new Map();
+    for (const [relativePath, expectedContent] of expectedFiles) {
+      const generatedPath = path.join(tmpDir, relativePath);
+      generatedFiles.set(relativePath, fs.existsSync(generatedPath)
+        ? normalize(fs.readFileSync(generatedPath, "utf-8"), tmpDir)
         : "<MISSING>\n");
+      normalizedExpectedFiles.set(relativePath, normalize(expectedContent, tmpDir));
     }
-
-    if (UPDATE) {
-      writeSnapshot(expectedDir, "stdout.txt", stdout);
-      writeSnapshot(expectedDir, "stderr.txt", stderr);
-      writeSnapshot(expectedDir, "exit-code.txt", exitCode);
-      for (const [aName, content] of artifacts) {
-        writeSnapshot(expectedDir, aName, content);
-      }
-      console.log(`[UPDATE] ${name}`);
-      return true;
-    }
-
-    const expectedStdout = readSnapshot(expectedDir, "stdout.txt");
-    const expectedStderr = readSnapshot(expectedDir, "stderr.txt");
-    const expectedExit = readSnapshot(expectedDir, "exit-code.txt");
-
     const mismatches = [];
-    if (stdout !== expectedStdout) mismatches.push("stdout");
-    if (stderr !== expectedStderr) mismatches.push("stderr");
-    if (exitCode !== expectedExit) mismatches.push("exit-code");
-    for (const [aName, content] of artifacts) {
-      if (content !== readSnapshot(expectedDir, aName)) mismatches.push(aName);
+    if (stdout !== normalizedExpectedStdout) mismatches.push("stdout");
+    if (stderr !== normalizedExpectedStderr) mismatches.push("stderr");
+    if (res.status !== expectedExitCode) mismatches.push("exit-code");
+    for (const [relativePath, actualContent] of generatedFiles) {
+      if (actualContent !== normalizedExpectedFiles.get(relativePath)) mismatches.push(relativePath);
     }
 
     if (mismatches.length === 0) {
@@ -185,17 +148,17 @@ const runOne = (testDir) => {
     }
     console.error(`[FAIL] ${name} (${mismatches.join(", ")})`);
     if (mismatches.includes("exit-code")) {
-      printDiff("exit-code", expectedExit, exitCode);
+      printDiff("exit-code", String(expectedExitCode), String(res.status));
     }
     if (mismatches.includes("stdout")) {
-      printDiff("stdout", expectedStdout, stdout);
+      printDiff("stdout", normalizedExpectedStdout, stdout);
     }
     if (mismatches.includes("stderr")) {
-      printDiff("stderr", expectedStderr, stderr);
+      printDiff("stderr", normalizedExpectedStderr, stderr);
     }
-    for (const [aName, content] of artifacts) {
-      if (mismatches.includes(aName)) {
-        printDiff(aName, readSnapshot(expectedDir, aName), content);
+    for (const [relativePath, actualContent] of generatedFiles) {
+      if (mismatches.includes(relativePath)) {
+        printDiff(relativePath, normalizedExpectedFiles.get(relativePath), actualContent);
       }
     }
     return false;
@@ -204,9 +167,9 @@ const runOne = (testDir) => {
   }
 };
 
-const testCases = findTestCases();
+const testCases = await findTestCases();
 if (testCases.length === 0) {
-  console.error(FILTER ? `No integration test named "${FILTER}".` : "No integration tests found.");
+  console.error(FILTER ? `No integration test named "${FILTER}".` : "No *.test.mjs integration tests found.");
   process.exit(1);
 }
 

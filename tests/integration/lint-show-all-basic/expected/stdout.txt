@@ -1,3 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: test-regex
-All tracked files: 1 file(s)
-[{"startLine":1,"endLine":1,"snippet":"FAIL\nPASS\nFAIL","message":"Found FAIL"},{"startLine":3,"endLine":3,"snippet":"FAIL\nPASS\nFAIL\n","message":"Found FAIL"}]

@@ -6,13 +6,12 @@
     "skymp-linter": "dist/linter.mjs"
   },
   "scripts": {
-    "postinstall": "node -e \"if(process.cwd()!==process.env.INIT_CWD)process.exit(0)\" && mkdir -p .linter && curl -fsSL https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs -o .linter/linter.mjs",
+    "!postinstall": "node -e \"if(process.cwd()!==process.env.INIT_CWD)process.exit(0)\" && mkdir -p .linter && curl -fsSL https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs -o .linter/linter.mjs",
     "build": "node esbuild.config.js",
     "lint": "node .linter/linter.mjs --lint",
     "fix": "node .linter/linter.mjs --fix",
     "update-linter": "cp dist/linter.mjs .linter/linter.mjs",
     "test": "yarn build && node tests/integration/run.mjs",
-    "test:update": "yarn build && UPDATE_SNAPSHOTS=1 node tests/integration/run.mjs",
     "test:coverage": "node esbuild.config.js --sourcemap && c8 --reporter=text --reporter=html --exclude 'node_modules/**' --exclude 'tests/**' node tests/integration/run.mjs"
   },
   "dependencies": {

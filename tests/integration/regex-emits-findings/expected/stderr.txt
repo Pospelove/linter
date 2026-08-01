@@ -1,3 +1,0 @@
-[FAIL] src/a.ts [regex-emits]
-  Found FAIL (1 hit(s)):
-  line 1: FAIL

@@ -1,3 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: test-regex
-All tracked files: 1 file(s)
-Expected at most 2 finding(s), found 2. If you're an AI agent fixing this step by step, you are OK to proceed.

@@ -1,4 +1,0 @@
-FAIL
-BAD
-FAIL
-BAD

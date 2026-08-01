@@ -1,3 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: crlf
-All tracked files: 1 file(s)
-[{"startLine":1,"endLine":1,"snippet":"line1\r\nline2\nline3\r","message":"contains CRLF line ending"},{"startLine":3,"endLine":3,"snippet":"line1\r\nline2\nline3\r\n","message":"contains CRLF line ending"}]

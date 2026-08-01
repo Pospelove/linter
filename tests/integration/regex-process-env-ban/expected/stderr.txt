@@ -1,3 +1,0 @@
-[FAIL] src/bad.ts [process-env-ban]
-  Do not use process.env directly. Use env from utils/env.ts instead. (1 hit(s)):
-  line 1: process.env

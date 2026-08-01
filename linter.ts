@@ -375,9 +375,11 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
   const counters = { pass: 0, fixed: 0, fail: 0, error: 0 };
 
   if (lintOnly) {
-    // Parallel lint: controlled by p-limit per file
+    // Lint files concurrently, but defer observable output until every worker
+    // has finished. This preserves parallel throughput without making stderr
+    // ordering depend on which file happened to complete first.
     const limit = pLimit(10); // reasonable default for lints
-    await Promise.all(
+    const completed = await Promise.all(
       groupedWork.map(({ file, checks }) =>
         limit(async () => {
           const results = await Promise.all(
@@ -394,34 +396,37 @@ const runChecks = async (files: string[], checks: BaseCheck[], { lintOnly = fals
               }
             })
           );
+          return { file, results };
+        })
+      )
+    );
 
-          const { lines, isFail, stats } = formatFileResults(results, file);
-          counters.pass += stats.pass;
-          counters.fixed += stats.fixed;
-          counters.fail += stats.fail;
-          counters.error += stats.error;
-          if (lines.length > 0) {
-            if (isFail) {
-              console.error(lines.join("\n"));
-            } else if (verbose) {
-              console.log(lines.join("\n"));
-            }
-          }
-          if (isFail) {
-            fail = true;
-            for (const { res, checkName } of results) {
-              if (res.status === "fail" || res.status === "error") {
-                if (res.findings) {
+    for (const { file, results } of completed) {
+      const { lines, isFail, stats } = formatFileResults(results, file);
+      counters.pass += stats.pass;
+      counters.fixed += stats.fixed;
+      counters.fail += stats.fail;
+      counters.error += stats.error;
+      if (lines.length > 0) {
+        if (isFail) {
+          console.error(lines.join("\n"));
+        } else if (verbose) {
+          console.log(lines.join("\n"));
+        }
+      }
+      if (isFail) {
+        fail = true;
+        for (const { res, checkName } of results) {
+          if (res.status === "fail" || res.status === "error") {
+            if (res.findings) {
                 for (const finding of res.findings) {
                   failedPairs.push({ file, checkName, finding });
                 }
               }
-              }
-            }
           }
-        })
-      )
-    );
+        }
+      }
+    }
   } else {
     // Sequential fix: file by file, check by check to avoid file races
     for (const { file, checks } of groupedWork) {

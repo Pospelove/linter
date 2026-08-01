@@ -1,1 +1,0 @@
-per-finding + findingsPerStory <= 0 or non-integer is not allowed

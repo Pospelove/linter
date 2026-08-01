@@ -1,1 +1,0 @@
---lint --mode manual --show bogus --checks test-regex --files src/a.ts

@@ -1,7 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: process-env-ban
-All tracked files: 2 file(s)
-Linting 1 check(s) across 1 file(s)...
-Summary: 1 check(s), 1 passed
-Linting completed.
-Completed in <TIME>
-PRD written to <TMPDIR>/prd.json

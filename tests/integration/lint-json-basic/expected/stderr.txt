@@ -1,2 +1,0 @@
-Mode: manual | Source: All tracked files | Checks: test-regex
-All tracked files: 3 file(s)

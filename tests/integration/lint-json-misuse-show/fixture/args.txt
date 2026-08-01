@@ -1,1 +1,0 @@
---lint --mode manual --json --show first --checks test-regex --files src/a.ts

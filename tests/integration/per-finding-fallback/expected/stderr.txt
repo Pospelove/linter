@@ -1,4 +1,0 @@
-[FAIL] linter-config.json [always-fail]
-  always-fail: this check always fails
-[FAIL] src/a.ts [always-fail]
-  always-fail: this check always fails
