@@ -5513,6 +5513,11 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
     archiveName = `LLVM-${VERSION2}-Linux-X64.tar.xz`;
     archiveSha256 = "b3b7f2801d15d50736acea3c73982994d025b01c2f035b91ae3b49d1b575732b";
     archivePathToClangFormat = `LLVM-${VERSION2}-Linux-X64/bin/clang-format`;
+  } else if (platform === "win32") {
+    url = `https://files.pythonhosted.org/packages/py2.py3/c/clang-format/clang_format-${VERSION2}-py2.py3-none-win_amd64.whl`;
+    archiveName = `clang-format-${VERSION2}-win64.zip`;
+    archiveSha256 = "a7606da55e31ebf5b63dd75800392e6cca7c595a74100c2cebcda2d742130732";
+    archivePathToClangFormat = "clang_format/data/bin/clang-format.exe";
   } else {
     console.warn(`Platform ${platform} not supported for clang-format download`);
     return void 0;
@@ -5528,7 +5533,7 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
   }
   await downloadFile(url, archivePath, archiveSha256);
   ensureDirExists(extractDir);
-  console.log(`Extracting clang-format from ${archiveName} (single binary, not full LLVM)...`);
+  console.log(`Extracting clang-format from ${archiveName}...`);
   await extractArchive(archivePath, extractDir, [archivePathToClangFormat]);
   if (fs7.existsSync(expectedExe)) {
     console.log(`Using downloaded ${expectedExe}, version ${checkVersion(expectedExe)}`);
@@ -19001,7 +19006,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "addb178" : "unknown";
+var LINTER_COMMIT = true ? "dc8d690" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {

@@ -64,6 +64,15 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
     archiveName = `LLVM-${VERSION}-Linux-X64.tar.xz`;
     archiveSha256 = "b3b7f2801d15d50736acea3c73982994d025b01c2f035b91ae3b49d1b575732b";
     archivePathToClangFormat = `LLVM-${VERSION}-Linux-X64/bin/clang-format`;
+  } else if (platform === "win32") {
+    // LLVM ships the Windows clang-format only inside a 942 MB tarball or an
+    // NSIS installer we cannot unpack without extra tooling. The PyPI wheel
+    // carries the same upstream binary for the same VERSION in 1.4 MB and is
+    // a plain zip. Cached as .zip because Expand-Archive rejects .whl.
+    url = `https://files.pythonhosted.org/packages/py2.py3/c/clang-format/clang_format-${VERSION}-py2.py3-none-win_amd64.whl`;
+    archiveName = `clang-format-${VERSION}-win64.zip`;
+    archiveSha256 = "a7606da55e31ebf5b63dd75800392e6cca7c595a74100c2cebcda2d742130732";
+    archivePathToClangFormat = "clang_format/data/bin/clang-format.exe";
   } else {
     console.warn(`Platform ${platform} not supported for clang-format download`);
     return undefined;
@@ -84,7 +93,7 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
   await downloadFile(url, archivePath, archiveSha256);
 
   ensureDirExists(extractDir);
-  console.log(`Extracting clang-format from ${archiveName} (single binary, not full LLVM)...`);
+  console.log(`Extracting clang-format from ${archiveName}...`);
   await extractArchive(archivePath, extractDir, [archivePathToClangFormat]);
 
   if (fs.existsSync(expectedExe)) {
