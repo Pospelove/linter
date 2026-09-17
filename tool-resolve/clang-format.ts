@@ -60,10 +60,14 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
   let archivePathToClangFormat = "";
 
   if (platform === "linux") {
-    url = `https://github.com/llvm/llvm-project/releases/download/llvmorg-${VERSION}/LLVM-${VERSION}-Linux-X64.tar.xz`;
-    archiveName = `LLVM-${VERSION}-Linux-X64.tar.xz`;
-    archiveSha256 = "b3b7f2801d15d50736acea3c73982994d025b01c2f035b91ae3b49d1b575732b";
-    archivePathToClangFormat = `LLVM-${VERSION}-Linux-X64/bin/clang-format`;
+    // The full LLVM release tarball for Linux is 600+ MB. The PyPI wheel
+    // carries just the clang-format binary for the same VERSION in ~1.8 MB
+    // and is a plain zip. Cached as .zip because unzip needs the extension
+    // to identify the archive type.
+    url = `https://files.pythonhosted.org/packages/py2.py3/c/clang-format/clang_format-${VERSION}-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl`;
+    archiveName = `clang-format-${VERSION}-linux64.zip`;
+    archiveSha256 = "d12b864b596b80810cdd7f97556c485dc09cfe2952503958535f01359e025fbb";
+    archivePathToClangFormat = "clang_format/data/bin/clang-format";
   } else if (platform === "win32") {
     // LLVM ships the Windows clang-format only inside a 942 MB tarball or an
     // NSIS installer we cannot unpack without extra tooling. The PyPI wheel
@@ -97,6 +101,10 @@ export async function getClangFormatPath({ shouldDownload, shouldSearchInPath, t
   await extractArchive(archivePath, extractDir, [archivePathToClangFormat]);
 
   if (fs.existsSync(expectedExe)) {
+    if (platform !== "win32") {
+      // zip archives don't reliably preserve the executable bit across every unzip implementation.
+      try { fs.chmodSync(expectedExe, 0o755); } catch {}
+    }
     console.log(`Using downloaded ${expectedExe}, version ${checkVersion(expectedExe)}`);
     return expectedExe;
   }

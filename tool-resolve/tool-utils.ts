@@ -112,20 +112,27 @@ export async function downloadFile(url: string, destPath: string, expectedSha256
 
 /**
  * Extract an archive (tar.xz, zip) to a destination directory.
+ * Zip files are detected by extension so they extract correctly on every
+ * platform, regardless of what else is being unpacked there (e.g. tar.xz).
  * @param {string} archivePath - Path to the archive file.
  * @param {string} destDir - Directory to extract into.
- * @param {string[]} [members] - Optional specific members to extract (tar only).
+ * @param {string[]} [members] - Optional specific members to extract.
  */
 export function extractArchive(archivePath: string, destDir: string, members: string[] = []): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const platform = os.platform();
+    ensureDirExists(destDir);
+    const isZip = archivePath.toLowerCase().endsWith(".zip");
     let command: string, args: string[];
 
-    if (platform === "win32") {
-      command = "powershell";
-      args = ["-command", `Expand-Archive -Path '${archivePath}' -DestinationPath '${destDir}' -Force`];
+    if (isZip) {
+      if (os.platform() === "win32") {
+        command = "powershell";
+        args = ["-command", `Expand-Archive -Path '${archivePath}' -DestinationPath '${destDir}' -Force`];
+      } else {
+        command = "unzip";
+        args = ["-oq", archivePath, ...members, "-d", destDir];
+      }
     } else {
-      ensureDirExists(destDir);
       command = "tar";
       args = ["-xf", archivePath, "-C", destDir, ...members];
     }

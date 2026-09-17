@@ -5308,13 +5308,18 @@ ${stderr}`));
 }
 function extractArchive(archivePath, destDir, members = []) {
   return new Promise((resolve, reject) => {
-    const platform = os.platform();
+    ensureDirExists(destDir);
+    const isZip = archivePath.toLowerCase().endsWith(".zip");
     let command, args;
-    if (platform === "win32") {
-      command = "powershell";
-      args = ["-command", `Expand-Archive -Path '${archivePath}' -DestinationPath '${destDir}' -Force`];
+    if (isZip) {
+      if (os.platform() === "win32") {
+        command = "powershell";
+        args = ["-command", `Expand-Archive -Path '${archivePath}' -DestinationPath '${destDir}' -Force`];
+      } else {
+        command = "unzip";
+        args = ["-oq", archivePath, ...members, "-d", destDir];
+      }
     } else {
-      ensureDirExists(destDir);
       command = "tar";
       args = ["-xf", archivePath, "-C", destDir, ...members];
     }
@@ -5509,10 +5514,10 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
   let archiveSha256 = "";
   let archivePathToClangFormat = "";
   if (platform === "linux") {
-    url = `https://github.com/llvm/llvm-project/releases/download/llvmorg-${VERSION2}/LLVM-${VERSION2}-Linux-X64.tar.xz`;
-    archiveName = `LLVM-${VERSION2}-Linux-X64.tar.xz`;
-    archiveSha256 = "b3b7f2801d15d50736acea3c73982994d025b01c2f035b91ae3b49d1b575732b";
-    archivePathToClangFormat = `LLVM-${VERSION2}-Linux-X64/bin/clang-format`;
+    url = `https://files.pythonhosted.org/packages/py2.py3/c/clang-format/clang_format-${VERSION2}-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl`;
+    archiveName = `clang-format-${VERSION2}-linux64.zip`;
+    archiveSha256 = "d12b864b596b80810cdd7f97556c485dc09cfe2952503958535f01359e025fbb";
+    archivePathToClangFormat = "clang_format/data/bin/clang-format";
   } else if (platform === "win32") {
     url = `https://files.pythonhosted.org/packages/py2.py3/c/clang-format/clang_format-${VERSION2}-py2.py3-none-win_amd64.whl`;
     archiveName = `clang-format-${VERSION2}-win64.zip`;
@@ -5536,6 +5541,12 @@ async function getClangFormatPath({ shouldDownload, shouldSearchInPath, toolsDir
   console.log(`Extracting clang-format from ${archiveName}...`);
   await extractArchive(archivePath, extractDir, [archivePathToClangFormat]);
   if (fs7.existsSync(expectedExe)) {
+    if (platform !== "win32") {
+      try {
+        fs7.chmodSync(expectedExe, 493);
+      } catch {
+      }
+    }
     console.log(`Using downloaded ${expectedExe}, version ${checkVersion(expectedExe)}`);
     return expectedExe;
   }
@@ -19025,7 +19036,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "436dc2b" : "unknown";
+var LINTER_COMMIT = true ? "a6d9206" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
