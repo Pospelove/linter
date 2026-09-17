@@ -9,8 +9,12 @@ import { BaseFileSource } from "./base-file-source.js";
  * Base ref resolution order:
  *   1. options.baseRef from linter-config.json
  *   2. GITHUB_BASE_REF env var (set by GHA on pull_request events) → origin/$GITHUB_BASE_REF
- *   3. GITHUB_EVENT_NAME == "push" → origin/ + default branch from GITHUB_REF_NAME or "main"
+ *   3. GITHUB_EVENT_NAME == "push" → origin/ + default branch from GITHUB_DEFAULT_BRANCH or "main"
  *   4. Throws if nothing found.
+ *
+ * Special case: a push directly to the default branch (e.g. a merge landing on main) has
+ * nothing to diff against — HEAD already *is* the base — so instead of silently checking 0
+ * files, all tracked files are returned.
  *
  * Typical use: CI / GitHub Actions.
  */
@@ -21,12 +25,25 @@ export class DiffBaseSource extends BaseFileSource {
   }
 
   override async resolve(): Promise<string[]> {
+    if (this.#isPushToDefaultBranch()) {
+      console.log(
+        "DiffBaseSource: push to default branch detected — nothing to diff against, checking all tracked files instead",
+      );
+      const git = simpleGit(this.repoRoot);
+      const output = await git.raw(["ls-files"]);
+      return this.#resolveExistingFiles(output);
+    }
+
     const baseRef = this.#detectBaseRef();
     console.log(`DiffBaseSource: diffing against ${baseRef}`);
 
     const git = simpleGit(this.repoRoot);
     const output = await git.diff(["--name-only", "--diff-filter=ACMR", baseRef]);
-    const files = output
+    return this.#resolveExistingFiles(output);
+  }
+
+  async #resolveExistingFiles(rawOutput: string): Promise<string[]> {
+    const files = rawOutput
       .split("\n")
       .filter((f) => f.trim() !== "")
       .map((f) => path.resolve(this.repoRoot, f));
@@ -43,6 +60,18 @@ export class DiffBaseSource extends BaseFileSource {
     );
 
     return existing.filter((filePath): filePath is string => filePath !== null);
+  }
+
+  #isPushToDefaultBranch(): boolean {
+    // Explicit base ref always wins — the caller knows what they want.
+    if (typeof this.options["baseRef"] === "string") return false;
+    // Not a push event (or it's a pull_request event with GITHUB_BASE_REF set).
+    if (process.env["GITHUB_EVENT_NAME"] !== "push") return false;
+    if (process.env["GITHUB_BASE_REF"]) return false;
+
+    const defaultBranch = process.env["GITHUB_DEFAULT_BRANCH"] || "main";
+    const pushedRef = process.env["GITHUB_REF_NAME"];
+    return pushedRef === defaultBranch;
   }
 
   #detectBaseRef(): string {
@@ -76,7 +105,7 @@ export class DiffBaseSource extends BaseFileSource {
   static override getHelp() {
     return {
       name: "DiffBaseSource",
-      description: "Files changed relative to a base branch/ref. Auto-detects GITHUB_BASE_REF in GitHub Actions. Typical use: CI.",
+      description: "Files changed relative to a base branch/ref. Auto-detects GITHUB_BASE_REF in GitHub Actions; on a push directly to the default branch, checks all tracked files instead. Typical use: CI.",
       options: "baseRef — explicit base ref to diff against (optional, auto-detected in GHA)",
     };
   }

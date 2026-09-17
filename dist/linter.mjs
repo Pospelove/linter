@@ -18930,11 +18930,22 @@ var DiffBaseSource = class extends BaseFileSource {
     this.name = "Diff vs base";
   }
   async resolve() {
+    if (this.#isPushToDefaultBranch()) {
+      console.log(
+        "DiffBaseSource: push to default branch detected \u2014 nothing to diff against, checking all tracked files instead"
+      );
+      const git2 = esm_default(this.repoRoot);
+      const output2 = await git2.raw(["ls-files"]);
+      return this.#resolveExistingFiles(output2);
+    }
     const baseRef = this.#detectBaseRef();
     console.log(`DiffBaseSource: diffing against ${baseRef}`);
     const git = esm_default(this.repoRoot);
     const output = await git.diff(["--name-only", "--diff-filter=ACMR", baseRef]);
-    const files = output.split("\n").filter((f) => f.trim() !== "").map((f) => path16.resolve(this.repoRoot, f));
+    return this.#resolveExistingFiles(output);
+  }
+  async #resolveExistingFiles(rawOutput) {
+    const files = rawOutput.split("\n").filter((f) => f.trim() !== "").map((f) => path16.resolve(this.repoRoot, f));
     const existing = await Promise.all(
       files.map(async (filePath) => {
         try {
@@ -18946,6 +18957,14 @@ var DiffBaseSource = class extends BaseFileSource {
       })
     );
     return existing.filter((filePath) => filePath !== null);
+  }
+  #isPushToDefaultBranch() {
+    if (typeof this.options["baseRef"] === "string") return false;
+    if (process.env["GITHUB_EVENT_NAME"] !== "push") return false;
+    if (process.env["GITHUB_BASE_REF"]) return false;
+    const defaultBranch = process.env["GITHUB_DEFAULT_BRANCH"] || "main";
+    const pushedRef = process.env["GITHUB_REF_NAME"];
+    return pushedRef === defaultBranch;
   }
   #detectBaseRef() {
     const baseRef = this.options["baseRef"];
@@ -18970,7 +18989,7 @@ var DiffBaseSource = class extends BaseFileSource {
   static getHelp() {
     return {
       name: "DiffBaseSource",
-      description: "Files changed relative to a base branch/ref. Auto-detects GITHUB_BASE_REF in GitHub Actions. Typical use: CI.",
+      description: "Files changed relative to a base branch/ref. Auto-detects GITHUB_BASE_REF in GitHub Actions; on a push directly to the default branch, checks all tracked files instead. Typical use: CI.",
       options: "baseRef \u2014 explicit base ref to diff against (optional, auto-detected in GHA)"
     };
   }
@@ -19006,7 +19025,7 @@ var builtinRegistry = {
 // linter.ts
 var __filename = fileURLToPath(import.meta.url);
 var LINTER_VERSION = true ? "0.0.1" : "dev";
-var LINTER_COMMIT = true ? "dc8d690" : "unknown";
+var LINTER_COMMIT = true ? "436dc2b" : "unknown";
 var UPGRADE_URL = "https://raw.githubusercontent.com/skyrim-multiplayer/linter/main/dist/linter.mjs";
 var YARN_INSTALL_SPEC = "https://github.com/skyrim-multiplayer/linter#main";
 var getRepoRoot = () => {
