@@ -32,8 +32,7 @@ One check instance describes one kind of synced value:
   key must have one value across all of them.
 - For every key, a follower's value must equal the leader's. A follower
   naming a key the leader doesn't have is an error ("refers to `move`, and
-  no leader has it"). That is how a rename or a deletion of the leader
-  shows up.
+  no leader has it"). That is how a rename in the leader shows up.
 
 ### Extractors
 
@@ -113,13 +112,10 @@ The core lints files one by one and only the files of the file source
 - The same disagreement reached from two changed files is reported once
   per file. That is acceptable; findings carry the location.
 
-### Gaps in the core to close
-
-- **Deletions are invisible.** `DiffBaseSource` diffs with
-  `--diff-filter=ACMR`, and the staged source does the same, so deleting a
-  leader file runs nothing. The fix: file sources also return deleted
-  paths, and checks that opt in (`seesDeleted`) are called for them. Only
-  FileSyncCheck opts in at first.
+- No core changes. Deleted files are not linted (`--diff-filter=ACMR`),
+  and the check does not need them: a rename changes the leader file, it
+  doesn't delete it, and code that uses a deleted file breaks at once
+  anyway.
 - A full read of all sources per changed file is fine for tens of files.
   If a config grows to thousands, cache the extracted sources per run.
 
@@ -129,7 +125,7 @@ Integration fixtures, as for the other checks:
 
 - a leader edit with one follower → fail, naming the follower's line;
   `--fix` rewrites the follower;
-- a rename and a deleted leader → fail ("no leader has it");
+- a key renamed in the leader → fail ("no leader has it");
 - `fixCommand` runs instead of rewriting;
 - peers that disagree → fail, no rewrite;
 - every extractor, including `blobHash` matching `git hash-object`.
