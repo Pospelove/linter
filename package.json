@@ -18,7 +18,8 @@
     "iconv-lite": "^0.7.2",
     "openai": "^6.34.0",
     "p-limit": "^7.3.0",
-    "simple-git": "^3.27.0"
+    "simple-git": "^3.27.0",
+    "yaml": "2"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

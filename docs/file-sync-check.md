@@ -1,6 +1,22 @@
-# FileSyncCheck (plan)
+# FileSyncCheck
 
-**Status: decided 2026-10-25, nothing built yet.**
+**Status: decided 2026-10-25, built 2026-11-08** (`checks/file-sync-check.ts`,
+tests `tests/integration/file-sync-*.test.mjs`).
+
+Details settled while building:
+
+- Without a leader, list the peers under `sources` (`followers` works too).
+- `regex` is run over the whole file with the `m` flag; add more with
+  `regexFlags`. It needs a `(?<value>)` group, and a `(?<key>)` group or a
+  fixed `key`.
+- `json` / `yaml` paths: `*` matches any key or array index, `<key>` matches
+  the same and names the key. YAML files may hold several documents.
+- `command` gets the repo-relative file as `{file}` (or appended), and its
+  values cannot be rewritten by `--fix`; neither can `blobHash` values.
+- Source files are the repo's tracked and untracked, not ignored, files
+  (`git ls-files --cached --others --exclude-standard`) matched by the globs.
+- `"strict": false` turns off the "no leader has it" failure; strict is the
+  default.
 
 ## Motivation
 
